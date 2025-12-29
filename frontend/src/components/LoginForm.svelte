@@ -1,0 +1,220 @@
+<script lang="ts">
+  import { createEventDispatcher } from 'svelte';
+  import type { LoginResponse, ApiError } from '../types';
+
+  const dispatch = createEventDispatcher<{ 
+    authenticated: { token: string };
+    switchToRegister: void;
+  }>();
+
+  let email: string = '';
+  let password: string = '';
+  let error: string = '';
+  let loading: boolean = false;
+
+  async function handleSubmit() {
+    loading = true;
+    error = '';
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        const errorMessage = data.error?.message || data.message || 'Login failed';
+        throw new Error(errorMessage);
+      }
+
+      const data: LoginResponse = await response.json();
+      dispatch('authenticated', { 
+        token: data.tokens.access_token,
+        user: data.user
+      });
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Login failed';
+    } finally {
+      loading = false;
+    }
+  }
+</script>
+
+<form on:submit|preventDefault={handleSubmit} class="login-form">
+  <div class="logo">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z"/>
+    </svg>
+  </div>
+  <h2>Welcome Back</h2>
+  <p class="subtitle">Sign in to continue to your account</p>
+  
+  <div class="form-group">
+    <label for="email">Email</label>
+    <input
+      id="email"
+      type="email"
+      bind:value={email}
+      placeholder="Enter your email"
+      required
+      disabled={loading}
+    />
+  </div>
+
+  <div class="form-group">
+    <label for="password">Password</label>
+    <input
+      id="password"
+      type="password"
+      bind:value={password}
+      placeholder="Enter your password"
+      required
+      disabled={loading}
+    />
+  </div>
+
+  {#if error}
+    <div class="error" role="alert">{error}</div>
+  {/if}
+
+  <button type="submit" disabled={loading}>
+    {loading ? 'Signing in...' : 'Sign In'}
+  </button>
+
+  <p class="switch-text">
+    Don't have an account? 
+    <button type="button" class="link-btn" on:click={() => dispatch('switchToRegister')}>
+      Create one
+    </button>
+  </p>
+</form>
+
+<style>
+  .login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    max-width: 360px;
+    padding: 2rem;
+    background: rgba(26, 26, 46, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+  }
+
+  .logo {
+    width: 60px;
+    height: 60px;
+    margin: 0 auto 0.5rem;
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+  }
+
+  h2 {
+    margin: 0;
+    text-align: center;
+    color: #fff;
+    font-size: 24px;
+    font-weight: 600;
+  }
+
+  .subtitle {
+    margin: 0 0 1rem;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  label {
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+  }
+
+  input {
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    transition: border-color 0.15s ease;
+  }
+
+  input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  input:focus {
+    outline: none;
+    border-color: #7c3aed;
+  }
+
+  input:disabled {
+    opacity: 0.6;
+  }
+
+  .error {
+    color: #f87171;
+    font-size: 13px;
+    padding: 10px 12px;
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.2);
+    border-radius: 8px;
+  }
+
+  button[type="submit"] {
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+
+  button[type="submit"]:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  button[type="submit"]:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  .switch-text {
+    text-align: center;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.5);
+    margin: 0.5rem 0 0;
+  }
+
+  .link-btn {
+    background: none;
+    border: none;
+    color: #a855f7;
+    cursor: pointer;
+    padding: 0;
+    font-size: inherit;
+    font-weight: 500;
+  }
+
+  .link-btn:hover {
+    text-decoration: underline;
+  }
+</style>

@@ -1,0 +1,21 @@
+{
+  "name": "@discord-clone/events",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@discord-clone/types": "1.0.0",
+    "@discord-clone/snowflake": "1.0.0"
+  }
+}

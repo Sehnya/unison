@@ -1,0 +1,15 @@
+# Nixpacks configuration for Railway
+# This ensures proper Node.js version and build setup
+
+[phases.setup]
+nixPkgs = ["nodejs-18_x", "npm-9_x"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build --workspaces --if-present"]
+
+[start]
+cmd = "npm run start -w @discord-clone/api"
+

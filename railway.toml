@@ -1,0 +1,14 @@
+# Railway Configuration
+# This file configures how Railway builds and deploys your application
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm install && npm run build --workspaces --if-present"
+
+[deploy]
+startCommand = "npm run start -w @discord-clone/api"
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+

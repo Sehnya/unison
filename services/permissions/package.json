@@ -1,0 +1,25 @@
+{
+  "name": "@discord-clone/permissions",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest --run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@discord-clone/database": "1.0.0",
+    "@discord-clone/events": "1.0.0",
+    "@discord-clone/snowflake": "1.0.0",
+    "@discord-clone/types": "1.0.0",
+    "pg": "^8.11.3",
+    "ioredis": "^5.3.2"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.10.9",
+    "fast-check": "^3.14.0"
+  }
+}

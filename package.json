@@ -1,0 +1,43 @@
+{
+  "name": "discord-clone",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "start": "npm run start -w @discord-clone/api",
+    "dev": "concurrently -n api,frontend -c blue,green \"npm run dev:api\" \"npm run dev:frontend\"",
+    "dev:api": "npm run dev -w @discord-clone/api",
+    "dev:frontend": "npm run dev -w frontend",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "format": "prettier --write \"**/*.{ts,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,json,md}\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/supertest": "^6.0.3",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "concurrently": "^9.2.1",
+    "dotenv": "^17.2.3",
+    "eslint": "^8.55.0",
+    "eslint-config-prettier": "^9.1.0",
+    "fast-check": "^3.14.0",
+    "prettier": "^3.1.0",
+    "supertest": "^7.1.4",
+    "typescript": "^5.3.2",
+    "vitest": "^1.0.0",
+    "ws": "^8.18.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
