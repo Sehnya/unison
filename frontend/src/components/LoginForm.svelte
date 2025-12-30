@@ -23,27 +23,23 @@
         body: JSON.stringify({ email, password })
       });
 
-      // Try to parse response as JSON
-      let data;
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const text = await response.text();
-        if (text) {
-          try {
-            data = JSON.parse(text);
-          } catch {
-            throw new Error('Server returned invalid response');
-          }
-        }
-      }
+      // Parse response as JSON
+      const data = await response.json().catch(() => {
+        throw new Error('Server returned invalid response');
+      });
 
       if (!response.ok) {
         const errorMessage = data?.error?.message || data?.message || `Login failed (${response.status})`;
         throw new Error(errorMessage);
       }
 
-      if (!data) {
-        throw new Error('Server returned empty response');
+      // Validate response structure
+      if (!data.tokens || !data.tokens.access_token) {
+        throw new Error('Invalid response: missing access token');
+      }
+
+      if (!data.user) {
+        throw new Error('Invalid response: missing user data');
       }
 
       dispatch('authenticated', { 
@@ -51,6 +47,7 @@
         user: data.user
       });
     } catch (err) {
+      console.error('Login error:', err);
       error = err instanceof Error ? err.message : 'Login failed';
     } finally {
       loading = false;
