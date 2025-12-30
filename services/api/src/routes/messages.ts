@@ -25,6 +25,7 @@ export interface MessagingServiceInterface {
  */
 export interface MessageRoutesConfig {
   messagingService: MessagingServiceInterface;
+  authService: { getUserById: (userId: string) => Promise<{ id: string; username: string; avatar?: string | null } | null> };
   validateToken: TokenValidator;
 }
 
@@ -33,7 +34,7 @@ export interface MessageRoutesConfig {
  */
 export function createMessageRoutes(config: MessageRoutesConfig): Router {
   const router = Router();
-  const { messagingService, validateToken } = config;
+  const { messagingService, authService, validateToken } = config;
   const authMiddleware = createAuthMiddleware(validateToken);
 
   // All message routes require authentication
@@ -77,7 +78,26 @@ export function createMessageRoutes(config: MessageRoutesConfig): Router {
 
       const message = await messagingService.createMessage(channelId, userId, content);
 
-      res.status(201).json({ message });
+      // Enrich the created message with author information
+      let enrichedMessage = message as any;
+      const authorId = (message as any).author_id || (message as any).authorId || userId;
+      if (authorId) {
+        try {
+          const author = await authService.getUserById(authorId) as { id: string; username: string; avatar?: string | null } | null;
+          if (author) {
+            enrichedMessage = {
+              ...message,
+              author_id: authorId,
+              author_name: author.username,
+              author_avatar: author.avatar || null,
+            };
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch author info for user ${authorId}:`, error);
+        }
+      }
+
+      res.status(201).json({ message: enrichedMessage });
     } catch (error) {
       next(error);
     }
@@ -122,7 +142,36 @@ export function createMessageRoutes(config: MessageRoutesConfig): Router {
 
       const messages = await messagingService.getMessages(channelId, userId, options);
 
-      res.status(200).json({ messages });
+      // Enrich messages with author information (username, avatar)
+      const enrichedMessages = await Promise.all(
+        (messages as any[]).map(async (msg: any) => {
+          const authorId = msg.author_id || msg.authorId;
+          if (authorId) {
+            try {
+              const author = await authService.getUserById(authorId) as { id: string; username: string; avatar?: string | null } | null;
+              if (author) {
+                return {
+                  ...msg,
+                  author_id: authorId,
+                  author_name: author.username,
+                  author_avatar: author.avatar || null,
+                };
+              }
+            } catch (error) {
+              console.warn(`Failed to fetch author info for user ${authorId}:`, error);
+            }
+          }
+          // Fallback if author not found
+          return {
+            ...msg,
+            author_id: authorId,
+            author_name: 'Unknown',
+            author_avatar: null,
+          };
+        })
+      );
+
+      res.status(200).json({ messages: enrichedMessages });
     } catch (error) {
       next(error);
     }

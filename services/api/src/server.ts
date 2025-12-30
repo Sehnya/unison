@@ -136,6 +136,7 @@ export function createApiServer(config: ApiServerConfig): Express {
   // Routes are defined with full paths, so mount at /api (but auth router is registered first)
   const messageRoutes = createMessageRoutes({
     messagingService: config.messagingService,
+    authService: config.authService,
     validateToken: config.validateToken,
   });
   app.use('/api', messageRoutes);
