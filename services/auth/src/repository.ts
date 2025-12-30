@@ -347,6 +347,10 @@ export class AuthRepository {
       setClauses.push(`bio = $${paramIndex++}`);
       values.push(updates.bio.trim() || null);
     }
+    if (updates.background_image !== undefined) {
+      setClauses.push(`background_image = $${paramIndex++}`);
+      values.push(updates.background_image || null);
+    }
 
     if (setClauses.length === 0) {
       const user = await this.findUserById(userId);
@@ -360,7 +364,7 @@ export class AuthRepository {
     const result = await this.pool.query<UserRow>(
       `UPDATE users SET ${setClauses.join(', ')}
        WHERE id = $${paramIndex}
-       RETURNING id, email, username, password_hash, avatar, bio, created_at, terms_accepted_at`,
+       RETURNING id, email, username, password_hash, avatar, bio, background_image, created_at, terms_accepted_at`,
       values
     );
     const row = result.rows[0];
