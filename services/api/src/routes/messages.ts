@@ -39,9 +39,9 @@ export function createMessageRoutes(config: MessageRoutesConfig): Router {
   // All message routes require authentication
   // Apply middleware only to routes that match (not to /auth paths)
   router.use((req, res, next) => {
-    // Skip auth middleware for /auth paths
+    // Skip auth middleware for /auth paths - let them pass through to auth router
     if (req.path.startsWith('/auth')) {
-      return next('route'); // Skip this router
+      return next(); // Pass through without auth
     }
     return authMiddleware(req, res, next);
   });
