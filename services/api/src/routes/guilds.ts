@@ -17,6 +17,7 @@ export interface GuildServiceInterface {
   createGuild(ownerId: string, name: string, options?: { description?: string; icon?: string; banner?: string }): Promise<{ guild: unknown }>;
   getUserGuilds(userId: string): Promise<unknown[]>;
   getGuild(guildId: string): Promise<unknown>;
+  getGuildByName(name: string): Promise<{ id: string } | null>;
   updateGuild(guildId: string, requesterId: string, updates: { name?: string; description?: string | null; icon?: string | null; banner?: string | null }): Promise<unknown>;
   deleteGuild(guildId: string, requesterId: string): Promise<void>;
   joinGuild(userId: string, inviteCode: string): Promise<unknown>;
@@ -29,7 +30,7 @@ export interface GuildServiceInterface {
   getGuildBans(guildId: string): Promise<unknown[]>;
   banMember(guildId: string, requesterId: string, targetUserId: string, reason?: string): Promise<unknown>;
   unbanMember(guildId: string, targetUserId: string): Promise<void>;
-  getRepository(): { isOwner: (guildId: string, userId: string) => Promise<boolean> };
+  getRepository(): { isOwner: (guildId: string, userId: string) => Promise<boolean>; addMember: (guildId: string, userId: string, isOwner?: boolean) => Promise<unknown> };
 }
 
 /**

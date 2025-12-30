@@ -30,16 +30,8 @@ export interface AuthServiceInterface {
  */
 export interface AuthRoutesConfig {
   authService: AuthServiceInterface;
-  guildService: GuildServiceInterface | null;
+  guildService: { getGuildByName: (name: string) => Promise<{ id: string } | null>; getRepository: () => { addMember: (guildId: string, userId: string, isOwner?: boolean) => Promise<unknown> } } | null;
   validateToken: TokenValidator;
-}
-
-/**
- * Minimal guild service interface for auth routes
- */
-export interface GuildServiceInterface {
-  getGuildByName(name: string): Promise<{ id: string } | null>;
-  getRepository(): { addMember: (guildId: string, userId: string, isOwner?: boolean) => Promise<unknown> };
 }
 
 /**
