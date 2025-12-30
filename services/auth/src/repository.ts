@@ -329,7 +329,7 @@ export class AuthRepository {
    */
   async updateProfile(
     userId: Snowflake,
-    updates: { username?: string; avatar?: string; bio?: string }
+    updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null }
   ): Promise<User> {
     const setClauses: string[] = [];
     const values: (string | null)[] = [];
