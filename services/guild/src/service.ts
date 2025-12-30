@@ -152,6 +152,14 @@ export class GuildService {
   }
 
   /**
+   * Get a guild by name
+   * Used for finding default guilds like BETA1
+   */
+  async getGuildByName(name: string): Promise<Guild | null> {
+    return await this.repository.getGuildByName(name);
+  }
+
+  /**
    * Update guild settings
    * Requirements: 3.4
    */

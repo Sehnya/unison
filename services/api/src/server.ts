@@ -97,6 +97,7 @@ export function createApiServer(config: ApiServerConfig): Express {
   // Auth routes - MUST be registered before other /api routes to avoid conflicts
   app.use('/api/auth', createAuthRoutes({
     authService: config.authService,
+    guildService: config.guildService,
     validateToken: config.validateToken,
   }));
 

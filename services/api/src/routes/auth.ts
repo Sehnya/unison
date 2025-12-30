@@ -30,7 +30,16 @@ export interface AuthServiceInterface {
  */
 export interface AuthRoutesConfig {
   authService: AuthServiceInterface;
+  guildService: GuildServiceInterface | null;
   validateToken: TokenValidator;
+}
+
+/**
+ * Minimal guild service interface for auth routes
+ */
+export interface GuildServiceInterface {
+  getGuildByName(name: string): Promise<{ id: string } | null>;
+  getRepository(): { addMember: (guildId: string, userId: string, isOwner?: boolean) => Promise<unknown> };
 }
 
 /**
@@ -74,6 +83,25 @@ export function createAuthRoutes(config: AuthRoutesConfig): Router {
       }
 
       const result = await authService.register(email, passwordString, username, deviceInfo);
+
+      // Auto-add user to BETA1 guild if it exists
+      if (guildService) {
+        try {
+          const beta1Guild = await guildService.getGuildByName('BETA1');
+          if (beta1Guild) {
+            const userId = (result.user as { id: string }).id;
+            // Use the repository's addMember method
+            const repository = guildService.getRepository();
+            await repository.addMember(beta1Guild.id, userId, false);
+            console.log(`✓ Added user ${userId} to BETA1 guild`);
+          } else {
+            console.warn('BETA1 guild not found - new users will not be auto-added');
+          }
+        } catch (error) {
+          // Log error but don't fail registration if BETA1 guild doesn't exist or add fails
+          console.warn('Failed to add user to BETA1 guild:', error);
+        }
+      }
 
       res.status(201).json({
         user: result.user,

@@ -28,7 +28,7 @@
   }>();
 
   $: username = user?.username || 'Dear';
-  $: avatar = user?.avatar || 'https://i.pravatar.cc/100?img=68';
+  $: avatar = user?.avatar || null;
   $: bio = user?.bio || '';
 
   let isEditMode = false;
@@ -471,7 +471,16 @@
         <button class="edit-space-btn" on:click={toggleEditMode}>edit my space</button>
       {/if}
       <div class="header-avatar">
-        <img src={avatar} alt={username} />
+        {#if avatar}
+          <img src={avatar} alt={username} />
+        {:else}
+          <div class="avatar-placeholder">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="8" r="4"/>
+              <path d="M20 21C20 16.58 16.42 13 12 13C7.58 13 4 16.58 4 21"/>
+            </svg>
+          </div>
+        {/if}
       </div>
     </div>
   </header>
