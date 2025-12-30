@@ -3,7 +3,7 @@
   import type { LoginResponse, ApiError } from '../types';
 
   const dispatch = createEventDispatcher<{ 
-    authenticated: { token: string };
+    authenticated: { token: string; user?: unknown };
     switchToRegister: void;
   }>();
 
@@ -23,13 +23,29 @@
         body: JSON.stringify({ email, password })
       });
 
+      // Try to parse response as JSON
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const text = await response.text();
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            throw new Error('Server returned invalid response');
+          }
+        }
+      }
+
       if (!response.ok) {
-        const data = await response.json();
-        const errorMessage = data.error?.message || data.message || 'Login failed';
+        const errorMessage = data?.error?.message || data?.message || `Login failed (${response.status})`;
         throw new Error(errorMessage);
       }
 
-      const data: LoginResponse = await response.json();
+      if (!data) {
+        throw new Error('Server returned empty response');
+      }
+
       dispatch('authenticated', { 
         token: data.tokens.access_token,
         user: data.user

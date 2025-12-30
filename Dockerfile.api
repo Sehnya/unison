@@ -3,11 +3,15 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
+# Install build dependencies for native modules (argon2)
+RUN apk add --no-cache python3 make g++
+
 # Copy package files
 COPY package*.json ./
 COPY packages/*/package.json ./packages/*/
 COPY services/*/package.json ./services/*/
 COPY frontend/package.json ./frontend/
+COPY scripts ./scripts
 
 # Install dependencies
 RUN npm ci
@@ -24,13 +28,19 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Install runtime dependencies for native modules (argon2)
+RUN apk add --no-cache libstdc++
+
 # Copy package files
 COPY package*.json ./
 COPY packages/*/package.json ./packages/*/
 COPY services/*/package.json ./services/*/
+COPY scripts ./scripts
 
-# Install production dependencies only
-RUN npm ci --production
+# Install production dependencies only (with build tools for native modules)
+RUN apk add --no-cache python3 make g++ && \
+    npm ci --production && \
+    apk del python3 make g++
 
 # Copy built files
 COPY --from=builder /app/packages ./packages
