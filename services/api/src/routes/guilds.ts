@@ -8,6 +8,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { createAuthMiddleware, type AuthenticatedRequest, type TokenValidator, requireSnowflake } from '../middleware.js';
 import { ApiError, ApiErrorCode } from '../errors.js';
+import type { ChannelServiceInterface } from './channels.js';
 
 /**
  * Guild service interface
