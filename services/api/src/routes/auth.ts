@@ -78,22 +78,22 @@ export function createAuthRoutes(config: AuthRoutesConfig): Router {
 
       const result = await authService.register(email, passwordString, username, deviceInfo);
 
-      // Auto-add user to BETA1 guild if it exists
+      // Auto-add user to BETA guild if it exists
       if (guildService) {
         try {
-          const beta1Guild = await guildService.getGuildByName('BETA1') as { id: string } | null;
-          if (beta1Guild) {
+          const betaGuild = await guildService.getGuildByName('BETA') as { id: string } | null;
+          if (betaGuild) {
             const userId = (result.user as { id: string }).id;
             // Use the repository's addMember method
             const repository = guildService.getRepository();
-            await repository.addMember(beta1Guild.id, userId, false);
-            console.log(`✓ Added user ${userId} to BETA1 guild`);
+            await repository.addMember(betaGuild.id, userId, false);
+            console.log(`✓ Added user ${userId} to BETA guild`);
           } else {
-            console.warn('BETA1 guild not found - new users will not be auto-added');
+            console.warn('BETA guild not found - new users will not be auto-added');
           }
         } catch (error) {
-          // Log error but don't fail registration if BETA1 guild doesn't exist or add fails
-          console.warn('Failed to add user to BETA1 guild:', error);
+          // Log error but don't fail registration if BETA guild doesn't exist or add fails
+          console.warn('Failed to add user to BETA guild:', error);
         }
       }
 
