@@ -37,17 +37,11 @@ export function createMessageRoutes(config: MessageRoutesConfig): Router {
   const authMiddleware = createAuthMiddleware(validateToken);
 
   // All message routes require authentication
-  // Apply middleware only to routes that match (not to /auth paths)
+  // Skip middleware for /auth paths to avoid 405 errors
   router.use((req, res, next) => {
-    // Skip auth middleware for /auth paths - let them pass through to auth router
-    // Check both req.path (relative to mount point) and req.originalUrl (full path)
-    const path = req.path || req.url || '';
-    const originalUrl = req.originalUrl || req.url || '';
-    
-    // If the path starts with /auth, skip this router entirely by calling next()
-    // This allows Express to continue to the next router (auth router)
-    if (path.startsWith('/auth') || originalUrl.includes('/auth/')) {
-      return next(); // Pass through to next router without applying auth
+    // If this is an auth route, skip this router entirely
+    if (req.path?.startsWith('/auth') || req.originalUrl?.includes('/auth/')) {
+      return next('route'); // Skip to next router
     }
     return authMiddleware(req, res, next);
   });

@@ -82,39 +82,32 @@ export function createApiServer(config: ApiServerConfig): Express {
   }));
 
   // Channel routes (includes /guilds/:guild_id/channels and /channels/:channel_id)
-  // Mount at specific paths to avoid catching /api/auth requests
+  // Routes are defined with full paths, so mount at /api (but auth router is registered first)
   const channelRoutes = createChannelRoutes({
     channelService: config.channelService,
     guildService: config.guildService,
     validateToken: config.validateToken,
   });
-  // Mount at /api/guilds and /api/channels (not at /api to avoid catching /api/auth)
-  app.use('/api/guilds', channelRoutes);
-  app.use('/api/channels', channelRoutes);
-  app.use('/guilds', channelRoutes);
-  app.use('/channels', channelRoutes);
+  app.use('/api', channelRoutes);
+  app.use('/', channelRoutes);
 
   // Message routes (includes /channels/:channel_id/messages)
-  // Mount at specific paths to avoid catching /api/auth requests
+  // Routes are defined with full paths, so mount at /api (but auth router is registered first)
   const messageRoutes = createMessageRoutes({
     messagingService: config.messagingService,
     validateToken: config.validateToken,
   });
-  // Mount at /api/channels (not at /api to avoid catching /api/auth)
-  app.use('/api/channels', messageRoutes);
-  app.use('/channels', messageRoutes);
+  app.use('/api', messageRoutes);
+  app.use('/', messageRoutes);
 
   // Role routes (includes /guilds/:guild_id/roles and /channels/:channel_id/overwrites)
-  // Mount at specific paths to avoid catching /api/auth requests
+  // Routes are defined with full paths, so mount at /api (but auth router is registered first)
   const roleRoutes = createRoleRoutes({
     permissionsService: config.permissionsService,
     validateToken: config.validateToken,
   });
-  // Mount at /api/guilds and /api/channels (not at /api to avoid catching /api/auth)
-  app.use('/api/guilds', roleRoutes);
-  app.use('/api/channels', roleRoutes);
-  app.use('/guilds', roleRoutes);
-  app.use('/channels', roleRoutes);
+  app.use('/api', roleRoutes);
+  app.use('/', roleRoutes);
 
   // 404 handler
   app.use((_req: Request, _res: Response, next: NextFunction) => {
