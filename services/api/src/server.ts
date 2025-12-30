@@ -104,6 +104,7 @@ export function createApiServer(config: ApiServerConfig): Express {
   // Also mount at /auth for backwards compatibility
   app.use('/auth', createAuthRoutes({
     authService: config.authService,
+    guildService: config.guildService,
     validateToken: config.validateToken,
   }));
 
