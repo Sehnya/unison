@@ -7,6 +7,7 @@
 
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
 import compression from 'compression';
+import cors from 'cors';
 import type { TokenValidator } from './middleware.js';
 import { errorHandler, ApiError, ApiErrorCode } from './errors.js';
 import {
@@ -39,6 +40,39 @@ export interface ApiServerConfig {
  */
 export function createApiServer(config: ApiServerConfig): Express {
   const app = express();
+
+  // CORS configuration
+  // Allow requests from frontend origin(s)
+  const allowedOrigins = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+    : [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'https://unison-production-1938.up.railway.app',
+        // Add other frontend origins as needed
+      ];
+
+  app.use(cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        // In development, allow all origins for easier testing
+        if (process.env.NODE_ENV === 'development') {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  }));
 
   // Middleware
   // Compression middleware for production (reduces response size)
