@@ -176,11 +176,12 @@
         }
       );
 
-      // Enter presence
+      // Enter presence with full user information
       await enterPresence(channelName, {
         odId: visitorId,
-        userName,
+        userName: currentUser?.username || userName,
         status: 'online',
+        avatar: currentUser?.avatar || null,
       });
     } catch (error) {
       console.warn('Ably initialization failed, continuing without real-time updates:', error);
