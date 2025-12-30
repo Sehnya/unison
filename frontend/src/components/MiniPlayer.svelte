@@ -25,12 +25,23 @@
   });
 
   onDestroy(() => {
-    if (ytPlayer) {
-      ytPlayer.destroy();
+    // Only pause, don't destroy - player should persist across navigation
+    // The player will be reused if component is recreated
+    if (ytPlayer && ytPlayer.pauseVideo) {
+      try {
+        // Pause but don't destroy to maintain state
+        ytPlayer.pauseVideo();
+      } catch (e) {
+        console.warn('Error pausing player on destroy:', e);
+      }
     }
     if (progressInterval) {
       clearInterval(progressInterval);
     }
+    // Note: We don't destroy the player here because:
+    // 1. The component should persist as long as there's a playlist
+    // 2. If the component is recreated, we want to reuse the player if possible
+    // 3. Only destroy when the playlist is actually cleared
   });
 
   function initYouTubeAPI() {
@@ -162,9 +173,16 @@
   $: if (track && ytPlayer && $musicStore.playerReady) {
     try {
       console.log('Loading new track:', track.videoId);
-      ytPlayer.loadVideoById(track.videoId);
-      if (isPlaying) {
-        ytPlayer.playVideo();
+      const currentVideoId = ytPlayer.getVideoData?.()?.video_id;
+      // Only load if it's a different video
+      if (currentVideoId !== track.videoId) {
+        ytPlayer.loadVideoById(track.videoId);
+        // Small delay to ensure video is loaded before playing
+        setTimeout(() => {
+          if (isPlaying && ytPlayer) {
+            ytPlayer.playVideo();
+          }
+        }, 100);
       }
     } catch (error) {
       console.error('Error loading track:', error);
