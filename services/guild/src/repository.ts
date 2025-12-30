@@ -300,11 +300,12 @@ export class GuildRepository {
       [name]
     );
 
-    if (result.rows.length === 0) {
+    const row = result.rows[0];
+    if (!row) {
       return null;
     }
 
-    return rowToGuild(result.rows[0]);
+    return rowToGuild(row);
   }
 
   /**
