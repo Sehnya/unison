@@ -3,7 +3,7 @@
 
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install && npm run build --workspaces --if-present"
+buildCommand = "npm install && chmod +x scripts/build.sh && ./scripts/build.sh"
 
 [deploy]
 startCommand = "npm run start -w @discord-clone/api"

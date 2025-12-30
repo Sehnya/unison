@@ -16,8 +16,8 @@ RUN npm ci
 COPY packages ./packages
 COPY services ./services
 
-# Build all packages and services
-RUN npm run build --workspaces --if-present
+# Build all packages and services (in dependency order)
+RUN chmod +x scripts/build.sh && ./scripts/build.sh
 
 # Production stage
 FROM node:18-alpine

@@ -7,7 +7,7 @@
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { ChannelType } from '@discord-clone/types';
-import { createAuthMiddleware, type TokenValidator, requireSnowflake } from '../middleware.js';
+import { createAuthMiddleware, type AuthenticatedRequest, type TokenValidator, requireSnowflake } from '../middleware.js';
 import { ApiError, ApiErrorCode } from '../errors.js';
 
 /**

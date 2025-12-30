@@ -13,7 +13,7 @@ import { config } from 'dotenv';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Pool } from 'pg';
-import { createPool, closePool, getDatabaseConfig } from './pool';
+import { createPool, closePool } from './pool.js';
 
 // Load .env file from project root
 const __filename = fileURLToPath(import.meta.url);

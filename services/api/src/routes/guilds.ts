@@ -28,6 +28,7 @@ export interface GuildServiceInterface {
   getGuildBans(guildId: string): Promise<unknown[]>;
   banMember(guildId: string, requesterId: string, targetUserId: string, reason?: string): Promise<unknown>;
   unbanMember(guildId: string, targetUserId: string): Promise<void>;
+  getRepository(): { isOwner: (guildId: string, userId: string) => Promise<boolean> };
 }
 
 /**

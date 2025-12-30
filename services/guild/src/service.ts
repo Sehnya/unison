@@ -266,8 +266,8 @@ export class GuildService {
     try {
       await client.query('BEGIN');
 
-      // Add member
-      const member = await this.repository.addMember(invite.guild_id, userId, client);
+      // Add member (not owner when joining via invite)
+      const member = await this.repository.addMember(invite.guild_id, userId, false, client);
 
       // Increment invite uses
       await this.repository.incrementInviteUses(inviteCode, client);

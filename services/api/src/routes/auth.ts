@@ -20,6 +20,9 @@ export interface AuthServiceInterface {
   logout(sessionId: string): Promise<void>;
   getSessions(userId: string): Promise<unknown[]>;
   revokeSession(userId: string, sessionId: string): Promise<void>;
+  getUserById(userId: string): Promise<unknown>;
+  acceptTerms(userId: string): Promise<void>;
+  updateProfile(userId: string, updates: { username?: string; avatar?: string; bio?: string }): Promise<unknown>;
 }
 
 /**
