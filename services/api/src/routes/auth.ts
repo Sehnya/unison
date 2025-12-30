@@ -39,7 +39,7 @@ export interface AuthRoutesConfig {
  */
 export function createAuthRoutes(config: AuthRoutesConfig): Router {
   const router = Router();
-  const { authService, validateToken } = config;
+  const { authService, guildService, validateToken } = config;
   const authMiddleware = createAuthMiddleware(validateToken);
 
   /**
