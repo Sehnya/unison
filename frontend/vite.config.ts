@@ -58,22 +58,36 @@ export default defineConfig(({ mode }) => {
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
+        secure: false,
+        ws: true,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, res) => {
+            console.log('Proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Proxying:', req.method, req.url, '->', proxyReq.path);
+          });
+        },
       },
       '/auth': {
         target: 'http://localhost:3001',
         changeOrigin: true,
+        secure: false,
       },
       '/guilds': {
         target: 'http://localhost:3001',
         changeOrigin: true,
+        secure: false,
       },
       '/channels': {
         target: 'http://localhost:3001',
         changeOrigin: true,
+        secure: false,
       },
       '/messages': {
         target: 'http://localhost:3001',
         changeOrigin: true,
+        secure: false,
       }
     }
   },
