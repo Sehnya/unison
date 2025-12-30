@@ -42,11 +42,16 @@ export function createRoleRoutes(config: RoleRoutesConfig): Router {
   const authMiddleware = createAuthMiddleware(validateToken);
 
   // All role routes require authentication
-  // Skip middleware for /auth paths to avoid 405 errors
+  // Skip this router entirely for /auth paths to avoid 405 errors
   router.use((req, res, next) => {
-    // If this is an auth route, skip this router entirely
-    if (req.path?.startsWith('/auth') || req.originalUrl?.includes('/auth/')) {
-      return next('route'); // Skip to next router
+    // If this is an auth route, skip this router by calling next() without applying middleware
+    // This allows Express to continue to the next router (auth router)
+    const path = req.path || req.url || '';
+    const originalUrl = req.originalUrl || req.url || '';
+    if (path.startsWith('/auth') || originalUrl.includes('/auth/')) {
+      // Skip this router - don't apply middleware, don't try to match routes
+      // Express will continue to the next router in the chain
+      return next();
     }
     return authMiddleware(req, res, next);
   });
