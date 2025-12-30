@@ -56,8 +56,9 @@ export const DEFAULT_PAGE_SIZE = 50;
 
 /**
  * Maximum message content length
+ * Increased to support base64 encoded images (up to ~25MB raw = ~33MB base64)
  */
-export const MAX_MESSAGE_LENGTH = 2000;
+export const MAX_MESSAGE_LENGTH = 50000000; // 50MB to handle large base64 images
 
 /**
  * Messaging Repository

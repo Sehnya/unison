@@ -305,7 +305,7 @@ export class AuthService {
    */
   async updateProfile(
     userId: Snowflake,
-    updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null }
+    updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string }
   ): Promise<User> {
     // Validate username if provided
     if (updates.username !== undefined) {

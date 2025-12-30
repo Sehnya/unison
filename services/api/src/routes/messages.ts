@@ -83,13 +83,14 @@ export function createMessageRoutes(config: MessageRoutesConfig): Router {
       const authorId = (message as any).author_id || (message as any).authorId || userId;
       if (authorId) {
         try {
-          const author = await authService.getUserById(authorId) as { id: string; username: string; avatar?: string | null } | null;
+          const author = await authService.getUserById(authorId) as { id: string; username: string; avatar?: string | null; username_font?: string | null } | null;
           if (author) {
             enrichedMessage = {
               ...(message as Record<string, unknown>),
               author_id: authorId,
               author_name: author.username,
               author_avatar: author.avatar || null,
+              author_font: author.username_font || null,
             };
           }
         } catch (error) {
@@ -142,19 +143,20 @@ export function createMessageRoutes(config: MessageRoutesConfig): Router {
 
       const messages = await messagingService.getMessages(channelId, userId, options);
 
-      // Enrich messages with author information (username, avatar)
+      // Enrich messages with author information (username, avatar, font)
       const enrichedMessages = await Promise.all(
         (messages as any[]).map(async (msg: any) => {
           const authorId = msg.author_id || msg.authorId;
           if (authorId) {
             try {
-              const author = await authService.getUserById(authorId) as { id: string; username: string; avatar?: string | null } | null;
+              const author = await authService.getUserById(authorId) as { id: string; username: string; avatar?: string | null; username_font?: string | null } | null;
               if (author) {
                 return {
                   ...msg,
                   author_id: authorId,
                   author_name: author.username,
                   author_avatar: author.avatar || null,
+                  author_font: author.username_font || null,
                 };
               }
             } catch (error) {
@@ -167,6 +169,7 @@ export function createMessageRoutes(config: MessageRoutesConfig): Router {
             author_id: authorId,
             author_name: 'Unknown',
             author_avatar: null,
+            author_font: null,
           };
         })
       );

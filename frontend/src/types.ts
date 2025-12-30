@@ -79,6 +79,7 @@ export interface User {
   avatar?: string;
   bio?: string;
   background_image?: string;
+  username_font?: string;
   status?: 'online' | 'offline' | 'idle' | 'dnd';
   role?: string;
   terms_accepted_at?: Date | string;

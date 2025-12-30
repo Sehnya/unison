@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import type { User } from '../types';
   import Avatar from './Avatar.svelte';
   import { apiUrl } from '../lib/api';
@@ -20,11 +20,50 @@
   let confirmPassword = '';
   let presence: PresenceStatus = 'online';
   let avatarUrl = user?.avatar || null;
-  let avatarBase64: string | null = user?.avatar || null; // Store base64 for saving
+  let avatarBase64: string | null = user?.avatar || null;
   let fileInput: HTMLInputElement;
   let showPasswordSection = false;
   let saveMessage = '';
   let saving = false;
+  
+  // Font selection
+  let selectedFont = (user as any)?.username_font || 'Inter';
+  let fontLoaded = false;
+  
+  // Popular Google Fonts for username display
+  const fontOptions = [
+    { name: 'Inter', category: 'Sans-serif' },
+    { name: 'Roboto', category: 'Sans-serif' },
+    { name: 'Open Sans', category: 'Sans-serif' },
+    { name: 'Lato', category: 'Sans-serif' },
+    { name: 'Montserrat', category: 'Sans-serif' },
+    { name: 'Poppins', category: 'Sans-serif' },
+    { name: 'Raleway', category: 'Sans-serif' },
+    { name: 'Nunito', category: 'Sans-serif' },
+    { name: 'Pangolin', category: 'Sans-serif' },
+    { name: 'Playfair Display', category: 'Serif' },
+    { name: 'Merriweather', category: 'Serif' },
+    { name: 'Lora', category: 'Serif' },
+    { name: 'Crimson Text', category: 'Serif' },
+    { name: 'Special Elite', category: 'Serif' },
+    { name: 'Pacifico', category: 'Handwriting' },
+    { name: 'Dancing Script', category: 'Handwriting' },
+    { name: 'Caveat', category: 'Handwriting' },
+    { name: 'Satisfy', category: 'Handwriting' },
+    { name: 'Cherry Bomb One', category: 'Display' },
+    { name: 'Concert One', category: 'Display' },
+    { name: 'Permanent Marker', category: 'Display' },
+    { name: 'Bebas Neue', category: 'Display' },
+    { name: 'Righteous', category: 'Display' },
+    { name: 'Bangers', category: 'Display' },
+    { name: 'Press Start 2P', category: 'Display' },
+    { name: 'Freckle Face', category: 'Display' },
+    { name: 'UnifrakturCook', category: 'Display' },
+    { name: 'Jersey 10', category: 'Display' },
+    { name: 'VT323', category: 'Monospace' },
+    { name: 'Fira Code', category: 'Monospace' },
+    { name: 'JetBrains Mono', category: 'Monospace' },
+  ];
 
   const presenceOptions: { value: PresenceStatus; label: string; color: string }[] = [
     { value: 'online', label: 'Online', color: '#22c55e' },
@@ -32,6 +71,31 @@
     { value: 'dnd', label: 'Do Not Disturb', color: '#ef4444' },
     { value: 'offline', label: 'Invisible', color: '#6b7280' },
   ];
+  
+  // Load Google Font dynamically
+  function loadGoogleFont(fontName: string) {
+    const fontId = `google-font-${fontName.replace(/\s+/g, '-').toLowerCase()}`;
+    
+    // Check if already loaded
+    if (document.getElementById(fontId)) return;
+    
+    const link = document.createElement('link');
+    link.id = fontId;
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName)}:wght@400;500;600;700&display=swap`;
+    document.head.appendChild(link);
+  }
+  
+  // Load selected font on mount and when it changes
+  onMount(() => {
+    loadGoogleFont(selectedFont);
+    fontLoaded = true;
+  });
+  
+  function handleFontChange(fontName: string) {
+    selectedFont = fontName;
+    loadGoogleFont(fontName);
+  }
 
   function handleAvatarUpload(e: Event) {
     const input = e.target as HTMLInputElement;
@@ -80,6 +144,7 @@
         body: JSON.stringify({
           username: username.trim(),
           avatar: avatarBase64,
+          username_font: selectedFont,
         }),
       });
 
@@ -90,6 +155,7 @@
           user: data.user || {
             username: username.trim(),
             avatar: avatarBase64,
+            username_font: selectedFont,
           }
         });
         saveMessage = 'Profile saved!';
@@ -184,6 +250,39 @@
         />
         <span class="char-count">{username.length}/32</span>
       </div>
+    </section>
+
+    <!-- Username Font Section -->
+    <section class="settings-section">
+      <h3>Username Font</h3>
+      <div class="font-preview" style="font-family: {selectedFont}, sans-serif;">
+        {username || 'Preview'}
+      </div>
+      <div class="font-selector">
+        <select 
+          class="font-select"
+          bind:value={selectedFont}
+          on:change={(e) => handleFontChange(e.currentTarget.value)}
+        >
+          {#each fontOptions as font}
+            <option value={font.name}>{font.name} ({font.category})</option>
+          {/each}
+        </select>
+      </div>
+      <div class="font-grid">
+        {#each fontOptions.slice(0, 8) as font}
+          <button 
+            class="font-option"
+            class:active={selectedFont === font.name}
+            style="font-family: {font.name}, sans-serif;"
+            on:click={() => handleFontChange(font.name)}
+            title={font.name}
+          >
+            Aa
+          </button>
+        {/each}
+      </div>
+      <p class="hint">Choose a font for your username display</p>
     </section>
 
     <!-- Presence Section -->
@@ -467,6 +566,84 @@
     transform: translateY(-50%);
     font-size: 11px;
     color: rgba(255, 255, 255, 0.3);
+  }
+
+  /* Font Selector */
+  .font-preview {
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    font-size: 24px;
+    color: #fff;
+    text-align: center;
+    margin-bottom: 12px;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .font-selector {
+    margin-bottom: 12px;
+  }
+
+  .font-select {
+    width: 100%;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+
+  .font-select:focus {
+    outline: none;
+    border-color: #3182ce;
+  }
+
+  .font-select option {
+    background: #1a1a1a;
+    color: #fff;
+  }
+
+  .font-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .font-option {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .font-option:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+
+  .font-option.active {
+    background: rgba(49, 130, 206, 0.2);
+    border-color: rgba(49, 130, 206, 0.5);
+    color: #63b3ed;
   }
 
   /* Presence Options */

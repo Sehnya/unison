@@ -88,9 +88,9 @@ export function createApiServer(config: ApiServerConfig): Express {
     app.use(compression());
   }
   
-  // Increase body size limit to 10MB to handle image uploads (base64 encoded)
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  // Increase body size limit to 50MB to handle image uploads (base64 encoded)
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   // Health check
   app.get('/health', (_req: Request, res: Response) => {

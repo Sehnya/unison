@@ -43,6 +43,7 @@ export interface ChatMessage {
   authorId: string;
   authorName: string;
   authorAvatar?: string;
+  authorFont?: string;
   content: string;
   timestamp: number;
   channelId: string;
