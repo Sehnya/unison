@@ -288,6 +288,26 @@ export class GuildRepository {
   }
 
   /**
+   * Get a guild by name
+   * Used for finding default guilds like BETA1
+   */
+  async getGuildByName(name: string): Promise<Guild | null> {
+    const result = await this.pool.query<GuildRow>(
+      `SELECT id, owner_id, name, description, icon, banner, created_at, deleted_at
+       FROM guilds
+       WHERE name = $1 AND deleted_at IS NULL
+       LIMIT 1`,
+      [name]
+    );
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    return rowToGuild(result.rows[0]);
+  }
+
+  /**
    * Update guild settings
    * Requirements: 3.4
    */
