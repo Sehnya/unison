@@ -22,6 +22,7 @@
     type ProfileCard,
     type MiniWidget
   } from '../lib/profileStorage';
+  import { apiUrl } from '../lib/api';
 
   export let user: User | null = null;
   export let authToken: string = '';
@@ -248,7 +249,7 @@
       // Save to database via API
       if (authToken && user?.id) {
         try {
-          const response = await fetch('/api/auth/profile', {
+          const response = await fetch(apiUrl('/api/auth/profile'), {
             method: 'PATCH',
             headers: {
               'Authorization': `Bearer ${authToken}`,
@@ -284,7 +285,7 @@
     // Save to database via API
     if (authToken && user?.id) {
       try {
-        const response = await fetch('/api/auth/profile', {
+        const response = await fetch(apiUrl('/api/auth/profile'), {
           method: 'PATCH',
           headers: {
             'Authorization': `Bearer ${authToken}`,
@@ -299,7 +300,7 @@
           const data = await response.json();
           // Update user prop if possible (will be reactive)
           if (user) {
-            user.background_image = null;
+            user.background_image = undefined;
           }
         } else {
           console.error('Failed to remove background image');
