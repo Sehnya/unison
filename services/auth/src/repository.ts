@@ -11,6 +11,7 @@ export interface UserRow {
   password_hash: string;
   avatar: string | null;
   bio: string | null;
+  background_image: string | null;
   created_at: Date;
   terms_accepted_at?: Date | null;
 }
@@ -42,6 +43,9 @@ export function rowToUser(row: UserRow): User {
   }
   if (row.bio) {
     (user as User & { bio?: string }).bio = row.bio;
+  }
+  if (row.background_image) {
+    (user as User & { background_image?: string }).background_image = row.background_image;
   }
   if (row.terms_accepted_at) {
     (user as User & { terms_accepted_at?: Date }).terms_accepted_at = row.terms_accepted_at;
@@ -83,7 +87,7 @@ export class AuthRepository {
     const result = await conn.query<UserRow>(
       `INSERT INTO users (id, email, username, password_hash)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, email, username, password_hash, avatar, bio, created_at, terms_accepted_at`,
+       RETURNING id, email, username, password_hash, avatar, bio, background_image, created_at, terms_accepted_at`,
       [id, email.toLowerCase().trim(), username.trim(), passwordHash]
     );
     const row = result.rows[0];
@@ -98,7 +102,7 @@ export class AuthRepository {
    */
   async findUserByEmail(email: string): Promise<(User & { password_hash: string }) | null> {
     const result = await this.pool.query<UserRow>(
-      `SELECT id, email, username, password_hash, avatar, bio, created_at, terms_accepted_at
+      `SELECT id, email, username, password_hash, avatar, bio, background_image, created_at, terms_accepted_at
        FROM users WHERE email = $1`,
       [email.toLowerCase().trim()]
     );
@@ -118,7 +122,7 @@ export class AuthRepository {
    */
   async findUserById(id: Snowflake): Promise<User | null> {
     const result = await this.pool.query<UserRow>(
-      `SELECT id, email, username, password_hash, avatar, bio, created_at, terms_accepted_at
+      `SELECT id, email, username, password_hash, avatar, bio, background_image, created_at, terms_accepted_at
        FROM users WHERE id = $1`,
       [id]
     );

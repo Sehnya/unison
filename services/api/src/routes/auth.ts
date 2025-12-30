@@ -286,12 +286,13 @@ export function createAuthRoutes(config: AuthRoutesConfig): Router {
   router.patch('/profile', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id: userId } = (req as AuthenticatedRequest).user;
-      const { username, avatar, bio } = req.body;
+      const { username, avatar, bio, background_image } = req.body;
 
-      const updates: { username?: string; avatar?: string; bio?: string } = {};
+      const updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null } = {};
       if (username !== undefined) updates.username = username;
       if (avatar !== undefined) updates.avatar = avatar;
       if (bio !== undefined) updates.bio = bio;
+      if (background_image !== undefined) updates.background_image = background_image;
 
       const user = await authService.updateProfile(userId, updates);
 

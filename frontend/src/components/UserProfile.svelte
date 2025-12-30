@@ -22,6 +22,7 @@
   } from '../lib/profileStorage';
 
   export let user: User | null = null;
+  export let authToken: string = '';
 
   const dispatch = createEventDispatcher<{
     close: void;
@@ -30,9 +31,7 @@
   $: username = user?.username || 'Dear';
   $: avatar = user?.avatar || null;
   $: bio = user?.bio || '';
-
-  let isEditMode = false;
-  let backgroundImage: string | null = null;
+  $: backgroundImage = user?.background_image || null;
   let fileInput: HTMLInputElement;
   let customGreeting = 'HI,';
   let isEditingGreeting = false;
@@ -77,7 +76,7 @@
 
   // Load profile data on mount
   // Profile customization (cards, layout, etc.) is stored in localStorage and is per-browser
-  // The user prop contains the actual user data (username, avatar, bio) from the database
+  // The user prop contains the actual user data (username, avatar, bio, background_image) from the database
   onMount(() => {
     // Always load profile customization data from localStorage
     // This is the current user's profile layout/customization
@@ -86,7 +85,7 @@
     // Load layout
     cards = profileData.cards as Card[];
     customGreeting = profileData.greeting;
-    backgroundImage = profileData.backgroundImage;
+    // backgroundImage is now loaded from user prop (reactive) - no longer from localStorage
     miniWidgets = profileData.miniWidgets;
     
     // Load quote contents
@@ -222,7 +221,7 @@
     updateProfileWidgets(miniWidgets);
   }
 
-  function handleBackgroundUpload(e: Event) {
+  async function handleBackgroundUpload(e: Event) {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -235,16 +234,75 @@
 
     // Convert to base64 for persistence
     const reader = new FileReader();
-    reader.onload = (event) => {
-      backgroundImage = event.target?.result as string;
-      updateProfileBackground(backgroundImage);
+    reader.onload = async (event) => {
+      const base64Image = event.target?.result as string;
+      backgroundImage = base64Image;
+      
+      // Save to database via API
+      if (authToken && user?.id) {
+        try {
+          const response = await fetch('/api/auth/profile', {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${authToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              background_image: base64Image,
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            // Update user prop if possible (will be reactive)
+            if (user) {
+              user.background_image = base64Image;
+            }
+          } else {
+            console.error('Failed to save background image');
+            alert('Failed to save background image. Please try again.');
+          }
+        } catch (error) {
+          console.error('Error saving background image:', error);
+          alert('Error saving background image. Please try again.');
+        }
+      }
     };
     reader.readAsDataURL(file);
   }
 
-  function removeBackground() {
+  async function removeBackground() {
     backgroundImage = null;
-    updateProfileBackground(null);
+    
+    // Save to database via API
+    if (authToken && user?.id) {
+      try {
+        const response = await fetch('/api/auth/profile', {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            background_image: null,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // Update user prop if possible (will be reactive)
+          if (user) {
+            user.background_image = null;
+          }
+        } else {
+          console.error('Failed to remove background image');
+          alert('Failed to remove background image. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error removing background image:', error);
+        alert('Error removing background image. Please try again.');
+      }
+    }
   }
 
   function triggerFileInput() {

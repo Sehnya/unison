@@ -78,6 +78,7 @@ export interface User {
   email?: string;
   avatar?: string;
   bio?: string;
+  background_image?: string;
   status?: 'online' | 'offline' | 'idle' | 'dnd';
   role?: string;
   terms_accepted_at?: Date | string;

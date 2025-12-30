@@ -9,6 +9,7 @@ export interface User {
   username: string;
   avatar?: string;
   bio?: string;
+  background_image?: string;
   created_at: Date;
   terms_accepted_at?: Date;
 }

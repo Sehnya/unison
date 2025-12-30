@@ -429,6 +429,7 @@
       {#if showUserProfile}
         <UserProfile 
           user={viewedUser || currentUser}
+          authToken={authToken || ''}
           on:close={() => { showUserProfile = false; viewedUser = null; }}
         />
       {:else if selectedDMId && selectedDMUser}
