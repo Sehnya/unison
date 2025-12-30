@@ -1,35 +1,82 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { Room, RoomEvent, RemoteParticipant, LocalParticipant, TrackPublication, Track } from 'livekit-client';
+  import { Room, RoomEvent, RemoteParticipant, LocalParticipant, TrackPublication, Track, ConnectionQuality, VideoPresets } from 'livekit-client';
   import type { User } from '../types';
   import { apiUrl } from '../lib/api';
+  import { getAblyClient } from '../lib/ably';
+  import Avatar from './Avatar.svelte';
 
   export let channelId: string;
   export let channelName: string;
   export let authToken: string;
   export let currentUser: User | null = null;
+  export let onDisconnect: () => void = () => {};
 
   let room: Room | null = null;
   let isConnected = false;
   let isConnecting = false;
-  let participants: Map<string, RemoteParticipant | LocalParticipant> = new Map();
-  let localParticipant: LocalParticipant | null = null;
   let error: string | null = null;
+  
+  // Audio/Video state
   let isMuted = false;
   let isDeafened = false;
-  let localAudioTrack: any = null;
+  let isVideoEnabled = false;
+  let isScreenSharing = false;
+  let outputVolume = 100;
+  let inputVolume = 100;
+  
+  // UI state
+  let showSettings = false;
+  let showParticipantList = true;
+  let connectionQuality: ConnectionQuality = ConnectionQuality.Unknown;
+  let localVideoElement: HTMLVideoElement | null = null;
+  let screenShareElement: HTMLVideoElement | null = null;
+  
+  // Ably presence channel
+  let ablyPresenceChannel: any = null;
 
   // Participant display data
   interface ParticipantDisplay {
     id: string;
     name: string;
-    avatar?: string;
+    avatar?: string | null;
     isSpeaking: boolean;
     isMuted: boolean;
+    isVideoEnabled: boolean;
+    isScreenSharing: boolean;
     audioLevel: number;
+    connectionQuality: ConnectionQuality;
+    videoTrack?: Track;
   }
 
   let participantDisplays: ParticipantDisplay[] = [];
+  let speakingInterval: ReturnType<typeof setInterval> | null = null;
+  
+  // Enter Ably presence when connected
+  async function enterAblyPresence() {
+    const client = getAblyClient();
+    if (!client || !currentUser) return;
+    
+    ablyPresenceChannel = client.channels.get(`voice:${channelId}`);
+    try {
+      await ablyPresenceChannel.presence.enter({
+        username: currentUser.username,
+        avatar: currentUser.avatar || null,
+      });
+    } catch (err) {
+      console.warn('Failed to enter Ably presence:', err);
+    }
+  }
+  
+  // Leave Ably presence when disconnecting
+  async function leaveAblyPresence() {
+    if (!ablyPresenceChannel) return;
+    try {
+      await ablyPresenceChannel.presence.leave();
+    } catch (err) {
+      console.warn('Failed to leave Ably presence:', err);
+    }
+  }
 
   async function connectToRoom() {
     if (isConnecting || isConnected) return;
@@ -38,7 +85,6 @@
     error = null;
 
     try {
-      // Get LiveKit token from API
       const response = await fetch(apiUrl('/api/livekit/token'), {
         method: 'POST',
         headers: {
@@ -58,20 +104,21 @@
 
       const { token, wsUrl } = await response.json();
 
-      // Create room and connect
       room = new Room({
         adaptiveStream: true,
         dynacast: true,
+        videoCaptureDefaults: {
+          resolution: VideoPresets.h720.resolution,
+        },
       });
 
-      // Set up event listeners
       setupRoomListeners();
-
-      // Connect to room
       await room.connect(wsUrl, token);
       isConnected = true;
-
-      // Enable microphone
+      
+      // Enter Ably presence so other users can see us in the channel list
+      await enterAblyPresence();
+      
       await enableMicrophone();
     } catch (err) {
       console.error('Failed to connect to voice room:', err);
@@ -85,47 +132,44 @@
   function setupRoomListeners() {
     if (!room) return;
 
-    room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
-      console.log('Participant connected:', participant.identity);
-      participants.set(participant.identity, participant);
-      updateParticipantDisplays();
-    });
-
-    room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
-      console.log('Participant disconnected:', participant.identity);
-      participants.delete(participant.identity);
-      updateParticipantDisplays();
-    });
-
+    room.on(RoomEvent.ParticipantConnected, () => updateParticipantDisplays());
+    room.on(RoomEvent.ParticipantDisconnected, () => updateParticipantDisplays());
+    
     room.on(RoomEvent.TrackSubscribed, (track: Track, publication: TrackPublication, participant: RemoteParticipant | LocalParticipant) => {
-      console.log('Track subscribed:', track.kind, participant.identity);
       if (track.kind === 'audio') {
-        track.attach(document.createElement('audio') as HTMLAudioElement);
+        const audioElement = document.createElement('audio');
+        audioElement.autoplay = true;
+        (audioElement as any).playsInline = true;
+        audioElement.volume = outputVolume / 100;
+        track.attach(audioElement);
+        audioElement.style.display = 'none';
+        document.body.appendChild(audioElement);
       }
       updateParticipantDisplays();
     });
 
-    room.on(RoomEvent.TrackUnsubscribed, (track: Track, publication: TrackPublication, participant: RemoteParticipant | LocalParticipant) => {
-      console.log('Track unsubscribed:', track.kind, participant.identity);
-      track.detach();
+    room.on(RoomEvent.TrackUnsubscribed, (track: Track) => {
+      const elements = track.detach();
+      elements.forEach((el) => el.parentNode?.removeChild(el));
       updateParticipantDisplays();
     });
 
-    room.on(RoomEvent.LocalTrackPublished, (publication: TrackPublication, participant: LocalParticipant) => {
-      console.log('Local track published:', publication.kind);
-      localParticipant = participant;
+    room.on(RoomEvent.LocalTrackPublished, () => updateParticipantDisplays());
+    room.on(RoomEvent.LocalTrackUnpublished, () => updateParticipantDisplays());
+    room.on(RoomEvent.AudioPlaybackStatusChanged, () => updateParticipantDisplays());
+    
+    room.on(RoomEvent.ConnectionQualityChanged, (quality: ConnectionQuality) => {
+      connectionQuality = quality;
       updateParticipantDisplays();
     });
 
-    room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
-      updateParticipantDisplays();
+    room.on(RoomEvent.Disconnected, () => {
+      isConnected = false;
+      participantDisplays = [];
     });
 
-    // Update speaking status periodically
-    const speakingInterval = setInterval(() => {
-      if (room && isConnected) {
-        updateParticipantDisplays();
-      }
+    speakingInterval = setInterval(() => {
+      if (room && isConnected) updateParticipantDisplays();
     }, 100);
   }
 
@@ -134,29 +178,41 @@
 
     const displays: ParticipantDisplay[] = [];
 
-    // Add local participant
     if (room.localParticipant) {
-      const localPub = room.localParticipant.audioTrackPublications.values().next().value;
+      const lp = room.localParticipant;
+      const videoTrack = Array.from(lp.videoTrackPublications.values()).find(p => p.source === Track.Source.Camera)?.track;
+      const screenTrack = Array.from(lp.videoTrackPublications.values()).find(p => p.source === Track.Source.ScreenShare)?.track;
+      
       displays.push({
-        id: room.localParticipant.identity,
+        id: lp.identity,
         name: currentUser?.username || 'You',
         avatar: currentUser?.avatar || null,
-        isSpeaking: room.localParticipant.isSpeaking,
+        isSpeaking: lp.isSpeaking,
         isMuted: isMuted,
-        audioLevel: room.localParticipant.isSpeaking ? 0.5 : 0,
+        isVideoEnabled: isVideoEnabled,
+        isScreenSharing: isScreenSharing,
+        audioLevel: lp.isSpeaking ? 0.5 : 0,
+        connectionQuality: lp.connectionQuality,
+        videoTrack: videoTrack || screenTrack,
       });
     }
 
-    // Add remote participants
     room.remoteParticipants.forEach((participant) => {
+      const videoTrack = Array.from(participant.videoTrackPublications.values()).find(p => p.source === Track.Source.Camera)?.track;
+      const screenTrack = Array.from(participant.videoTrackPublications.values()).find(p => p.source === Track.Source.ScreenShare)?.track;
       const audioPub = participant.audioTrackPublications.values().next().value;
+      
       displays.push({
         id: participant.identity,
-        name: participant.name || `User ${participant.identity}`,
-        avatar: null, // Could be enhanced to fetch from API
+        name: participant.name || `User ${participant.identity.slice(0, 8)}`,
+        avatar: null,
         isSpeaking: participant.isSpeaking,
-        isMuted: !audioPub || !audioPub.isSubscribed,
+        isMuted: !audioPub || audioPub.isMuted,
+        isVideoEnabled: !!videoTrack,
+        isScreenSharing: !!screenTrack,
         audioLevel: participant.isSpeaking ? 0.5 : 0,
+        connectionQuality: participant.connectionQuality,
+        videoTrack: videoTrack || screenTrack,
       });
     });
 
@@ -165,9 +221,8 @@
 
   async function enableMicrophone() {
     if (!room) return;
-
     try {
-      localAudioTrack = await room.localParticipant.setMicrophoneEnabled(true);
+      await room.localParticipant.setMicrophoneEnabled(true);
       isMuted = false;
       updateParticipantDisplays();
     } catch (err) {
@@ -178,310 +233,817 @@
 
   async function toggleMute() {
     if (!room) return;
-
     try {
       isMuted = !isMuted;
       await room.localParticipant.setMicrophoneEnabled(!isMuted);
       updateParticipantDisplays();
     } catch (err) {
       console.error('Failed to toggle mute:', err);
+      isMuted = !isMuted;
     }
   }
 
   async function toggleDeafen() {
     if (!room) return;
-
     try {
       isDeafened = !isDeafened;
-      await room.localParticipant.setMicrophoneEnabled(!isDeafened && !isMuted);
-      // Mute audio playback when deafened
       if (isDeafened) {
-        room.remoteParticipants.forEach((participant) => {
-          participant.audioTrackPublications.forEach((pub) => {
-            if (pub.track) {
-              (pub.track.attach(document.createElement('audio') as HTMLAudioElement) as HTMLAudioElement).muted = true;
-            }
-          });
-        });
+        await room.localParticipant.setMicrophoneEnabled(false);
+        isMuted = true;
       }
+      document.querySelectorAll('audio').forEach((el) => {
+        el.muted = isDeafened;
+      });
+      updateParticipantDisplays();
     } catch (err) {
       console.error('Failed to toggle deafen:', err);
+      isDeafened = !isDeafened;
+    }
+  }
+
+  async function toggleVideo() {
+    if (!room) return;
+    try {
+      isVideoEnabled = !isVideoEnabled;
+      await room.localParticipant.setCameraEnabled(isVideoEnabled);
+      updateParticipantDisplays();
+    } catch (err) {
+      console.error('Failed to toggle video:', err);
+      isVideoEnabled = !isVideoEnabled;
+      error = 'Failed to enable camera. Please check permissions.';
+    }
+  }
+
+  async function toggleScreenShare() {
+    if (!room) return;
+    try {
+      isScreenSharing = !isScreenSharing;
+      await room.localParticipant.setScreenShareEnabled(isScreenSharing);
+      updateParticipantDisplays();
+    } catch (err) {
+      console.error('Failed to toggle screen share:', err);
+      isScreenSharing = !isScreenSharing;
+    }
+  }
+
+  function handleVolumeChange(e: Event) {
+    const target = e.target as HTMLInputElement;
+    outputVolume = parseInt(target.value);
+    document.querySelectorAll('audio').forEach((el) => {
+      el.volume = outputVolume / 100;
+    });
+  }
+
+  function getConnectionQualityLabel(quality: ConnectionQuality): string {
+    switch (quality) {
+      case ConnectionQuality.Excellent: return 'Excellent';
+      case ConnectionQuality.Good: return 'Good';
+      case ConnectionQuality.Poor: return 'Poor';
+      case ConnectionQuality.Lost: return 'Lost';
+      default: return 'Unknown';
+    }
+  }
+
+  function getConnectionQualityColor(quality: ConnectionQuality): string {
+    switch (quality) {
+      case ConnectionQuality.Excellent: return '#22c55e';
+      case ConnectionQuality.Good: return '#84cc16';
+      case ConnectionQuality.Poor: return '#f59e0b';
+      case ConnectionQuality.Lost: return '#ef4444';
+      default: return '#6b7280';
     }
   }
 
   async function disconnect() {
+    if (speakingInterval) clearInterval(speakingInterval);
+    
+    // Leave Ably presence first
+    await leaveAblyPresence();
+    
     if (room) {
       room.disconnect();
       room = null;
     }
     isConnected = false;
-    participants.clear();
     participantDisplays = [];
-    localAudioTrack = null;
+    onDisconnect();
   }
 
-  onMount(() => {
-    connectToRoom();
-  });
-
-  onDestroy(() => {
-    disconnect();
-  });
+  onMount(() => connectToRoom());
+  onDestroy(() => disconnect());
 </script>
 
 <div class="voice-room">
-  <div class="voice-header">
+  <!-- Header -->
+  <header class="voice-header">
     <div class="channel-info">
-      <svg class="voice-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-      </svg>
-      <h3>{channelName}</h3>
+      <div class="voice-icon-wrapper">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
+          <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
+          <path d="M12 19V23M8 23H16"/>
+        </svg>
+      </div>
+      <div class="channel-details">
+        <h3>{channelName}</h3>
+        <span class="participant-count">{participantDisplays.length} participant{participantDisplays.length !== 1 ? 's' : ''}</span>
+      </div>
     </div>
-    <button class="close-btn" on:click={disconnect}>×</button>
-  </div>
+    
+    <div class="header-actions">
+      <!-- Connection Quality -->
+      {#if isConnected}
+        <div class="connection-quality" title="Connection: {getConnectionQualityLabel(connectionQuality)}">
+          <div class="quality-bars">
+            {#each [1, 2, 3, 4] as bar}
+              <div 
+                class="quality-bar" 
+                class:active={Number(connectionQuality) >= bar}
+                style="background-color: {Number(connectionQuality) >= bar ? getConnectionQualityColor(connectionQuality) : 'rgba(255,255,255,0.2)'}"
+              ></div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+      
+      <button class="icon-btn" on:click={() => showParticipantList = !showParticipantList} title="Toggle participants">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      </button>
+      
+      <button class="icon-btn" on:click={() => showSettings = !showSettings} title="Settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
 
-  {#if error}
-    <div class="error-message">{error}</div>
+  <!-- Settings Panel -->
+  {#if showSettings}
+    <div class="settings-panel">
+      <div class="settings-section">
+        <span class="settings-label">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          </svg>
+          Output Volume
+        </span>
+        <div class="volume-control">
+          <input type="range" min="0" max="100" value={outputVolume} on:input={handleVolumeChange} aria-label="Output volume" />
+          <span class="volume-value">{outputVolume}%</span>
+        </div>
+      </div>
+    </div>
   {/if}
 
-  {#if isConnecting}
-    <div class="connecting">
-      <div class="spinner"></div>
-      <p>Connecting to voice channel...</p>
+  <!-- Error Message -->
+  {#if error}
+    <div class="error-banner">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span>{error}</span>
+      <button class="dismiss-btn" on:click={() => error = null}>×</button>
     </div>
-  {:else if isConnected}
-    <div class="voice-content">
-      <div class="participants-grid">
-        {#each participantDisplays as participant (participant.id)}
-          <div class="participant-card" class:speaking={participant.isSpeaking} class:muted={participant.isMuted}>
-            <div class="participant-avatar">
-              {#if participant.avatar}
-                <img src={participant.avatar} alt={participant.name} />
+  {/if}
+
+  <!-- Main Content -->
+  <div class="voice-content">
+    {#if isConnecting}
+      <div class="connecting-state">
+        <div class="pulse-ring"></div>
+        <div class="connecting-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
+            <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
+          </svg>
+        </div>
+        <p>Connecting to voice channel...</p>
+      </div>
+    {:else if isConnected}
+      <!-- Participants Grid -->
+      <div class="participants-area" class:with-sidebar={showParticipantList}>
+        <div class="video-grid">
+          {#each participantDisplays as participant (participant.id)}
+            <div class="participant-tile" class:speaking={participant.isSpeaking} class:video-active={participant.isVideoEnabled || participant.isScreenSharing}>
+              {#if participant.videoTrack}
+                <video 
+                  class="participant-video"
+                  autoplay 
+                  playsinline
+                  muted={participant.id === room?.localParticipant?.identity}
+                  use:attachVideo={participant.videoTrack}
+                ></video>
               {:else}
-                <div class="avatar-placeholder">
-                  {participant.name.charAt(0).toUpperCase()}
+                <div class="participant-avatar-wrapper">
+                  <Avatar 
+                    userId={participant.id} 
+                    username={participant.name} 
+                    src={participant.avatar} 
+                    size={80} 
+                  />
                 </div>
               {/if}
+              
+              <!-- Participant Info Overlay -->
+              <div class="participant-overlay">
+                <div class="participant-name-row">
+                  <span class="participant-name">{participant.name}</span>
+                  <div class="participant-indicators">
+                    {#if participant.isMuted}
+                      <div class="indicator muted" title="Muted">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+                        </svg>
+                      </div>
+                    {/if}
+                    {#if participant.isScreenSharing}
+                      <div class="indicator screen" title="Screen sharing">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
+                        </svg>
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Speaking Ring -->
               {#if participant.isSpeaking}
-                <div class="speaking-indicator"></div>
+                <div class="speaking-ring"></div>
               {/if}
             </div>
-            <div class="participant-info">
-              <span class="participant-name">{participant.name}</span>
-              {#if participant.isMuted}
-                <svg class="mute-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
-                </svg>
-              {/if}
-            </div>
-          </div>
-        {/each}
-      </div>
+          {/each}
+        </div>
 
-      <div class="voice-controls">
-        <button class="control-btn" class:muted={isMuted} on:click={toggleMute} title={isMuted ? 'Unmute' : 'Mute'}>
-          {#if isMuted}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
-            </svg>
-          {:else}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
-            </svg>
-          {/if}
-        </button>
-        <button class="control-btn" class:deafened={isDeafened} on:click={toggleDeafen} title={isDeafened ? 'Undeafen' : 'Deafen'}>
-          {#if isDeafened}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 4c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2s2-.9 2-2V6c0-1.1-.9-2-2-2zm8.78.28l-1.06 1.06c.84 1.18 1.28 2.57 1.28 4.06s-.44 2.88-1.28 4.06l1.06 1.06c1.17-1.54 1.78-3.36 1.78-5.12s-.61-3.58-1.78-5.12zM5.28 4.22l1.06 1.06C5.44 6.42 5 7.81 5 9.3s.44 2.88 1.28 4.06l-1.06 1.06C4.11 12.82 3.5 11 3.5 9.3s.61-3.58 1.78-5.08zm15.9 1.06l-1.06 1.06c.5.7.88 1.5 1.1 2.36l1.98-.4c-.3-1.1-.8-2.1-1.48-3.02zM4.28 5.28l1.06 1.06c-.7.92-1.18 1.92-1.48 3.02l1.98.4c.22-.86.6-1.66 1.1-2.36l-1.06-1.06zM12 16c-2.21 0-4-1.79-4-4v-1h8v1c0 2.21-1.79 4-4 4zm0 2c-1.1 0-2 .9-2 2v2h4v-2c0-1.1-.9-2-2-2z"/>
-            </svg>
-          {:else}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-            </svg>
-          {/if}
-        </button>
-        <button class="control-btn disconnect" on:click={disconnect} title="Disconnect">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12.5 7c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zm-2-5c2.76 0 5 2.24 5 5s-2.24 5-5 5-5-2.24-5-5 2.24-5 5-5zm0 13c-2.67 0-8 1.34-8 4v1h16v-1c0-2.66-5.33-4-8-4zm4.5-8c0 .83-.67 1.5-1.5 1.5s-1.5-.67-1.5-1.5.67-1.5 1.5-1.5 1.5.67 1.5 1.5z"/>
-          </svg>
-        </button>
+        <!-- Participant Sidebar -->
+        {#if showParticipantList}
+          <aside class="participant-sidebar">
+            <h4>In Voice — {participantDisplays.length}</h4>
+            <ul class="participant-list">
+              {#each participantDisplays as participant (participant.id)}
+                <li class="participant-item" class:speaking={participant.isSpeaking}>
+                  <Avatar 
+                    userId={participant.id} 
+                    username={participant.name} 
+                    src={participant.avatar} 
+                    size={32} 
+                  />
+                  <span class="name">{participant.name}</span>
+                  <div class="status-icons">
+                    {#if participant.isMuted}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="#ef4444">
+                        <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+                      </svg>
+                    {/if}
+                    {#if participant.isVideoEnabled}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="#22c55e">
+                        <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                      </svg>
+                    {/if}
+                  </div>
+                </li>
+              {/each}
+            </ul>
+          </aside>
+        {/if}
       </div>
+    {/if}
+  </div>
+
+  <!-- Control Bar -->
+  <footer class="control-bar">
+    <div class="control-group">
+      <!-- Mute -->
+      <button 
+        class="control-btn" 
+        class:active={!isMuted} 
+        class:danger={isMuted}
+        on:click={toggleMute} 
+        title={isMuted ? 'Unmute' : 'Mute'}
+        disabled={!isConnected}
+      >
+        {#if isMuted}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+          </svg>
+        {:else}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+          </svg>
+        {/if}
+      </button>
+      
+      <!-- Deafen -->
+      <button 
+        class="control-btn" 
+        class:danger={isDeafened}
+        on:click={toggleDeafen} 
+        title={isDeafened ? 'Undeafen' : 'Deafen'}
+        disabled={!isConnected}
+      >
+        {#if isDeafened}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M4.34 2.93L2.93 4.34 7.29 8.7 7 9H3v6h4l5 5v-6.59l4.18 4.18c-.65.49-1.38.88-2.18 1.11v2.06c1.34-.3 2.57-.92 3.61-1.75l2.05 2.05 1.41-1.41L4.34 2.93zM19 12c0 .82-.15 1.61-.41 2.34l1.53 1.53c.56-1.17.88-2.48.88-3.87 0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zm-7-8l-1.88 1.88L12 7.76zm4.5 8c0-1.77-1.02-3.29-2.5-4.03v1.79l2.48 2.48c.01-.08.02-.16.02-.24z"/>
+          </svg>
+        {:else}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+        {/if}
+      </button>
     </div>
-  {/if}
+
+    <div class="control-group">
+      <!-- Video -->
+      <button 
+        class="control-btn" 
+        class:active={isVideoEnabled}
+        on:click={toggleVideo} 
+        title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
+        disabled={!isConnected}
+      >
+        {#if isVideoEnabled}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+          </svg>
+        {:else}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
+          </svg>
+        {/if}
+      </button>
+      
+      <!-- Screen Share -->
+      <button 
+        class="control-btn" 
+        class:active={isScreenSharing}
+        on:click={toggleScreenShare} 
+        title={isScreenSharing ? 'Stop sharing' : 'Share screen'}
+        disabled={!isConnected}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="control-group">
+      <!-- Disconnect -->
+      <button 
+        class="control-btn disconnect" 
+        on:click={disconnect} 
+        title="Disconnect"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+        </svg>
+      </button>
+    </div>
+  </footer>
 </div>
+
+<!-- Video attachment action - removed dummy element -->
+
+<script context="module" lang="ts">
+  function attachVideo(node: HTMLVideoElement, track: Track | undefined) {
+    if (track) {
+      track.attach(node);
+    }
+    return {
+      update(newTrack: Track | undefined) {
+        if (track) track.detach(node);
+        if (newTrack) newTrack.attach(node);
+        track = newTrack;
+      },
+      destroy() {
+        if (track) track.detach(node);
+      }
+    };
+  }
+</script>
 
 <style>
   .voice-room {
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: #1a1a1a;
+    background: linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%);
     color: #fff;
+    flex: 1;
   }
 
+  /* Header */
   .voice-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem;
-    border-bottom: 1px solid #2a2a2a;
+    padding: 16px 20px;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .channel-info {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 12px;
   }
 
-  .voice-icon {
-    color: #7289da;
+  .voice-icon-wrapper {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: rgba(34, 197, 94, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #22c55e;
   }
 
-  .voice-header h3 {
+  .channel-details h3 {
     margin: 0;
-    font-size: 1rem;
+    font-size: 16px;
     font-weight: 600;
   }
 
-  .close-btn {
+  .participant-count {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .connection-quality {
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    margin-right: 8px;
+  }
+
+  .quality-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 16px;
+  }
+
+  .quality-bar {
+    width: 4px;
+    border-radius: 1px;
+    transition: all 0.2s;
+  }
+
+  .quality-bar:nth-child(1) { height: 4px; }
+  .quality-bar:nth-child(2) { height: 8px; }
+  .quality-bar:nth-child(3) { height: 12px; }
+  .quality-bar:nth-child(4) { height: 16px; }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+
+  .icon-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+
+  /* Settings Panel */
+  .settings-panel {
+    padding: 16px 20px;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .settings-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .volume-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .volume-control input[type="range"] {
+    flex: 1;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    cursor: pointer;
+  }
+
+  .volume-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #3182ce;
+    cursor: pointer;
+  }
+
+  .volume-value {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  /* Error Banner */
+  .error-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    background: rgba(239, 68, 68, 0.15);
+    border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+  }
+
+  .dismiss-btn {
+    margin-left: auto;
     background: none;
     border: none;
-    color: #fff;
-    font-size: 1.5rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 18px;
     cursor: pointer;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
+    padding: 0 4px;
   }
 
-  .close-btn:hover {
-    background: #2a2a2a;
-  }
-
-  .error-message {
-    padding: 1rem;
-    background: #d32f2f;
+  .dismiss-btn:hover {
     color: #fff;
-    margin: 1rem;
-    border-radius: 4px;
   }
 
-  .connecting {
+  /* Main Content */
+  .voice-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Connecting State */
+  .connecting-state {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 3rem;
-    gap: 1rem;
+    gap: 20px;
   }
 
-  .spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid #2a2a2a;
-    border-top-color: #7289da;
+  .pulse-ring {
+    position: absolute;
+    width: 100px;
+    height: 100px;
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    background: rgba(34, 197, 94, 0.2);
+    animation: pulse-ring 1.5s ease-out infinite;
   }
 
-  @keyframes spin {
-    to { transform: rotate(360deg); }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.8); opacity: 1; }
+    100% { transform: scale(1.5); opacity: 0; }
   }
 
-  .voice-content {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    padding: 1rem;
-    overflow-y: auto;
-  }
-
-  .participants-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1rem;
-  }
-
-  .participant-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 1rem;
-    background: #2a2a2a;
-    border-radius: 8px;
-    transition: all 0.2s;
-  }
-
-  .participant-card.speaking {
-    background: #7289da;
-    box-shadow: 0 0 10px rgba(114, 137, 218, 0.5);
-  }
-
-  .participant-avatar {
-    position: relative;
+  .connecting-icon {
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    overflow: hidden;
-    margin-bottom: 0.5rem;
+    background: rgba(34, 197, 94, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #22c55e;
+    position: relative;
+    z-index: 1;
   }
 
-  .participant-avatar img {
+  .connecting-state p {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+  }
+
+  /* Participants Area */
+  .participants-area {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .participants-area.with-sidebar {
+    padding-right: 0;
+  }
+
+  .video-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+    padding: 16px;
+    overflow-y: auto;
+    align-content: start;
+  }
+
+  .participant-tile {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+  }
+
+  .participant-tile.speaking {
+    border-color: #22c55e;
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+  }
+
+  .participant-tile.video-active {
+    background: #000;
+  }
+
+  .participant-video {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
 
-  .avatar-placeholder {
-    width: 100%;
-    height: 100%;
+  .participant-avatar-wrapper {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #7289da;
-    font-size: 2rem;
-    font-weight: bold;
+    background: linear-gradient(135deg, rgba(26, 54, 93, 0.5) 0%, rgba(15, 15, 25, 0.8) 100%);
   }
 
-  .speaking-indicator {
+  .participant-overlay {
     position: absolute;
     bottom: 0;
+    left: 0;
     right: 0;
-    width: 20px;
-    height: 20px;
-    background: #43b581;
-    border: 3px solid #2a2a2a;
-    border-radius: 50%;
-    animation: pulse 1s ease-in-out infinite;
+    padding: 12px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
   }
 
-  @keyframes pulse {
-    0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.1); opacity: 0.8; }
-  }
-
-  .participant-info {
+  .participant-name-row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: space-between;
   }
 
   .participant-name {
-    font-size: 0.875rem;
+    font-size: 13px;
     font-weight: 500;
+    color: #fff;
   }
 
-  .mute-icon {
-    color: #f04747;
+  .participant-indicators {
+    display: flex;
+    gap: 6px;
   }
 
-  .voice-controls {
+  .indicator {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .indicator.muted {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+  }
+
+  .indicator.screen {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+  }
+
+  .speaking-ring {
+    position: absolute;
+    inset: -2px;
+    border-radius: 14px;
+    border: 2px solid #22c55e;
+    animation: speaking-pulse 1s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes speaking-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* Participant Sidebar */
+  .participant-sidebar {
+    width: 240px;
+    background: rgba(0, 0, 0, 0.3);
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  .participant-sidebar h4 {
+    margin: 0 0 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .participant-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .participant-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 8px;
+    transition: all 0.15s;
+  }
+
+  .participant-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .participant-item.speaking {
+    background: rgba(34, 197, 94, 0.1);
+  }
+
+  .participant-item .name {
+    flex: 1;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .status-icons {
+    display: flex;
+    gap: 4px;
+  }
+
+  /* Control Bar */
+  .control-bar {
     display: flex;
     justify-content: center;
-    gap: 1rem;
-    padding: 1rem;
-    border-top: 1px solid #2a2a2a;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    background: rgba(0, 0, 0, 0.4);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .control-group {
+    display: flex;
+    gap: 8px;
   }
 
   .control-btn {
@@ -489,37 +1051,46 @@
     height: 48px;
     border-radius: 50%;
     border: none;
-    background: #2a2a2a;
-    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
+    transition: all 0.15s;
   }
 
-  .control-btn:hover {
-    background: #3a3a3a;
+  .control-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    transform: scale(1.05);
   }
 
-  .control-btn.muted {
-    background: #f04747;
+  .control-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
-  .control-btn.muted:hover {
-    background: #d32f2f;
+  .control-btn.active {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
   }
 
-  .control-btn.deafened {
-    background: #f04747;
+  .control-btn.danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+  }
+
+  .control-btn.danger:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.3);
   }
 
   .control-btn.disconnect {
-    background: #d32f2f;
+    background: #ef4444;
+    color: #fff;
   }
 
   .control-btn.disconnect:hover {
-    background: #b71c1c;
+    background: #dc2626;
   }
 </style>
-

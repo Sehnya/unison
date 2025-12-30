@@ -35,7 +35,7 @@ export class LiveKitService {
   /**
    * Generate an access token for a participant to join a room
    */
-  generateToken(options: TokenOptions): string {
+  async generateToken(options: TokenOptions): Promise<string> {
     const { roomName, participantName, participantIdentity, canPublish = true, canSubscribe = true, canPublishData = true } = options;
 
     const at = new AccessToken(this.apiKey, this.apiSecret, {
@@ -52,7 +52,7 @@ export class LiveKitService {
       canPublishData,
     });
 
-    return at.toJwt();
+    return await at.toJwt();
   }
 
   /**

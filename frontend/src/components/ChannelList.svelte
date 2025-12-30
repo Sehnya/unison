@@ -1,15 +1,17 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
-  import type { Channel, Guild } from '../types';
+  import type { Channel, Guild, User } from '../types';
   import { apiUrl } from '../lib/api';
   import { getAblyClient } from '../lib/ably';
   import CreateChannelModal from './CreateChannelModal.svelte';
+  import Avatar from './Avatar.svelte';
 
   export let authToken: string | null = null;
   export let selectedGuildId: string | null = null;
   export let selectedChannelId: string | null = null;
   export let guilds: Guild[] = [];
   export let collapsed: boolean = false;
+  export let currentUser: User | null = null;
 
   const dispatch = createEventDispatcher<{
     selectChannel: { channelId: string; channelType?: 'text' | 'voice' };
@@ -18,6 +20,13 @@
   }>();
 
   type ViewMode = 'list' | 'box' | 'icon';
+  
+  // Voice presence user type
+  interface VoiceUser {
+    id: string;
+    username: string;
+    avatar?: string | null;
+  }
   
   let textChannels: Channel[] = [];
   let voiceChannels: Channel[] = [];
@@ -33,6 +42,10 @@
   
   // Ably channel subscription for real-time updates
   let ablyChannel: any = null;
+  
+  // Voice presence tracking - maps channelId to array of users in that channel
+  let voicePresence: Map<string, VoiceUser[]> = new Map();
+  let voicePresenceChannels: Map<string, any> = new Map();
 
   // Load view mode from localStorage on mount
   onMount(() => {
@@ -81,11 +94,77 @@
     if (ablyChannel) {
       ablyChannel.unsubscribe();
     }
+    // Cleanup voice presence subscriptions
+    voicePresenceChannels.forEach((channel) => {
+      try {
+        channel.presence.unsubscribe();
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    });
+    voicePresenceChannels.clear();
   });
 
   // Subscribe to guild channels when guild changes
   $: if (selectedGuildId) {
     subscribeToGuildChannels(selectedGuildId);
+  }
+  
+  // Subscribe to voice presence when voice channels change
+  $: if (voiceChannels.length > 0) {
+    subscribeToVoicePresence();
+  }
+  
+  // Subscribe to voice channel presence for all voice channels
+  function subscribeToVoicePresence() {
+    const client = getAblyClient();
+    if (!client) return;
+    
+    voiceChannels.forEach((channel) => {
+      if (voicePresenceChannels.has(channel.id)) return; // Already subscribed
+      
+      const presenceChannel = client.channels.get(`voice:${channel.id}`);
+      voicePresenceChannels.set(channel.id, presenceChannel);
+      
+      // Get initial presence
+      presenceChannel.presence.get().then((members: any[]) => {
+        const users: VoiceUser[] = members.map((m) => ({
+          id: m.clientId,
+          username: m.data?.username || `User ${m.clientId.slice(0, 6)}`,
+          avatar: m.data?.avatar || null,
+        }));
+        voicePresence.set(channel.id, users);
+        voicePresence = new Map(voicePresence); // Trigger reactivity
+      }).catch(() => {
+        // Channel might not exist yet, that's ok
+      });
+      
+      // Subscribe to presence changes
+      presenceChannel.presence.subscribe('enter', (member: any) => {
+        const users = voicePresence.get(channel.id) || [];
+        if (!users.find(u => u.id === member.clientId)) {
+          users.push({
+            id: member.clientId,
+            username: member.data?.username || `User ${member.clientId.slice(0, 6)}`,
+            avatar: member.data?.avatar || null,
+          });
+          voicePresence.set(channel.id, users);
+          voicePresence = new Map(voicePresence);
+        }
+      });
+      
+      presenceChannel.presence.subscribe('leave', (member: any) => {
+        const users = voicePresence.get(channel.id) || [];
+        const filtered = users.filter(u => u.id !== member.clientId);
+        voicePresence.set(channel.id, filtered);
+        voicePresence = new Map(voicePresence);
+      });
+    });
+  }
+  
+  // Get users in a voice channel
+  function getVoiceUsers(channelId: string): VoiceUser[] {
+    return voicePresence.get(channelId) || [];
   }
 
   // Save view mode to localStorage when it changes
@@ -121,10 +200,16 @@
       }
 
       const data = await response.json();
-      const allChannels: Channel[] = data.channels || [];
+      const rawChannels = data.channels || [];
+      
+      // Map numeric types to string types
+      const allChannels: Channel[] = rawChannels.map((c: any) => ({
+        ...c,
+        type: c.type === 2 ? 'voice' : 'text'
+      }));
 
       // Separate text and voice channels
-      textChannels = allChannels.filter(c => c.type === 'text' || !c.type);
+      textChannels = allChannels.filter(c => c.type === 'text');
       voiceChannels = allChannels.filter(c => c.type === 'voice');
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load channels';
@@ -171,7 +256,11 @@
       }
 
       const data = await response.json();
-      const newChannel: Channel = data.channel;
+      // Map numeric type to string type
+      const newChannel: Channel = {
+        ...data.channel,
+        type: type // Use the type we passed in since we know it
+      };
 
       // Add to appropriate list
       if (type === 'voice') {
@@ -194,7 +283,7 @@
       dispatch('channelCreated', { channel: newChannel });
 
       // Auto-select the new channel
-      dispatch('selectChannel', { channelId: newChannel.id, channelType: newChannel.type });
+      dispatch('selectChannel', { channelId: newChannel.id, channelType: type });
 
     } catch (err) {
       console.error('Failed to create channel:', err);
@@ -355,10 +444,11 @@
           {#if voiceExpanded}
             <ul class="channel-list-items">
               {#each voiceChannels as channel}
-                <li>
+                <li class="voice-channel-wrapper">
                   <button 
                     class="channel-item voice"
                     class:active={selectedChannelId === channel.id}
+                    class:has-users={getVoiceUsers(channel.id).length > 0}
                     on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: channel.type })}
                   >
                     <svg class="voice-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -367,7 +457,31 @@
                       <path d="M12 19V23M8 23H16"/>
                     </svg>
                     <span class="channel-name">{channel.name}</span>
+                    {#if getVoiceUsers(channel.id).length > 0}
+                      <span class="user-count">{getVoiceUsers(channel.id).length}</span>
+                    {/if}
                   </button>
+                  <!-- Users in voice channel -->
+                  {#if getVoiceUsers(channel.id).length > 0}
+                    <ul class="voice-users">
+                      {#each getVoiceUsers(channel.id) as user (user.id)}
+                        <li class="voice-user">
+                          <Avatar 
+                            userId={user.id} 
+                            username={user.username} 
+                            src={user.avatar} 
+                            size={24} 
+                          />
+                          <span class="voice-user-name">{user.username}</span>
+                          <div class="voice-user-status">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                            </svg>
+                          </div>
+                        </li>
+                      {/each}
+                    </ul>
+                  {/if}
                 </li>
               {/each}
               {#if voiceChannels.length === 0}
@@ -385,7 +499,7 @@
               class="box-item"
               class:active={selectedChannelId === channel.id}
               class:voice={isVoiceChannel(channel)}
-              on:click={() => dispatch('selectChannel', { channelId: channel.id })}
+              on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: channel.type })}
             >
               <div class="box-icon">
                 {#if isVoiceChannel(channel)}
@@ -412,7 +526,7 @@
               class="icon-item"
               class:active={selectedChannelId === channel.id}
               class:voice={isVoiceChannel(channel)}
-              on:click={() => dispatch('selectChannel', { channelId: channel.id })}
+              on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: channel.type })}
               title={channel.name}
             >
               {#if isVoiceChannel(channel)}
@@ -721,9 +835,68 @@
     color: rgba(255, 255, 255, 0.55);
   }
 
+  .channel-item.voice.has-users {
+    color: #22c55e;
+  }
+
   .voice-icon {
     color: rgba(255, 255, 255, 0.4);
     flex-shrink: 0;
+  }
+
+  .channel-item.voice.has-users .voice-icon {
+    color: #22c55e;
+  }
+
+  .user-count {
+    font-size: 11px;
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+
+  /* Voice channel wrapper for users list */
+  .voice-channel-wrapper {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Voice users list */
+  .voice-users {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 4px 0;
+    padding-left: 24px;
+  }
+
+  .voice-user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.15s ease;
+  }
+
+  .voice-user:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .voice-user-name {
+    flex: 1;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .voice-user-status {
+    display: flex;
+    align-items: center;
+    color: #22c55e;
   }
 
   .empty-state {

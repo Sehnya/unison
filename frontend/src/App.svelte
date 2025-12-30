@@ -436,6 +436,7 @@
           {selectedGuildId}
           {selectedChannelId}
           {guilds}
+          {currentUser}
           collapsed={channelListCollapsed}
           on:selectChannel={handleSelectChannel}
           on:selectGuild={(e) => handleSelectGuildFromChannelList(e.detail.guildId)}
@@ -471,6 +472,7 @@
             channelName={selectedChannelName || 'Voice Channel'}
             {authToken}
             currentUser={currentUser}
+            onDisconnect={() => { selectedChannelId = null; selectedChannelType = null; }}
           />
         {:else}
           <ChatArea 

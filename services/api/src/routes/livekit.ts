@@ -34,18 +34,18 @@ export function createLiveKitRoutes(config: LiveKitRoutesConfig): Router {
    */
   router.post('/token', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { id: userId, username } = (req as AuthenticatedRequest).user;
+      const { id: userId } = (req as AuthenticatedRequest).user;
       const { roomName, participantName } = req.body;
 
       if (!roomName || typeof roomName !== 'string') {
         throw new ApiError(ApiErrorCode.VALIDATION_ERROR, 400, 'Room name is required', 'roomName');
       }
 
-      // Use provided participant name or fallback to username
-      const name = participantName || username || `User ${userId}`;
+      // Use provided participant name or fallback to a default
+      const name = participantName || `User ${userId.slice(0, 8)}`;
 
       // Generate token
-      const token = livekitService.generateToken({
+      const token = await livekitService.generateToken({
         roomName,
         participantName: name,
         participantIdentity: userId,

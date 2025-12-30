@@ -156,6 +156,13 @@ export function createApiServer(config: ApiServerConfig): Express {
   app.use('/api', roleRoutes);
   app.use('/', roleRoutes);
 
+  // LiveKit routes for voice/video calls
+  const livekitRoutes = createLiveKitRoutes({
+    livekitService: config.livekitService,
+    validateToken: config.validateToken,
+  });
+  app.use('/api/livekit', livekitRoutes);
+
   // 404 handler
   app.use((_req: Request, _res: Response, next: NextFunction) => {
     next(new ApiError(ApiErrorCode.NOT_FOUND, 404, 'Not found'));
