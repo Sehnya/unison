@@ -23,12 +23,31 @@ export interface MusicState {
   sourceUserId: string | null; // Track whose profile the music came from
 }
 
+// Load initial state from localStorage if available
+function loadPersistedState(): Partial<MusicState> {
+  try {
+    const stored = localStorage.getItem('musicState');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        volume: parsed.volume ?? 50,
+        isMuted: parsed.isMuted ?? false,
+        // Don't restore playlist/playing state - let user start fresh
+      };
+    }
+  } catch (e) {
+    console.warn('Failed to load persisted music state:', e);
+  }
+  return {};
+}
+
+const persisted = loadPersistedState();
 const initialState: MusicState = {
   playlist: null,
   currentTrackIndex: 0,
   isPlaying: false,
-  volume: 50,
-  isMuted: false,
+  volume: persisted.volume ?? 50,
+  isMuted: persisted.isMuted ?? false,
   playerReady: false,
   sourceUserId: null,
 };
@@ -89,15 +108,39 @@ function createMusicStore() {
     },
 
     setVolume: (volume: number) => {
-      update(state => ({
-        ...state,
-        volume,
-        isMuted: volume === 0,
-      }));
+      update(state => {
+        const newState = {
+          ...state,
+          volume,
+          isMuted: volume === 0,
+        };
+        // Persist volume to localStorage
+        try {
+          localStorage.setItem('musicState', JSON.stringify({
+            volume: newState.volume,
+            isMuted: newState.isMuted,
+          }));
+        } catch (e) {
+          console.warn('Failed to persist music state:', e);
+        }
+        return newState;
+      });
     },
 
     toggleMute: () => {
-      update(state => ({ ...state, isMuted: !state.isMuted }));
+      update(state => {
+        const newState = { ...state, isMuted: !state.isMuted };
+        // Persist mute state to localStorage
+        try {
+          localStorage.setItem('musicState', JSON.stringify({
+            volume: newState.volume,
+            isMuted: newState.isMuted,
+          }));
+        } catch (e) {
+          console.warn('Failed to persist music state:', e);
+        }
+        return newState;
+      });
     },
 
     setPlayerReady: (ready: boolean) => {

@@ -54,8 +54,6 @@ export default defineConfig(({ mode }) => {
   return {
   plugins: [svelte()],
   server: {
-    // Enable client-side routing - serve index.html for all routes
-    historyApiFallback: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

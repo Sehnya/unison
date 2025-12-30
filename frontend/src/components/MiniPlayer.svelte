@@ -9,6 +9,7 @@
   let currentTime = 0;
   let duration = 0;
   let progressInterval: number;
+  let isUpdatingFromPlayer = false; // Flag to prevent reactive loops
 
   $: track = $currentTrack;
   $: isPlaying = $musicStore.isPlaying;
@@ -112,15 +113,33 @@
   }
 
   function onPlayerStateChange(event: any) {
+    // Prevent reactive loop by setting flag
+    isUpdatingFromPlayer = true;
+    
     if (event.data === 0) {
       // Video ended
       musicStore.nextTrack();
     } else if (event.data === 1) {
-      if (!isPlaying) musicStore.play();
+      // Playing
+      if (!isPlaying) {
+        musicStore.play();
+      }
       duration = ytPlayer.getDuration();
     } else if (event.data === 2) {
-      if (isPlaying) musicStore.pause();
+      // Paused
+      if (isPlaying) {
+        musicStore.pause();
+      }
+    } else if (event.data === 3) {
+      // Buffering - keep current state
+    } else if (event.data === 5) {
+      // Video cued - keep current state
     }
+    
+    // Reset flag after a short delay to allow reactive statements to run
+    setTimeout(() => {
+      isUpdatingFromPlayer = false;
+    }, 100);
   }
 
   function onPlayerError(event: any) {
@@ -164,12 +183,20 @@
     }
   }
 
-  // React to play/pause changes
-  $: if (ytPlayer && $musicStore.playerReady) {
-    if (isPlaying) {
-      ytPlayer.playVideo();
-    } else {
-      ytPlayer.pauseVideo();
+  // React to play/pause changes (only if not updating from player)
+  $: if (ytPlayer && $musicStore.playerReady && !isUpdatingFromPlayer) {
+    try {
+      const playerState = ytPlayer.getPlayerState?.();
+      // YouTube player states: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
+      if (isPlaying && playerState !== 1) {
+        // Store says playing but player is not - sync player
+        ytPlayer.playVideo();
+      } else if (!isPlaying && playerState === 1) {
+        // Store says paused but player is playing - sync player
+        ytPlayer.pauseVideo();
+      }
+    } catch (error) {
+      console.warn('Error syncing play/pause state:', error);
     }
   }
 
@@ -200,7 +227,25 @@
   }
 
   function togglePlay() {
-    musicStore.togglePlay();
+    if (!ytPlayer) return;
+    
+    try {
+      const playerState = ytPlayer.getPlayerState?.();
+      // YouTube player states: 1 = playing, 2 = paused
+      if (playerState === 1) {
+        // Currently playing, pause it
+        ytPlayer.pauseVideo();
+        musicStore.pause();
+      } else {
+        // Currently paused or stopped, play it
+        ytPlayer.playVideo();
+        musicStore.play();
+      }
+    } catch (error) {
+      console.warn('Error toggling play:', error);
+      // Fallback to store toggle
+      musicStore.togglePlay();
+    }
   }
 
   function handleVolumeChange(e: Event) {
