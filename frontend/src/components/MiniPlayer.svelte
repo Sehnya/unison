@@ -329,7 +329,24 @@
 
   function handleVolumeChange(e: Event) {
     const target = e.target as HTMLInputElement;
-    musicStore.setVolume(parseInt(target.value));
+    const newVolume = parseInt(target.value, 10);
+    if (!isNaN(newVolume)) {
+      musicStore.setVolume(newVolume);
+      // Also update player directly for immediate feedback
+      if (ytPlayer && $musicStore.playerReady) {
+        try {
+          const youtubeVolume = Math.max(0, Math.min(100, newVolume));
+          if (isMuted && newVolume > 0) {
+            // If volume is set above 0, unmute
+            ytPlayer.unMute();
+            musicStore.toggleMute(); // This will set isMuted to false
+          }
+          ytPlayer.setVolume(youtubeVolume);
+        } catch (error) {
+          console.warn('Error setting volume directly:', error);
+        }
+      }
+    }
   }
 
   function handleProgressClick(e: MouseEvent) {
