@@ -45,8 +45,14 @@ export function createRoleRoutes(config: RoleRoutesConfig): Router {
   // Apply middleware only to routes that match (not to /auth paths)
   router.use((req, res, next) => {
     // Skip auth middleware for /auth paths - let them pass through to auth router
-    if (req.path.startsWith('/auth')) {
-      return next(); // Pass through without auth
+    // Check both req.path (relative to mount point) and req.originalUrl (full path)
+    const path = req.path || req.url || '';
+    const originalUrl = req.originalUrl || req.url || '';
+    
+    // If the path starts with /auth, skip this router entirely by calling next()
+    // This allows Express to continue to the next router (auth router)
+    if (path.startsWith('/auth') || originalUrl.includes('/auth/')) {
+      return next(); // Pass through to next router without applying auth
     }
     return authMiddleware(req, res, next);
   });
