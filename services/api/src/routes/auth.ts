@@ -219,6 +219,31 @@ export function createAuthRoutes(config: AuthRoutesConfig): Router {
   });
 
   /**
+   * GET /auth/users/:user_id
+   * Get a user profile by ID (for viewing other users' profiles)
+   */
+  router.get('/users/:user_id', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { user_id } = req.params;
+      
+      if (!user_id) {
+        throw new ApiError(ApiErrorCode.VALIDATION_ERROR, 400, 'User ID is required');
+      }
+
+      const user = await authService.getUserById(user_id);
+
+      if (!user) {
+        throw new ApiError(ApiErrorCode.NOT_FOUND, 404, 'User not found');
+      }
+
+      // Return user profile (exclude sensitive data like email if needed)
+      res.status(200).json({ user });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /auth/accept-terms
    * Accept terms and conditions
    */

@@ -119,21 +119,60 @@
     }
   }
 
-  function handleViewUserProfile(event: CustomEvent<{ userId: string; username: string; avatar?: string }>) {
-    const { userId, username, avatar } = event.detail;
+  async function handleViewUserProfile(event: CustomEvent<{ userId: string; username: string; avatar?: string }>) {
+    const { userId } = event.detail;
     
     // If viewing own profile, show the editable profile
     if (userId === currentUser?.id) {
       viewedUser = null;
       showUserProfile = true;
-    } else {
-      // Viewing someone else's profile
+      navigateToMyspace();
+      showSettings = false;
+      selectedDMId = null;
+      selectedDMUser = null;
+      return;
+    }
+
+    // Fetch full user profile from API to get exact saved data
+    if (!authToken) {
+      console.error('Cannot fetch user profile: not authenticated');
+      return;
+    }
+
+    try {
+      const response = await fetch(apiUrl(`/api/auth/users/${userId}`), {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Use the exact user data from the API (username, avatar, bio as saved)
+        viewedUser = data.user as User;
+        showUserProfile = true;
+        navigateToMyspace();
+      } else {
+        console.error('Failed to fetch user profile:', response.status);
+        // Fallback to basic info from message if API fails
+        viewedUser = {
+          id: userId,
+          username: event.detail.username,
+          avatar: event.detail.avatar || 'https://i.pravatar.cc/100?img=68',
+        } as User;
+        showUserProfile = true;
+        navigateToMyspace();
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      // Fallback to basic info from message if API fails
       viewedUser = {
         id: userId,
-        username: username,
-        avatar: avatar || 'https://i.pravatar.cc/100?img=68',
+        username: event.detail.username,
+        avatar: event.detail.avatar || 'https://i.pravatar.cc/100?img=68',
       } as User;
       showUserProfile = true;
+      navigateToMyspace();
     }
     
     showSettings = false;

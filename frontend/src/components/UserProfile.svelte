@@ -76,29 +76,24 @@
   let showAddCardMenu = false;
 
   // Load profile data on mount
-  // Only load saved profile data if viewing own profile (user.id === currentUser.id)
-  // For other users, show their saved profile data from the user object
+  // Profile customization (cards, layout, etc.) is stored in localStorage and is per-browser
+  // The user prop contains the actual user data (username, avatar, bio) from the database
   onMount(() => {
-    // Only load localStorage profile data if this is the current user's own profile
-    // For other users, we'll use the data from the user prop
-    if (user && user.id) {
-      // Try to load profile data - this will use the user's ID as the key
-      // If viewing another user, we might not have their profile data in localStorage
-      // In that case, we should fetch it or use what's in the user prop
-      profileData = loadProfile();
-      
-      // Load layout
-      cards = profileData.cards as Card[];
-      customGreeting = profileData.greeting;
-      backgroundImage = profileData.backgroundImage;
-      miniWidgets = profileData.miniWidgets;
-      
-      // Load quote contents
-      if (profileData.quoteCards) {
-        quoteContents = Object.fromEntries(
-          Object.entries(profileData.quoteCards).map(([id, data]) => [id, data.content])
-        );
-      }
+    // Always load profile customization data from localStorage
+    // This is the current user's profile layout/customization
+    profileData = loadProfile();
+    
+    // Load layout
+    cards = profileData.cards as Card[];
+    customGreeting = profileData.greeting;
+    backgroundImage = profileData.backgroundImage;
+    miniWidgets = profileData.miniWidgets;
+    
+    // Load quote contents
+    if (profileData.quoteCards) {
+      quoteContents = Object.fromEntries(
+        Object.entries(profileData.quoteCards).map(([id, data]) => [id, data.content])
+      );
     }
   });
 
