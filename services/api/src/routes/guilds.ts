@@ -170,7 +170,6 @@ export function createGuildRoutes(config: GuildRoutesConfig): Router {
    */
   router.get('/:guild_id/navigate', async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { id: userId } = (req as AuthenticatedRequest).user;
       const guildId = requireSnowflake('guild_id', req.params.guild_id);
 
       // Get guild, channels, and members in parallel
