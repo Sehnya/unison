@@ -221,6 +221,18 @@
       if (userResponse.ok) {
         const userData = await userResponse.json();
         currentUser = userData.user;
+        // Initialize or update Ably with user information
+        if (currentUser?.id) {
+          try {
+            initAblyWithUser(
+              currentUser.id,
+              currentUser.username,
+              currentUser.avatar || null
+            );
+          } catch (error) {
+            console.warn('Failed to initialize Ably with user:', error);
+          }
+        }
       }
 
       const guildsResponse = await fetch(apiUrl('/api/guilds'), {
