@@ -91,12 +91,12 @@
         const fetchedMessages = Array.isArray(data) ? data : (data.messages || []);
         
         // Convert API messages to ChatMessage format
-        // Don't use stored author_avatar - let Avatar component generate gradient from userId
+        // Use author_avatar from API (fetched from users table, so it's always current)
         messages = fetchedMessages.map((msg: any) => ({
           id: msg.id || msg.message?.id,
           authorId: msg.author_id || msg.message?.author_id,
           authorName: msg.author_name || msg.message?.author_name || currentUser?.username || 'Unknown',
-          authorAvatar: undefined, // Let Avatar component generate gradient based on userId
+          authorAvatar: msg.author_avatar || msg.message?.author_avatar || null,
           content: msg.content || msg.message?.content || '',
           timestamp: new Date(msg.created_at || msg.message?.created_at || Date.now()).getTime(),
           channelId,

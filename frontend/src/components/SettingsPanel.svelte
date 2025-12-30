@@ -2,8 +2,10 @@
   import { createEventDispatcher } from 'svelte';
   import type { User } from '../types';
   import Avatar from './Avatar.svelte';
+  import { apiUrl } from '../lib/api';
 
   export let user: User | null = null;
+  export let authToken: string = '';
 
   const dispatch = createEventDispatcher<{
     close: void;
@@ -18,9 +20,11 @@
   let confirmPassword = '';
   let presence: PresenceStatus = 'online';
   let avatarUrl = user?.avatar || null;
+  let avatarBase64: string | null = user?.avatar || null; // Store base64 for saving
   let fileInput: HTMLInputElement;
   let showPasswordSection = false;
   let saveMessage = '';
+  let saving = false;
 
   const presenceOptions: { value: PresenceStatus; label: string; color: string }[] = [
     { value: 'online', label: 'Online', color: '#22c55e' },
@@ -39,29 +43,67 @@
       return;
     }
 
-    const url = URL.createObjectURL(file);
-    avatarUrl = url;
+    // Convert to base64 for persistence
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      avatarUrl = base64;
+      avatarBase64 = base64;
+    };
+    reader.readAsDataURL(file);
   }
 
   function triggerFileInput() {
     fileInput?.click();
   }
 
-  function saveProfile() {
+  async function saveProfile() {
     if (!username.trim()) {
       alert('Username cannot be empty');
       return;
     }
 
-    dispatch('updateUser', {
-      user: {
-        username: username.trim(),
-        avatar: avatarUrl,
-      }
-    });
+    if (!authToken) {
+      alert('Not authenticated');
+      return;
+    }
 
-    saveMessage = 'Profile saved!';
-    setTimeout(() => saveMessage = '', 2000);
+    saving = true;
+    try {
+      // Save to database via API
+      const response = await fetch(apiUrl('/api/auth/profile'), {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: username.trim(),
+          avatar: avatarBase64,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update local state with the saved user data
+        dispatch('updateUser', {
+          user: data.user || {
+            username: username.trim(),
+            avatar: avatarBase64,
+          }
+        });
+        saveMessage = 'Profile saved!';
+      } else {
+        const error = await response.json().catch(() => ({}));
+        alert(error.message || 'Failed to save profile');
+      }
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      alert('Error saving profile. Please try again.');
+    } finally {
+      saving = false;
+      setTimeout(() => saveMessage = '', 2000);
+    }
   }
 
   function savePassword() {

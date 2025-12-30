@@ -467,6 +467,7 @@
       {#if showSettings}
         <SettingsPanel 
           user={currentUser}
+          authToken={authToken || ''}
           on:close={() => { showSettings = false; selectedSection = 'main'; }}
           on:updateUser={handleUpdateUser}
         />
