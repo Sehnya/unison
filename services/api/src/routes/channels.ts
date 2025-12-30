@@ -89,7 +89,9 @@ export function createChannelRoutes(config: ChannelRoutesConfig): Router {
       if (type !== undefined) {
         if (type === 'CATEGORY' || type === 1) {
           channelType = ChannelType.CATEGORY;
-        } else if (type !== 'TEXT' && type !== 0) {
+        } else if (type === 'voice' || type === 'VOICE' || type === 2) {
+          channelType = ChannelType.VOICE;
+        } else if (type !== 'TEXT' && type !== 'text' && type !== 0) {
           throw new ApiError(ApiErrorCode.INVALID_CHANNEL_TYPE, 400, 'Invalid channel type');
         }
       }

@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import type { Channel, Guild } from '../types';
   import { apiUrl } from '../lib/api';
+  import { getAblyClient } from '../lib/ably';
+  import CreateChannelModal from './CreateChannelModal.svelte';
 
   export let authToken: string | null = null;
   export let selectedGuildId: string | null = null;
@@ -12,6 +14,7 @@
   const dispatch = createEventDispatcher<{
     selectChannel: { channelId: string };
     selectGuild: { guildId: string };
+    channelCreated: { channel: Channel };
   }>();
 
   type ViewMode = 'list' | 'box' | 'icon';
@@ -23,6 +26,13 @@
   let generalExpanded = true;
   let voiceExpanded = true;
   let viewMode: ViewMode = 'list';
+  
+  // Channel creation modal state
+  let showCreateChannelModal = false;
+  let createChannelType: 'text' | 'voice' = 'text';
+  
+  // Ably channel subscription for real-time updates
+  let ablyChannel: any = null;
 
   // Load view mode from localStorage on mount
   onMount(() => {
@@ -31,6 +41,52 @@
       viewMode = savedViewMode as ViewMode;
     }
   });
+
+  // Subscribe to guild channel updates via Ably
+  function subscribeToGuildChannels(guildId: string) {
+    const client = getAblyClient();
+    if (!client) return;
+
+    // Unsubscribe from previous guild
+    if (ablyChannel) {
+      ablyChannel.unsubscribe();
+    }
+
+    // Subscribe to channel events for this guild
+    ablyChannel = client.channels.get(`guild:${guildId}:channels`);
+    
+    ablyChannel.subscribe('channel.created', (message: any) => {
+      const newChannel: Channel = message.data;
+      // Add to appropriate list if not already present
+      if (newChannel.type === 'voice') {
+        if (!voiceChannels.find(c => c.id === newChannel.id)) {
+          voiceChannels = [...voiceChannels, newChannel];
+        }
+      } else {
+        if (!textChannels.find(c => c.id === newChannel.id)) {
+          textChannels = [...textChannels, newChannel];
+        }
+      }
+    });
+
+    ablyChannel.subscribe('channel.deleted', (message: any) => {
+      const { channelId } = message.data;
+      textChannels = textChannels.filter(c => c.id !== channelId);
+      voiceChannels = voiceChannels.filter(c => c.id !== channelId);
+    });
+  }
+
+  // Cleanup Ably subscription on destroy
+  onDestroy(() => {
+    if (ablyChannel) {
+      ablyChannel.unsubscribe();
+    }
+  });
+
+  // Subscribe to guild channels when guild changes
+  $: if (selectedGuildId) {
+    subscribeToGuildChannels(selectedGuildId);
+  }
 
   // Save view mode to localStorage when it changes
   function setViewMode(mode: ViewMode) {
@@ -84,6 +140,72 @@
 
   function isVoiceChannel(channel: Channel): boolean {
     return channel.type === 'voice';
+  }
+
+  function openCreateChannelModal(type: 'text' | 'voice') {
+    createChannelType = type;
+    showCreateChannelModal = true;
+  }
+
+  async function handleCreateChannel(event: CustomEvent<{ name: string; type: 'text' | 'voice' }>) {
+    if (!selectedGuildId || !authToken) return;
+
+    const { name, type } = event.detail;
+
+    try {
+      const response = await fetch(apiUrl(`/api/guilds/${selectedGuildId}/channels`), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          type: type === 'voice' ? 'voice' : 'TEXT',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to create channel: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const newChannel: Channel = data.channel;
+
+      // Add to appropriate list
+      if (type === 'voice') {
+        voiceChannels = [...voiceChannels, newChannel];
+      } else {
+        textChannels = [...textChannels, newChannel];
+      }
+
+      // Broadcast channel creation via Ably for other users
+      const client = getAblyClient();
+      if (client && selectedGuildId) {
+        const guildChannel = client.channels.get(`guild:${selectedGuildId}:channels`);
+        guildChannel.publish('channel.created', newChannel);
+      }
+
+      // Close modal
+      showCreateChannelModal = false;
+
+      // Dispatch event for parent components
+      dispatch('channelCreated', { channel: newChannel });
+
+      // Auto-select the new channel
+      dispatch('selectChannel', { channelId: newChannel.id });
+
+    } catch (err) {
+      console.error('Failed to create channel:', err);
+      // Keep modal open so user can see error or retry
+      alert(err instanceof Error ? err.message : 'Failed to create channel');
+    }
+  }
+
+  // Expose loadChannels for external refresh
+  export function refreshChannels() {
+    loadChannels();
   }
 </script>
 
@@ -188,7 +310,7 @@
               <path d="M9 18L15 12L9 6"/>
             </svg>
             <span class="section-title">TEXT CHANNELS</span>
-            <button class="add-btn" aria-label="Add channel" on:click|stopPropagation>
+            <button class="add-btn" aria-label="Add channel" on:click|stopPropagation={() => openCreateChannelModal('text')}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 5V19M5 12H19"/>
               </svg>
@@ -223,7 +345,7 @@
               <path d="M9 18L15 12L9 6"/>
             </svg>
             <span class="section-title">VOICE CHANNELS</span>
-            <button class="add-btn" aria-label="Add voice channel" on:click|stopPropagation>
+            <button class="add-btn" aria-label="Add voice channel" on:click|stopPropagation={() => openCreateChannelModal('voice')}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 5V19M5 12H19"/>
               </svg>
@@ -341,6 +463,14 @@
     </div>
   </div>
 </aside>
+
+<!-- Create Channel Modal -->
+<CreateChannelModal 
+  isOpen={showCreateChannelModal}
+  channelType={createChannelType}
+  on:close={() => showCreateChannelModal = false}
+  on:create={handleCreateChannel}
+/>
 
 <style>
   .channel-list {

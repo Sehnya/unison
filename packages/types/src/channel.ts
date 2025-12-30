@@ -6,6 +6,7 @@ import type { Snowflake } from './snowflake.js';
 export enum ChannelType {
   TEXT = 0,
   CATEGORY = 1,
+  VOICE = 2,
 }
 
 /**
