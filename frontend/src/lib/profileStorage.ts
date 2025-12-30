@@ -90,6 +90,80 @@ export interface ProfileData {
 
 const STORAGE_KEY = 'user_profile_data';
 const CURRENT_VERSION = 1;
+const MAX_IMAGE_SIZE = 200 * 1024; // 200KB max per image after compression
+
+/**
+ * Compress an image to reduce storage size
+ * Returns null if compression fails or image is too large
+ */
+async function compressImage(base64: string, maxSize: number = MAX_IMAGE_SIZE): Promise<string | null> {
+  return new Promise((resolve) => {
+    // If it's a URL (not base64), return as-is
+    if (!base64.startsWith('data:')) {
+      resolve(base64);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      
+      // Scale down if too large
+      const maxDimension = 800;
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = (height / width) * maxDimension;
+          width = maxDimension;
+        } else {
+          width = (width / height) * maxDimension;
+          height = maxDimension;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
+      
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Try different quality levels
+      for (let quality = 0.8; quality >= 0.3; quality -= 0.1) {
+        const compressed = canvas.toDataURL('image/jpeg', quality);
+        if (compressed.length <= maxSize) {
+          resolve(compressed);
+          return;
+        }
+      }
+      
+      // If still too large, return null
+      console.warn('Image too large even after compression');
+      resolve(null);
+    };
+    
+    img.onerror = () => resolve(null);
+    img.src = base64;
+  });
+}
+
+/**
+ * Get estimated storage size
+ */
+function getStorageSize(): number {
+  let total = 0;
+  for (const key in localStorage) {
+    if (localStorage.hasOwnProperty(key)) {
+      total += localStorage.getItem(key)?.length || 0;
+    }
+  }
+  return total;
+}
 
 // Default profile data
 function getDefaultProfile(): ProfileData {
@@ -157,13 +231,29 @@ export function loadProfile(): ProfileData {
 }
 
 // Save profile to localStorage
-export function saveProfile(data: ProfileData): void {
+export function saveProfile(data: ProfileData): boolean {
   try {
     data.lastUpdated = new Date().toISOString();
     data.version = CURRENT_VERSION;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const jsonString = JSON.stringify(data);
+    
+    // Check if data is too large (localStorage limit is ~5MB)
+    if (jsonString.length > 4 * 1024 * 1024) {
+      console.error('Profile data too large to save:', (jsonString.length / 1024 / 1024).toFixed(2), 'MB');
+      alert('Your profile has too much data to save. Try removing some images or content.');
+      return false;
+    }
+    
+    localStorage.setItem(STORAGE_KEY, jsonString);
+    return true;
   } catch (e) {
-    console.error('Failed to save profile:', e);
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      console.error('localStorage quota exceeded. Current storage:', (getStorageSize() / 1024 / 1024).toFixed(2), 'MB');
+      alert('Storage is full. Try removing some images or clearing old data.');
+    } else {
+      console.error('Failed to save profile:', e);
+    }
+    return false;
   }
 }
 
@@ -193,10 +283,22 @@ export function updateProfileGreeting(greeting: string): void {
   saveProfile(profile);
 }
 
-export function updateProfileBackground(backgroundImage: string | null): void {
+export async function updateProfileBackground(backgroundImage: string | null): Promise<boolean> {
   const profile = loadProfile();
-  profile.backgroundImage = backgroundImage;
-  saveProfile(profile);
+  
+  if (backgroundImage && backgroundImage.startsWith('data:')) {
+    // Compress the image before saving
+    const compressed = await compressImage(backgroundImage, 300 * 1024); // 300KB for background
+    if (!compressed) {
+      alert('Background image is too large. Please use a smaller image.');
+      return false;
+    }
+    profile.backgroundImage = compressed;
+  } else {
+    profile.backgroundImage = backgroundImage;
+  }
+  
+  return saveProfile(profile);
 }
 
 export function updateProfileWidgets(widgets: MiniWidget[]): void {
@@ -212,17 +314,46 @@ export function updateQuoteCard(cardId: string, content: string): void {
   saveProfile(profile);
 }
 
-export function updateGalleryCard(cardId: string, data: GalleryCardData): void {
+export async function updateGalleryCard(cardId: string, data: GalleryCardData): Promise<boolean> {
   const profile = loadProfile();
   if (!profile.galleryCards) profile.galleryCards = {};
-  profile.galleryCards[cardId] = data;
-  saveProfile(profile);
+  
+  // Compress all images in the gallery
+  const compressedImages: GalleryImage[] = [];
+  for (const img of data.images) {
+    if (img.src.startsWith('data:')) {
+      const compressed = await compressImage(img.src);
+      if (compressed) {
+        compressedImages.push({ ...img, src: compressed });
+      } else {
+        console.warn('Skipping image that could not be compressed:', img.name);
+      }
+    } else {
+      compressedImages.push(img);
+    }
+  }
+  
+  // Limit to 10 images per gallery
+  if (compressedImages.length > 10) {
+    alert('Gallery limited to 10 images. Some images were not added.');
+    compressedImages.splice(10);
+  }
+  
+  profile.galleryCards[cardId] = { ...data, images: compressedImages };
+  return saveProfile(profile);
 }
 
-export function updateMusicCard(data: MusicCardData): void {
+export async function updateMusicCard(data: MusicCardData): Promise<boolean> {
   const profile = loadProfile();
+  
+  // Compress cover image if it's base64
+  if (data.coverImage && data.coverImage.startsWith('data:')) {
+    const compressed = await compressImage(data.coverImage, 100 * 1024); // 100KB for cover
+    data.coverImage = compressed;
+  }
+  
   profile.musicCard = data;
-  saveProfile(profile);
+  return saveProfile(profile);
 }
 
 export function updateGamesCard(cardId: string, games: UserGame[]): void {
@@ -282,4 +413,29 @@ export function importProfile(jsonString: string): boolean {
 // Clear all profile data
 export function clearProfile(): void {
   localStorage.removeItem(STORAGE_KEY);
+}
+
+// Get storage usage info
+export function getStorageInfo(): { used: number; profileSize: number } {
+  const profileData = localStorage.getItem(STORAGE_KEY);
+  return {
+    used: getStorageSize(),
+    profileSize: profileData?.length || 0
+  };
+}
+
+// Clear large data (images) while keeping layout
+export function clearProfileImages(): void {
+  const profile = loadProfile();
+  profile.backgroundImage = null;
+  if (profile.galleryCards) {
+    for (const key in profile.galleryCards) {
+      profile.galleryCards[key].images = [];
+    }
+  }
+  if (profile.musicCard) {
+    profile.musicCard.coverImage = null;
+  }
+  profile.miniWidgets = profile.miniWidgets.filter(w => w.type !== 'gif');
+  saveProfile(profile);
 }
