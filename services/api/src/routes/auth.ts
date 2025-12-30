@@ -30,7 +30,7 @@ export interface AuthServiceInterface {
  */
 export interface AuthRoutesConfig {
   authService: AuthServiceInterface;
-  guildService: { getGuildByName: (name: string) => Promise<{ id: string } | null>; getRepository: () => { addMember: (guildId: string, userId: string, isOwner?: boolean) => Promise<unknown> } } | null;
+  guildService: { getGuildByName: (name: string) => Promise<unknown>; getRepository: () => { addMember: (guildId: string, userId: string, isOwner?: boolean) => Promise<unknown> } } | null;
   validateToken: TokenValidator;
 }
 
@@ -79,7 +79,7 @@ export function createAuthRoutes(config: AuthRoutesConfig): Router {
       // Auto-add user to BETA1 guild if it exists
       if (guildService) {
         try {
-          const beta1Guild = await guildService.getGuildByName('BETA1');
+          const beta1Guild = await guildService.getGuildByName('BETA1') as { id: string } | null;
           if (beta1Guild) {
             const userId = (result.user as { id: string }).id;
             // Use the repository's addMember method

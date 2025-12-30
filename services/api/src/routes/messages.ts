@@ -25,7 +25,7 @@ export interface MessagingServiceInterface {
  */
 export interface MessageRoutesConfig {
   messagingService: MessagingServiceInterface;
-  authService: { getUserById: (userId: string) => Promise<{ id: string; username: string; avatar?: string | null } | null> };
+  authService: { getUserById: (userId: string) => Promise<unknown> };
   validateToken: TokenValidator;
 }
 
@@ -79,14 +79,14 @@ export function createMessageRoutes(config: MessageRoutesConfig): Router {
       const message = await messagingService.createMessage(channelId, userId, content);
 
       // Enrich the created message with author information
-      let enrichedMessage = message as any;
+      let enrichedMessage = message as Record<string, unknown>;
       const authorId = (message as any).author_id || (message as any).authorId || userId;
       if (authorId) {
         try {
           const author = await authService.getUserById(authorId) as { id: string; username: string; avatar?: string | null } | null;
           if (author) {
             enrichedMessage = {
-              ...message,
+              ...(message as Record<string, unknown>),
               author_id: authorId,
               author_name: author.username,
               author_avatar: author.avatar || null,
