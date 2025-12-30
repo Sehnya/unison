@@ -12,7 +12,7 @@
   export let collapsed: boolean = false;
 
   const dispatch = createEventDispatcher<{
-    selectChannel: { channelId: string };
+    selectChannel: { channelId: string; channelType?: 'text' | 'voice' };
     selectGuild: { guildId: string };
     channelCreated: { channel: Channel };
   }>();
@@ -194,7 +194,7 @@
       dispatch('channelCreated', { channel: newChannel });
 
       // Auto-select the new channel
-      dispatch('selectChannel', { channelId: newChannel.id });
+      dispatch('selectChannel', { channelId: newChannel.id, channelType: newChannel.type });
 
     } catch (err) {
       console.error('Failed to create channel:', err);
@@ -324,7 +324,7 @@
                   <button 
                     class="channel-item"
                     class:active={selectedChannelId === channel.id}
-                    on:click={() => dispatch('selectChannel', { channelId: channel.id })}
+                    on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: channel.type })}
                   >
                     <span class="channel-hash">#</span>
                     <span class="channel-name">{channel.name}</span>
@@ -359,7 +359,7 @@
                   <button 
                     class="channel-item voice"
                     class:active={selectedChannelId === channel.id}
-                    on:click={() => dispatch('selectChannel', { channelId: channel.id })}
+                    on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: channel.type })}
                   >
                     <svg class="voice-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>

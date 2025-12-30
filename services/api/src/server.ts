@@ -22,6 +22,8 @@ import {
   type MessagingServiceInterface,
   type PermissionsServiceInterface,
 } from './routes/index.js';
+import { createLiveKitRoutes } from './routes/livekit.js';
+import type { LiveKitService } from './services/livekit.js';
 
 /**
  * API Server configuration
@@ -32,6 +34,7 @@ export interface ApiServerConfig {
   channelService: ChannelServiceInterface;
   messagingService: MessagingServiceInterface;
   permissionsService: PermissionsServiceInterface;
+  livekitService: LiveKitService;
   validateToken: TokenValidator;
 }
 

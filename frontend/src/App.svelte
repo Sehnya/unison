@@ -5,6 +5,7 @@
   import Sidebar from './components/Sidebar.svelte';
   import ChannelList from './components/ChannelList.svelte';
   import ChatArea from './components/ChatArea.svelte';
+  import VoiceRoom from './components/VoiceRoom.svelte';
   import GroupInfo from './components/GroupInfo.svelte';
   import UserProfile from './components/UserProfile.svelte';
   import SettingsPanel from './components/SettingsPanel.svelte';
@@ -28,6 +29,8 @@
   let showGroupInfo: boolean = false;
   let selectedGuildId: string | null = null;
   let selectedChannelId: string | null = null;
+  let selectedChannelType: 'text' | 'voice' | null = null;
+  let selectedChannelName: string | null = null;
   let currentUser: User | null = null;
   let guilds: Guild[] = [];
   let loading = true;
@@ -65,11 +68,33 @@
     loadUserData();
   }
 
-  function handleSelectChannel(event: CustomEvent<{ channelId: string }>) {
+  async function handleSelectChannel(event: CustomEvent<{ channelId: string; channelType?: 'text' | 'voice' }>) {
     selectedChannelId = event.detail.channelId;
+    selectedChannelType = event.detail.channelType || null;
     showUserProfile = false;
     selectedDMId = null;
     selectedDMUser = null;
+    
+    // Fetch channel details to get name and confirm type
+    if (authToken && selectedChannelId) {
+      try {
+        const response = await fetch(apiUrl(`/api/channels/${selectedChannelId}`), {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          selectedChannelName = data.channel?.name || null;
+          // Use type from API if not provided
+          if (!selectedChannelType && data.channel?.type !== undefined) {
+            selectedChannelType = data.channel.type === 2 ? 'voice' : 'text';
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch channel details:', err);
+      }
+    }
     
     // Update URL
     if (selectedGuildId && selectedChannelId) {
@@ -440,13 +465,22 @@
           on:close={closeDM}
         />
       {:else if selectedChannelId}
-        <ChatArea 
-          channelId={selectedChannelId}
-          {authToken}
-          currentUser={currentUser}
-          on:openGroupInfo={() => showGroupInfo = !showGroupInfo}
-          on:viewUserProfile={handleViewUserProfile}
-        />
+        {#if selectedChannelType === 'voice'}
+          <VoiceRoom 
+            channelId={selectedChannelId}
+            channelName={selectedChannelName || 'Voice Channel'}
+            {authToken}
+            currentUser={currentUser}
+          />
+        {:else}
+          <ChatArea 
+            channelId={selectedChannelId}
+            {authToken}
+            currentUser={currentUser}
+            on:openGroupInfo={() => showGroupInfo = !showGroupInfo}
+            on:viewUserProfile={handleViewUserProfile}
+          />
+        {/if}
       {:else if !selectedGuildId}
         <HomeDashboard 
           {guilds}

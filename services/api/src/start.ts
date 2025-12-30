@@ -12,6 +12,7 @@ import { GuildService } from '@discord-clone/guild';
 import { ChannelService } from '@discord-clone/channel';
 import { MessagingService } from '@discord-clone/messaging';
 import { PermissionsService } from '@discord-clone/permissions';
+import { LiveKitService } from './services/livekit.js';
 
 // Load .env file from project root
 const cwd = process.cwd();
@@ -75,6 +76,21 @@ async function main() {
     },
   });
 
+  // Initialize LiveKit service
+  const livekitApiKey = process.env.LIVEKIT_API_KEY || '';
+  const livekitApiSecret = process.env.LIVEKIT_API_SECRET || '';
+  const livekitWsUrl = process.env.LIVEKIT_WS_URL || 'wss://unison-livekit.livekit.cloud';
+
+  if (!livekitApiKey || !livekitApiSecret) {
+    console.warn('⚠️  LiveKit API key or secret not set. Voice calls will not work.');
+  }
+
+  const livekitService = new LiveKitService({
+    apiKey: livekitApiKey,
+    apiSecret: livekitApiSecret,
+    wsUrl: livekitWsUrl,
+  });
+
   // Create token validator using the auth service's validateToken method
   const validateToken = (token: string) => {
     try {
@@ -93,6 +109,7 @@ async function main() {
     channelService,
     messagingService,
     permissionsService,
+    livekitService,
     validateToken,
   });
 

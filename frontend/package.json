@@ -24,6 +24,7 @@
     "@tiptap/pm": "^3.14.0",
     "@tiptap/starter-kit": "^3.14.0",
     "ably": "^2.16.0",
+    "livekit-client": "^2.16.1",
     "lowlight": "^3.3.0"
   },
   "devDependencies": {
