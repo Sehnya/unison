@@ -226,15 +226,15 @@
   // React to play/pause changes (only if not updating from player)
   // Use a small delay to avoid conflicts with player state changes
   let syncTimeout: ReturnType<typeof setTimeout> | null = null;
-  $: if (ytPlayer && $musicStore.playerReady && !isUpdatingFromPlayer && isPlaying !== undefined) {
+  $: if (ytPlayer && $musicStore.playerReady && !isUpdatingFromPlayer) {
     if (syncTimeout) clearTimeout(syncTimeout);
     syncTimeout = setTimeout(() => {
       if (isUpdatingFromPlayer) return;
       try {
         const playerState = ytPlayer.getPlayerState?.();
         // YouTube player states: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
-        if (isPlaying && playerState !== 1 && playerState !== 3) {
-          // Store says playing but player is not - sync player (ignore buffering state)
+        if (isPlaying && playerState !== 1 && playerState !== 3 && playerState !== -1) {
+          // Store says playing but player is not - sync player (ignore buffering and unstarted states)
           ytPlayer.playVideo();
         } else if (!isPlaying && playerState === 1) {
           // Store says paused but player is playing - sync player
@@ -243,8 +243,13 @@
       } catch (error) {
         console.warn('Error syncing play/pause state:', error);
       }
-    }, 50);
+    }, 100);
   }
+  
+  // Cleanup timeout on destroy
+  onDestroy(() => {
+    if (syncTimeout) clearTimeout(syncTimeout);
+  });
 
   // React to volume changes
   $: if (ytPlayer && $musicStore.playerReady) {
