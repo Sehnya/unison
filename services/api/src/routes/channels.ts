@@ -39,7 +39,14 @@ export function createChannelRoutes(config: ChannelRoutesConfig): Router {
   const authMiddleware = createAuthMiddleware(validateToken);
 
   // All channel routes require authentication
-  router.use(authMiddleware);
+  // Skip middleware for /auth paths to avoid 405 errors
+  router.use((req, res, next) => {
+    // If this is an auth route, skip this router entirely
+    if (req.path?.startsWith('/auth') || req.originalUrl?.includes('/auth/')) {
+      return next('route'); // Skip to next router
+    }
+    return authMiddleware(req, res, next);
+  });
 
   // ============================================
   // Guild Channels
