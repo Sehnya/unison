@@ -80,16 +80,38 @@
       return;
     }
     
+    // Try to reuse existing player first
+    if (ytPlayer && ytPlayer.loadVideoById) {
+      try {
+        const currentVideoId = ytPlayer.getVideoData?.()?.video_id;
+        if (currentVideoId !== track.videoId) {
+          console.log('Reusing existing player, loading new video:', track.videoId);
+          ytPlayer.loadVideoById(track.videoId);
+          if (isPlaying) {
+            setTimeout(() => {
+              if (ytPlayer) ytPlayer.playVideo();
+            }, 100);
+          }
+        }
+        return; // Reused player, don't create new one
+      } catch (e) {
+        console.warn('Error reusing player, will create new one:', e);
+        // Fall through to create new player
+      }
+    }
+    
+    // Only destroy if we need to create a new player
     if (ytPlayer) {
       try {
         ytPlayer.destroy();
+        ytPlayer = null;
       } catch (e) {
         console.warn('Error destroying previous player:', e);
       }
     }
     
     try {
-      console.log('Creating YouTube player for video:', track.videoId);
+      console.log('Creating new YouTube player for video:', track.videoId);
       ytPlayer = new win.YT.Player(playerContainer, {
         height: '1',
         width: '1',
