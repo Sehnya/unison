@@ -41,6 +41,7 @@
   let profileData: ProfileData | null = null;
 
   let miniWidgets: MiniWidget[] = [];
+  let isEditMode = false;
 
   // Quote card content (keyed by card id)
   let quoteContents: Record<string, string> = {};
