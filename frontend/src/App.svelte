@@ -339,7 +339,7 @@
         {selectedGuildId}
         on:selectSection={handleSelectSection}
         on:selectGuild={handleSelectGuild}
-        on:openProfile={() => { showUserProfile = true; viewedUser = null; showSettings = false; selectedDMId = null; selectedDMUser = null; }}
+        on:openProfile={() => { showUserProfile = true; viewedUser = null; showSettings = false; selectedDMId = null; selectedDMUser = null; navigateToMyspace(); }}
         on:createGuild={handleCreateGuild}
       />
       {#if selectedGuildId}
