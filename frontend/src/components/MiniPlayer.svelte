@@ -25,6 +25,9 @@
   });
 
   onDestroy(() => {
+    // Cleanup timeouts
+    if (syncTimeout) clearTimeout(syncTimeout);
+    
     // Only pause, don't destroy - player should persist across navigation
     // The player will be reused if component is recreated
     if (ytPlayer && ytPlayer.pauseVideo) {
