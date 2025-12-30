@@ -176,12 +176,13 @@
         }
       );
 
-      // Enter presence with full user information
+      // Enter presence with minimal user information (avoid large avatars)
       await enterPresence(channelName, {
         odId: visitorId,
         userName: currentUser?.username || userName,
         status: 'online',
-        avatar: currentUser?.avatar || null,
+        // Don't send avatar in presence - it can exceed Ably's message size limit
+        avatar: undefined,
       });
     } catch (error) {
       console.warn('Ably initialization failed, continuing without real-time updates:', error);
