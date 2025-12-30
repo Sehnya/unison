@@ -23,6 +23,8 @@ export interface AuthServiceInterface {
   getUserById(userId: string): Promise<unknown>;
   acceptTerms(userId: string): Promise<void>;
   updateProfile(userId: string, updates: { username?: string; avatar?: string; bio?: string }): Promise<unknown>;
+  getProfileData(userId: string): Promise<unknown>;
+  saveProfileData(userId: string, profileData: unknown, backgroundImage?: string | null): Promise<void>;
 }
 
 /**
@@ -297,6 +299,43 @@ export function createAuthRoutes(config: AuthRoutesConfig): Router {
       const user = await authService.updateProfile(userId, updates);
 
       res.status(200).json({ user });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /auth/profile-data
+   * Get user's profile customization data (cards, layout, widgets, etc.)
+   */
+  router.get('/profile-data', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id: userId } = (req as AuthenticatedRequest).user;
+      
+      const profileData = await authService.getProfileData(userId);
+
+      res.status(200).json({ profileData: profileData || null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PUT /auth/profile-data
+   * Save user's profile customization data (cards, layout, widgets, etc.)
+   */
+  router.put('/profile-data', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id: userId } = (req as AuthenticatedRequest).user;
+      const { profileData, backgroundImage } = req.body;
+
+      if (!profileData || typeof profileData !== 'object') {
+        throw new ApiError(ApiErrorCode.VALIDATION_ERROR, 400, 'Profile data is required');
+      }
+
+      await authService.saveProfileData(userId, profileData, backgroundImage);
+
+      res.status(200).json({ success: true });
     } catch (error) {
       next(error);
     }

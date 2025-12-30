@@ -1,7 +1,9 @@
 /**
  * Profile Storage System
- * Persists all user profile data including card positions, content, and settings
+ * Persists user profile data to the server database
  */
+
+import { apiUrl } from './api';
 
 // Types for profile data
 export interface MiniWidget {
@@ -73,7 +75,6 @@ export interface ProfileData {
   
   // Header
   greeting: string;
-  backgroundImage: string | null;
   miniWidgets: MiniWidget[];
   
   // Card-specific data (keyed by card id for multiple instances)
@@ -88,81 +89,14 @@ export interface ProfileData {
   version: number;
 }
 
-const STORAGE_KEY = 'user_profile_data';
-const CURRENT_VERSION = 1;
-const MAX_IMAGE_SIZE = 200 * 1024; // 200KB max per image after compression
+const CURRENT_VERSION = 2;
+let authToken: string | null = null;
+let cachedProfile: ProfileData | null = null;
+let cachedBackgroundImage: string | null = null;
 
-/**
- * Compress an image to reduce storage size
- * Returns null if compression fails or image is too large
- */
-async function compressImage(base64: string, maxSize: number = MAX_IMAGE_SIZE): Promise<string | null> {
-  return new Promise((resolve) => {
-    // If it's a URL (not base64), return as-is
-    if (!base64.startsWith('data:')) {
-      resolve(base64);
-      return;
-    }
-
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let width = img.width;
-      let height = img.height;
-      
-      // Scale down if too large
-      const maxDimension = 800;
-      if (width > maxDimension || height > maxDimension) {
-        if (width > height) {
-          height = (height / width) * maxDimension;
-          width = maxDimension;
-        } else {
-          width = (width / height) * maxDimension;
-          height = maxDimension;
-        }
-      }
-      
-      canvas.width = width;
-      canvas.height = height;
-      
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        resolve(null);
-        return;
-      }
-      
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      // Try different quality levels
-      for (let quality = 0.8; quality >= 0.3; quality -= 0.1) {
-        const compressed = canvas.toDataURL('image/jpeg', quality);
-        if (compressed.length <= maxSize) {
-          resolve(compressed);
-          return;
-        }
-      }
-      
-      // If still too large, return null
-      console.warn('Image too large even after compression');
-      resolve(null);
-    };
-    
-    img.onerror = () => resolve(null);
-    img.src = base64;
-  });
-}
-
-/**
- * Get estimated storage size
- */
-function getStorageSize(): number {
-  let total = 0;
-  for (const key in localStorage) {
-    if (localStorage.hasOwnProperty(key)) {
-      total += localStorage.getItem(key)?.length || 0;
-    }
-  }
-  return total;
+// Set auth token for API calls
+export function setAuthToken(token: string | null): void {
+  authToken = token;
 }
 
 // Default profile data
@@ -177,7 +111,6 @@ function getDefaultProfile(): ProfileData {
       { id: '6', type: 'friends', size: 'small' },
     ],
     greeting: 'HI,',
-    backgroundImage: null,
     miniWidgets: [],
     quoteCards: {
       '1': {
@@ -208,66 +141,92 @@ function getDefaultProfile(): ProfileData {
   };
 }
 
-// Load profile from localStorage
-export function loadProfile(): ProfileData {
+// Load profile from server
+export async function loadProfileFromServer(): Promise<{ profileData: ProfileData; backgroundImage: string | null }> {
+  if (!authToken) {
+    return { profileData: getDefaultProfile(), backgroundImage: null };
+  }
+
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      return getDefaultProfile();
+    const response = await fetch(apiUrl('/api/auth/profile-data'), {
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.warn('Failed to load profile from server:', response.status);
+      return { profileData: getDefaultProfile(), backgroundImage: null };
+    }
+
+    const data = await response.json();
+    
+    if (data.profileData?.profile_data) {
+      cachedProfile = data.profileData.profile_data as ProfileData;
+      cachedBackgroundImage = data.profileData.background_image || null;
+      return { profileData: cachedProfile, backgroundImage: cachedBackgroundImage };
     }
     
-    const data = JSON.parse(stored) as ProfileData;
-    
-    // Version migration if needed
-    if (!data.version || data.version < CURRENT_VERSION) {
-      return migrateProfile(data);
-    }
-    
-    return data;
+    return { profileData: getDefaultProfile(), backgroundImage: null };
   } catch (e) {
-    console.warn('Failed to load profile, using defaults:', e);
-    return getDefaultProfile();
+    console.warn('Failed to load profile from server:', e);
+    return { profileData: getDefaultProfile(), backgroundImage: null };
   }
 }
 
-// Save profile to localStorage
-export function saveProfile(data: ProfileData): boolean {
+// Load profile (sync version using cache)
+export function loadProfile(): ProfileData {
+  return cachedProfile || getDefaultProfile();
+}
+
+// Get cached background image
+export function getBackgroundImage(): string | null {
+  return cachedBackgroundImage;
+}
+
+// Save profile to server
+export async function saveProfileToServer(data: ProfileData, backgroundImage?: string | null): Promise<boolean> {
+  if (!authToken) {
+    console.warn('No auth token, cannot save profile to server');
+    return false;
+  }
+
   try {
     data.lastUpdated = new Date().toISOString();
     data.version = CURRENT_VERSION;
-    const jsonString = JSON.stringify(data);
     
-    // Check if data is too large (localStorage limit is ~5MB)
-    if (jsonString.length > 4 * 1024 * 1024) {
-      console.error('Profile data too large to save:', (jsonString.length / 1024 / 1024).toFixed(2), 'MB');
-      alert('Your profile has too much data to save. Try removing some images or content.');
+    const response = await fetch(apiUrl('/api/auth/profile-data'), {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        profileData: data,
+        backgroundImage: backgroundImage !== undefined ? backgroundImage : cachedBackgroundImage,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Failed to save profile:', errorData);
       return false;
     }
-    
-    localStorage.setItem(STORAGE_KEY, jsonString);
+
+    cachedProfile = data;
+    if (backgroundImage !== undefined) {
+      cachedBackgroundImage = backgroundImage;
+    }
     return true;
   } catch (e) {
-    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-      console.error('localStorage quota exceeded. Current storage:', (getStorageSize() / 1024 / 1024).toFixed(2), 'MB');
-      alert('Storage is full. Try removing some images or clearing old data.');
-    } else {
-      console.error('Failed to save profile:', e);
-    }
+    console.error('Failed to save profile to server:', e);
     return false;
   }
 }
 
-// Migrate old profile data to new version
-function migrateProfile(oldData: Partial<ProfileData>): ProfileData {
-  const defaultProfile = getDefaultProfile();
-  
-  // Merge old data with defaults
-  return {
-    ...defaultProfile,
-    ...oldData,
-    version: CURRENT_VERSION,
-    lastUpdated: new Date().toISOString()
-  };
+// Legacy sync save (for backwards compatibility - now async internally)
+export function saveProfile(data: ProfileData): void {
+  saveProfileToServer(data).catch(console.error);
 }
 
 // Helper to update specific parts of the profile
@@ -285,20 +244,7 @@ export function updateProfileGreeting(greeting: string): void {
 
 export async function updateProfileBackground(backgroundImage: string | null): Promise<boolean> {
   const profile = loadProfile();
-  
-  if (backgroundImage && backgroundImage.startsWith('data:')) {
-    // Compress the image before saving
-    const compressed = await compressImage(backgroundImage, 300 * 1024); // 300KB for background
-    if (!compressed) {
-      alert('Background image is too large. Please use a smaller image.');
-      return false;
-    }
-    profile.backgroundImage = compressed;
-  } else {
-    profile.backgroundImage = backgroundImage;
-  }
-  
-  return saveProfile(profile);
+  return saveProfileToServer(profile, backgroundImage);
 }
 
 export function updateProfileWidgets(widgets: MiniWidget[]): void {
@@ -314,46 +260,17 @@ export function updateQuoteCard(cardId: string, content: string): void {
   saveProfile(profile);
 }
 
-export async function updateGalleryCard(cardId: string, data: GalleryCardData): Promise<boolean> {
+export function updateGalleryCard(cardId: string, data: GalleryCardData): void {
   const profile = loadProfile();
   if (!profile.galleryCards) profile.galleryCards = {};
-  
-  // Compress all images in the gallery
-  const compressedImages: GalleryImage[] = [];
-  for (const img of data.images) {
-    if (img.src.startsWith('data:')) {
-      const compressed = await compressImage(img.src);
-      if (compressed) {
-        compressedImages.push({ ...img, src: compressed });
-      } else {
-        console.warn('Skipping image that could not be compressed:', img.name);
-      }
-    } else {
-      compressedImages.push(img);
-    }
-  }
-  
-  // Limit to 10 images per gallery
-  if (compressedImages.length > 10) {
-    alert('Gallery limited to 10 images. Some images were not added.');
-    compressedImages.splice(10);
-  }
-  
-  profile.galleryCards[cardId] = { ...data, images: compressedImages };
-  return saveProfile(profile);
+  profile.galleryCards[cardId] = data;
+  saveProfile(profile);
 }
 
-export async function updateMusicCard(data: MusicCardData): Promise<boolean> {
+export function updateMusicCard(data: MusicCardData): void {
   const profile = loadProfile();
-  
-  // Compress cover image if it's base64
-  if (data.coverImage && data.coverImage.startsWith('data:')) {
-    const compressed = await compressImage(data.coverImage, 100 * 1024); // 100KB for cover
-    data.coverImage = compressed;
-  }
-  
   profile.musicCard = data;
-  return saveProfile(profile);
+  saveProfile(profile);
 }
 
 export function updateGamesCard(cardId: string, games: UserGame[]): void {
@@ -399,43 +316,19 @@ export function exportProfile(): string {
 }
 
 // Import profile from JSON
-export function importProfile(jsonString: string): boolean {
+export async function importProfile(jsonString: string): Promise<boolean> {
   try {
     const data = JSON.parse(jsonString) as ProfileData;
-    saveProfile(data);
-    return true;
+    return await saveProfileToServer(data);
   } catch (e) {
     console.error('Failed to import profile:', e);
     return false;
   }
 }
 
-// Clear all profile data
-export function clearProfile(): void {
-  localStorage.removeItem(STORAGE_KEY);
-}
-
-// Get storage usage info
-export function getStorageInfo(): { used: number; profileSize: number } {
-  const profileData = localStorage.getItem(STORAGE_KEY);
-  return {
-    used: getStorageSize(),
-    profileSize: profileData?.length || 0
-  };
-}
-
-// Clear large data (images) while keeping layout
-export function clearProfileImages(): void {
-  const profile = loadProfile();
-  profile.backgroundImage = null;
-  if (profile.galleryCards) {
-    for (const key in profile.galleryCards) {
-      profile.galleryCards[key].images = [];
-    }
-  }
-  if (profile.musicCard) {
-    profile.musicCard.coverImage = null;
-  }
-  profile.miniWidgets = profile.miniWidgets.filter(w => w.type !== 'gif');
-  saveProfile(profile);
+// Clear profile data
+export async function clearProfile(): Promise<void> {
+  cachedProfile = null;
+  cachedBackgroundImage = null;
+  await saveProfileToServer(getDefaultProfile(), null);
 }

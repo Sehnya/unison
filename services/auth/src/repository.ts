@@ -373,4 +373,36 @@ export class AuthRepository {
     }
     return rowToUser(row);
   }
+
+  /**
+   * Get user's profile customization data
+   */
+  async getProfileData(userId: Snowflake): Promise<{ profile_data: unknown; background_image: string | null } | null> {
+    const result = await this.pool.query(
+      `SELECT profile_data, background_image FROM user_profiles WHERE user_id = $1`,
+      [userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    return {
+      profile_data: result.rows[0].profile_data,
+      background_image: result.rows[0].background_image
+    };
+  }
+
+  /**
+   * Save user's profile customization data
+   */
+  async saveProfileData(userId: Snowflake, profileData: unknown, backgroundImage?: string | null): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO user_profiles (user_id, profile_data, background_image, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (user_id) 
+       DO UPDATE SET profile_data = $2, background_image = $3, updated_at = NOW()`,
+      [userId, JSON.stringify(profileData), backgroundImage ?? null]
+    );
+  }
 }

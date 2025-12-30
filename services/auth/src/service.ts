@@ -317,4 +317,18 @@ export class AuthService {
 
     return this.repository.updateProfile(userId, updates);
   }
+
+  /**
+   * Get user's profile customization data
+   */
+  async getProfileData(userId: Snowflake): Promise<{ profile_data: unknown; background_image: string | null } | null> {
+    return this.repository.getProfileData(userId);
+  }
+
+  /**
+   * Save user's profile customization data
+   */
+  async saveProfileData(userId: Snowflake, profileData: unknown, backgroundImage?: string | null): Promise<void> {
+    await this.repository.saveProfileData(userId, profileData, backgroundImage);
+  }
 }

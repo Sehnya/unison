@@ -9,7 +9,9 @@
   import FriendsCard from './FriendsCard.svelte';
   import {
     loadProfile,
+    loadProfileFromServer,
     saveProfile,
+    setAuthToken,
     updateProfileCards,
     updateProfileGreeting,
     updateProfileBackground,
@@ -31,7 +33,7 @@
   $: username = user?.username || 'Dear';
   $: avatar = user?.avatar || null;
   $: bio = user?.bio || '';
-  $: backgroundImage = user?.background_image || null;
+  let backgroundImage: string | null = null;
   let fileInput: HTMLInputElement;
   let customGreeting = 'HI,';
   let isEditingGreeting = false;
@@ -39,6 +41,7 @@
   let showWidgetMenu = false;
   let miniGifInput: HTMLInputElement;
   let profileData: ProfileData | null = null;
+  let profileLoading = true;
 
   let miniWidgets: MiniWidget[] = [];
   let isEditMode = false;
@@ -75,18 +78,19 @@
   let cards: Card[] = [];
   let showAddCardMenu = false;
 
-  // Load profile data on mount
-  // Profile customization (cards, layout, etc.) is stored in localStorage and is per-browser
-  // The user prop contains the actual user data (username, avatar, bio, background_image) from the database
-  onMount(() => {
-    // Always load profile customization data from localStorage
-    // This is the current user's profile layout/customization
-    profileData = loadProfile();
+  // Load profile data on mount from server
+  onMount(async () => {
+    // Set auth token for API calls
+    setAuthToken(authToken);
+    
+    // Load profile from server
+    const { profileData: serverProfile, backgroundImage: serverBg } = await loadProfileFromServer();
+    profileData = serverProfile;
+    backgroundImage = serverBg;
     
     // Load layout
     cards = profileData.cards as Card[];
     customGreeting = profileData.greeting;
-    // backgroundImage is now loaded from user prop (reactive) - no longer from localStorage
     miniWidgets = profileData.miniWidgets;
     
     // Load quote contents
@@ -95,6 +99,8 @@
         Object.entries(profileData.quoteCards).map(([id, data]) => [id, data.content])
       );
     }
+    
+    profileLoading = false;
   });
 
   function getQuoteContent(cardId: string): string {
