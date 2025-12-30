@@ -52,6 +52,7 @@ export interface ChatMessage {
     url: string;
     name?: string;
   }>;
+  edited?: boolean;
 }
 
 export interface TypingIndicator {
@@ -175,12 +176,6 @@ export function initAblyWithUser(
       key,
       clientId: userId, // User ID is used as Ably clientId
       echoMessages: false,
-      // Store user metadata for reference
-      clientData: {
-        userId,
-        userName,
-        avatar: avatar || null,
-      },
     });
 
     ablyClient.connection.on('connected', () => {

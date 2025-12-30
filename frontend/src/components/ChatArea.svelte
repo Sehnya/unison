@@ -58,6 +58,12 @@
   let showNewMessagesBanner = false;
   let unreadCount = 0;
 
+  // Edit/Delete message state
+  let editingMessageId: string | null = null;
+  let editingContent: string = '';
+  let hoveredMessageId: string | null = null;
+  let showMessageMenu: string | null = null;
+
   // Get last read message ID from localStorage
   function getLastReadMessageId(chId: string): string | null {
     try {
@@ -470,99 +476,87 @@
 
     loading = true;
     channelLoading = true;
-    messages = [];
     typingUsers = [];
-    channel = null;
 
-    // Fetch channel data
-    try {
-      const channelResponse = await fetch(apiUrl(`/api/channels/${channelId}`), {
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-        },
-      });
+    // Don't clear messages immediately - show stale data while loading
+    // This makes channel switching feel instant
+    const previousMessages = messages;
+    const previousChannel = channel;
 
-      if (channelResponse.ok) {
-        const channelData = await channelResponse.json();
-        channel = channelData.channel;
-      } else {
-        console.error('Failed to load channel data:', channelResponse.status);
-      }
-    } catch (error) {
-      console.error('Error loading channel data:', error);
-    } finally {
-      channelLoading = false;
+    // Fetch channel and messages in parallel
+    const [channelResult, messagesResult] = await Promise.allSettled([
+      fetch(apiUrl(`/api/channels/${channelId}`), {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      }),
+      fetch(apiUrl(`/api/channels/${channelId}/messages?limit=50`), {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      }),
+    ]);
+
+    // Process channel data
+    if (channelResult.status === 'fulfilled' && channelResult.value.ok) {
+      const channelData = await channelResult.value.json();
+      channel = channelData.channel;
+    } else {
+      channel = previousChannel;
+      console.error('Failed to load channel data');
     }
+    channelLoading = false;
 
-    try {
-      // Load messages from backend API
-      const response = await fetch(apiUrl(`/api/channels/${channelId}/messages`), {
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-        },
-      });
+    // Process messages
+    if (messagesResult.status === 'fulfilled' && messagesResult.value.ok) {
+      const data = await messagesResult.value.json();
+      const fetchedMessages = Array.isArray(data) ? data : (data.messages || []);
+      
+      messages = fetchedMessages.map((msg: any) => ({
+        id: msg.id || msg.message?.id,
+        authorId: msg.author_id || msg.message?.author_id,
+        authorName: msg.author_name || msg.message?.author_name || currentUser?.username || 'Unknown',
+        authorAvatar: msg.author_avatar || msg.message?.author_avatar || null,
+        authorFont: msg.author_font || msg.message?.author_font || null,
+        content: msg.content || msg.message?.content || '',
+        timestamp: new Date(msg.created_at || msg.message?.created_at || Date.now()).getTime(),
+        channelId,
+        edited: msg.edited_at ? true : false,
+      })).sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp);
+      
+      // Load Google fonts asynchronously (don't block)
+      const uniqueFonts = [...new Set(messages.map(m => m.authorFont).filter(Boolean))];
+      uniqueFonts.forEach(font => loadGoogleFont(font as string));
 
-      if (response.ok) {
-        const data = await response.json();
-        const fetchedMessages = Array.isArray(data) ? data : (data.messages || []);
-        
-        // Convert API messages to ChatMessage format
-        // Use author_avatar from API (fetched from users table, so it's always current)
-        messages = fetchedMessages.map((msg: any) => ({
-          id: msg.id || msg.message?.id,
-          authorId: msg.author_id || msg.message?.author_id,
-          authorName: msg.author_name || msg.message?.author_name || currentUser?.username || 'Unknown',
-          authorAvatar: msg.author_avatar || msg.message?.author_avatar || null,
-          authorFont: msg.author_font || msg.message?.author_font || null,
-          content: msg.content || msg.message?.content || '',
-          timestamp: new Date(msg.created_at || msg.message?.created_at || Date.now()).getTime(),
-          channelId,
-        })).sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp);
-        
-        // Load Google fonts for all unique author fonts
-        const uniqueFonts = [...new Set(messages.map(m => m.authorFont).filter(Boolean))];
-        uniqueFonts.forEach(font => loadGoogleFont(font as string));
-
-        // Check for unread messages
-        lastReadMessageId = getLastReadMessageId(channelId);
-        if (lastReadMessageId && messages.length > 0) {
-          const lastReadIndex = messages.findIndex(m => m.id === lastReadMessageId);
-          if (lastReadIndex >= 0 && lastReadIndex < messages.length - 1) {
-            // There are unread messages
-            firstUnreadIndex = lastReadIndex + 1;
-            unreadCount = messages.length - firstUnreadIndex;
-            hasUnreadMessages = true;
-            showNewMessagesBanner = true;
-          } else if (lastReadIndex === -1) {
-            // Last read message not found (maybe deleted), show all as unread
-            firstUnreadIndex = 0;
-            unreadCount = messages.length;
-            hasUnreadMessages = true;
-            showNewMessagesBanner = true;
-          } else {
-            // All messages read
-            hasUnreadMessages = false;
-            showNewMessagesBanner = false;
-            firstUnreadIndex = -1;
-            unreadCount = 0;
-          }
-        } else if (messages.length > 0) {
-          // First time viewing channel - mark all as read
-          markAllAsRead();
+      // Check for unread messages
+      lastReadMessageId = getLastReadMessageId(channelId);
+      if (lastReadMessageId && messages.length > 0) {
+        const lastReadIndex = messages.findIndex(m => m.id === lastReadMessageId);
+        if (lastReadIndex >= 0 && lastReadIndex < messages.length - 1) {
+          firstUnreadIndex = lastReadIndex + 1;
+          unreadCount = messages.length - firstUnreadIndex;
+          hasUnreadMessages = true;
+          showNewMessagesBanner = true;
+        } else if (lastReadIndex === -1) {
+          firstUnreadIndex = 0;
+          unreadCount = messages.length;
+          hasUnreadMessages = true;
+          showNewMessagesBanner = true;
+        } else {
+          hasUnreadMessages = false;
+          showNewMessagesBanner = false;
+          firstUnreadIndex = -1;
+          unreadCount = 0;
         }
-      } else if (response.status === 401) {
-        console.error('Unauthorized - token may be invalid');
-        messages = [];
-      } else {
-        console.warn('Failed to load messages from API, using fallback');
-        messages = getMockMessages();
+      } else if (messages.length > 0) {
+        markAllAsRead();
       }
-    } catch (error) {
-      console.error('Error loading messages:', error);
-      messages = getMockMessages();
+    } else if (messagesResult.status === 'fulfilled' && messagesResult.value.status === 401) {
+      console.error('Unauthorized - token may be invalid');
+      messages = [];
+    } else {
+      messages = previousMessages.length > 0 ? previousMessages : [];
     }
 
-      // Initialize Ably for real-time updates
+    loading = false;
+
+    // Initialize Ably in background (don't block UI)
     try {
       const currentClient = getAblyClient();
       if (!currentClient) {
@@ -616,6 +610,26 @@
         }
       });
 
+      // Subscribe to message edits
+      const ablyChannelRef = getAblyClient()?.channels.get(channelName);
+      if (ablyChannelRef) {
+        ablyChannelRef.subscribe('message.edited', (msg) => {
+          const data = msg.data as { id: string; content: string; channelId: string };
+          if (data.channelId === channelId) {
+            messages = messages.map(m => 
+              m.id === data.id ? { ...m, content: data.content, edited: true } : m
+            );
+          }
+        });
+
+        ablyChannelRef.subscribe('message.deleted', (msg) => {
+          const data = msg.data as { id: string; channelId: string };
+          if (data.channelId === channelId) {
+            messages = messages.filter(m => m.id !== data.id);
+          }
+        });
+      }
+
       // Subscribe to typing indicators
       subscribeToTyping(
         channelName,
@@ -645,7 +659,6 @@
       console.warn('Ably initialization failed, continuing without real-time updates:', error);
     }
 
-    loading = false;
     scrollToBottom();
   }
 
@@ -1013,6 +1026,139 @@
       avatar: message.authorAvatar,
     });
   }
+
+  // Start editing a message
+  function startEditing(message: ChatMessage) {
+    editingMessageId = message.id;
+    editingContent = message.content;
+    showMessageMenu = null;
+  }
+
+  // Cancel editing
+  function cancelEditing() {
+    editingMessageId = null;
+    editingContent = '';
+  }
+
+  // Save edited message
+  async function saveEdit() {
+    if (!editingMessageId || !editingContent.trim() || !authToken) return;
+
+    const messageId = editingMessageId;
+    const newContent = editingContent.trim();
+    const originalMessage = messages.find(m => m.id === messageId);
+    
+    if (!originalMessage || originalMessage.content === newContent) {
+      cancelEditing();
+      return;
+    }
+
+    // Optimistically update UI
+    messages = messages.map(msg => 
+      msg.id === messageId 
+        ? { ...msg, content: newContent, edited: true }
+        : msg
+    );
+    cancelEditing();
+
+    try {
+      const response = await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ content: newContent }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to edit message');
+      }
+
+      // Publish edit to Ably
+      const ablyChannel = getAblyClient()?.channels.get(`channel:${channelId}`);
+      if (ablyChannel) {
+        await ablyChannel.publish('message.edited', {
+          id: messageId,
+          content: newContent,
+          channelId,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to edit message:', error);
+      // Revert on failure
+      messages = messages.map(msg => 
+        msg.id === messageId ? originalMessage : msg
+      );
+      alert('Failed to edit message. Please try again.');
+    }
+  }
+
+  // Handle edit keydown
+  function handleEditKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      saveEdit();
+    } else if (event.key === 'Escape') {
+      cancelEditing();
+    }
+  }
+
+  // Delete a message
+  async function deleteMessage(messageId: string) {
+    if (!authToken) return;
+
+    const confirmed = confirm('Are you sure you want to delete this message?');
+    if (!confirmed) return;
+
+    const originalMessage = messages.find(m => m.id === messageId);
+    
+    // Optimistically remove from UI
+    messages = messages.filter(msg => msg.id !== messageId);
+    showMessageMenu = null;
+
+    try {
+      const response = await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}`), {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete message');
+      }
+
+      // Publish delete to Ably
+      const ablyChannel = getAblyClient()?.channels.get(`channel:${channelId}`);
+      if (ablyChannel) {
+        await ablyChannel.publish('message.deleted', {
+          id: messageId,
+          channelId,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+      // Revert on failure
+      if (originalMessage) {
+        messages = [...messages, originalMessage].sort((a, b) => a.timestamp - b.timestamp);
+      }
+      alert('Failed to delete message. Please try again.');
+    }
+  }
+
+  // Toggle message menu
+  function toggleMessageMenu(messageId: string) {
+    showMessageMenu = showMessageMenu === messageId ? null : messageId;
+  }
+
+  // Close menu when clicking outside
+  function handleClickOutside(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.message-menu') && !target.closest('.message-actions-btn')) {
+      showMessageMenu = null;
+    }
+  }
 </script>
 
 <div class="chat-area">
@@ -1087,7 +1233,14 @@
             <div class="day-line"></div>
           </div>
         {/if}
-        <div class="message-wrapper" class:new-author={shouldShowAvatar(message, index)} class:unread={index >= firstUnreadIndex && hasUnreadMessages}>
+        <div 
+          class="message-wrapper" 
+          class:new-author={shouldShowAvatar(message, index)} 
+          class:unread={index >= firstUnreadIndex && hasUnreadMessages}
+          class:editing={editingMessageId === message.id}
+          on:mouseenter={() => hoveredMessageId = message.id}
+          on:mouseleave={() => { hoveredMessageId = null; if (showMessageMenu === message.id) showMessageMenu = null; }}
+        >
           {#if shouldShowAvatar(message, index)}
             <button class="message-avatar" on:click={() => handleUserClick(message)} aria-label="View {message.authorName}'s profile">
               <Avatar 
@@ -1109,11 +1262,25 @@
                   on:click={() => handleUserClick(message)}
                   style={message.authorFont ? `font-family: '${message.authorFont}', sans-serif;` : ''}
                 >{message.authorName}</button>
-                <span class="message-time">{formatTimestamp(message.timestamp)}</span>
+                <span class="message-time">{formatTimestamp(message.timestamp)}{message.edited ? ' (edited)' : ''}</span>
               </div>
             {/if}
 
-            {#if message.content}
+            {#if editingMessageId === message.id}
+              <div class="edit-input-container">
+                <input
+                  type="text"
+                  class="edit-input"
+                  bind:value={editingContent}
+                  on:keydown={handleEditKeydown}
+                  autofocus
+                />
+                <div class="edit-actions">
+                  <button class="edit-cancel-btn" on:click={cancelEditing}>Cancel</button>
+                  <button class="edit-save-btn" on:click={saveEdit}>Save</button>
+                </div>
+              </div>
+            {:else if message.content}
               {#if isImageContent(message.content)}
                 <div class="message-gif">
                   <img src={message.content} alt="Image" loading="lazy" />
@@ -1209,6 +1376,42 @@
               </div>
             {/if}
           </div>
+
+          <!-- Message Actions (Edit/Delete) -->
+          {#if hoveredMessageId === message.id && message.authorId === visitorId && editingMessageId !== message.id}
+            <div class="message-actions">
+              <button 
+                class="message-actions-btn" 
+                on:click={() => toggleMessageMenu(message.id)}
+                aria-label="Message options"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="5" r="2"/>
+                  <circle cx="12" cy="12" r="2"/>
+                  <circle cx="12" cy="19" r="2"/>
+                </svg>
+              </button>
+              {#if showMessageMenu === message.id}
+                <div class="message-menu">
+                  {#if !isImageContent(message.content)}
+                    <button class="menu-item" on:click={() => startEditing(message)}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                      Edit
+                    </button>
+                  {/if}
+                  <button class="menu-item delete" on:click={() => deleteMessage(message.id)}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                    Delete
+                  </button>
+                </div>
+              {/if}
+            </div>
+          {/if}
         </div>
       {/each}
     {/if}
@@ -2320,5 +2523,142 @@
     width: 100%;
     min-height: 300px;
     border: none;
+  }
+
+  /* Message Actions (Edit/Delete) */
+  .message-wrapper {
+    position: relative;
+  }
+
+  .message-wrapper.editing {
+    background: rgba(49, 130, 206, 0.1);
+  }
+
+  .message-actions {
+    position: absolute;
+    right: 16px;
+    top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .message-actions-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .message-actions-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
+
+  .message-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: rgba(30, 30, 30, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    z-index: 100;
+    min-width: 120px;
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    border: none;
+    background: none;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    text-align: left;
+  }
+
+  .menu-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .menu-item.delete {
+    color: #ef4444;
+  }
+
+  .menu-item.delete:hover {
+    background: rgba(239, 68, 68, 0.15);
+  }
+
+  /* Edit Input */
+  .edit-input-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .edit-input {
+    width: 100%;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(49, 130, 206, 0.5);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+  }
+
+  .edit-input:focus {
+    outline: none;
+    border-color: rgba(49, 130, 206, 0.8);
+  }
+
+  .edit-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .edit-cancel-btn,
+  .edit-save-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: none;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .edit-cancel-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .edit-cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
+
+  .edit-save-btn {
+    background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+    color: #fff;
+  }
+
+  .edit-save-btn:hover {
+    transform: scale(1.02);
   }
 </style>
