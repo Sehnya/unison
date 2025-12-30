@@ -70,6 +70,7 @@ export function createApiServer(config: ApiServerConfig): Express {
   // Guild routes
   app.use('/api/guilds', createGuildRoutes({
     guildService: config.guildService,
+    channelService: config.channelService,
     authService: config.authService,
     validateToken: config.validateToken,
   }));
@@ -77,6 +78,7 @@ export function createApiServer(config: ApiServerConfig): Express {
   // Also mount at /guilds for backwards compatibility
   app.use('/guilds', createGuildRoutes({
     guildService: config.guildService,
+    channelService: config.channelService,
     authService: config.authService,
     validateToken: config.validateToken,
   }));

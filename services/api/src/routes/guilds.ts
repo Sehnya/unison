@@ -31,11 +31,16 @@ export interface GuildServiceInterface {
   getRepository(): { isOwner: (guildId: string, userId: string) => Promise<boolean> };
 }
 
+export interface ChannelServiceInterface {
+  getGuildChannels(guildId: string): Promise<unknown[]>;
+}
+
 /**
  * Guild routes configuration
  */
 export interface GuildRoutesConfig {
   guildService: GuildServiceInterface;
+  channelService: ChannelServiceInterface;
   authService: { getUserById: (userId: string) => Promise<unknown> };
   validateToken: TokenValidator;
 }
@@ -45,7 +50,7 @@ export interface GuildRoutesConfig {
  */
 export function createGuildRoutes(config: GuildRoutesConfig): Router {
   const router = Router();
-  const { guildService, authService, validateToken } = config;
+  const { guildService, channelService, authService, validateToken } = config;
   const authMiddleware = createAuthMiddleware(validateToken);
 
   // All guild routes require authentication
@@ -65,6 +70,43 @@ export function createGuildRoutes(config: GuildRoutesConfig): Router {
       const { id: userId } = (req as AuthenticatedRequest).user;
       const guilds = await guildService.getUserGuilds(userId);
       res.status(200).json({ guilds });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /guilds/dashboard
+   * Get dashboard data for the authenticated user
+   * Returns user's guilds with summary information
+   */
+  router.get('/dashboard', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id: userId } = (req as AuthenticatedRequest).user;
+      const guilds = await guildService.getUserGuilds(userId);
+
+      // Get channel counts for each guild
+      const guildsWithChannels = await Promise.all(
+        guilds.map(async (guild: any) => {
+          try {
+            const channels = await channelService.getGuildChannels(guild.id);
+            return {
+              ...guild,
+              channel_count: channels.length,
+            };
+          } catch {
+            return {
+              ...guild,
+              channel_count: 0,
+            };
+          }
+        })
+      );
+
+      res.status(200).json({
+        guilds: guildsWithChannels,
+        total_guilds: guildsWithChannels.length,
+      });
     } catch (error) {
       next(error);
     }
@@ -119,6 +161,33 @@ export function createGuildRoutes(config: GuildRoutesConfig): Router {
       const guild = await guildService.getGuild(guildId);
 
       res.status(200).json({ guild });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /guilds/:guild_id/navigate
+   * Get guild with channels and members for navigation
+   * Returns all data needed to navigate to and display a guild
+   */
+  router.get('/:guild_id/navigate', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id: userId } = (req as AuthenticatedRequest).user;
+      const guildId = requireSnowflake('guild_id', req.params.guild_id);
+
+      // Get guild, channels, and members in parallel
+      const [guild, channels, members] = await Promise.all([
+        guildService.getGuild(guildId),
+        channelService.getGuildChannels(guildId),
+        guildService.getGuildMembers(guildId),
+      ]);
+
+      res.status(200).json({
+        guild,
+        channels,
+        members,
+      });
     } catch (error) {
       next(error);
     }
