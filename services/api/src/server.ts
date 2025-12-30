@@ -83,6 +83,14 @@ export function createApiServer(config: ApiServerConfig): Express {
 
   // Channel routes (includes /guilds/:guild_id/channels and /channels/:channel_id)
   // Routes are defined with full paths, so mount at /api (but auth router is registered first)
+  // Add middleware to skip /api/auth requests before mounting
+  app.use('/api', (req, res, next) => {
+    // If this is an auth route, skip to next middleware/router
+    if (req.path?.startsWith('/auth')) {
+      return next('route'); // Skip to next router
+    }
+    next(); // Continue to channel routes
+  });
   const channelRoutes = createChannelRoutes({
     channelService: config.channelService,
     guildService: config.guildService,
