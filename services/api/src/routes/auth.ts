@@ -233,7 +233,7 @@ export function createAuthRoutes(config: AuthRoutesConfig): Router {
       const user = await authService.getUserById(user_id);
 
       if (!user) {
-        throw new ApiError(ApiErrorCode.NOT_FOUND, 404, 'User not found');
+        throw new ApiError(ApiErrorCode.USER_NOT_FOUND, 404, 'User not found');
       }
 
       // Return user profile (exclude sensitive data like email if needed)
