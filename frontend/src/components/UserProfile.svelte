@@ -26,10 +26,15 @@
 
   export let user: User | null = null;
   export let authToken: string = '';
+  export let currentUserId: string = ''; // The logged-in user's ID
 
   const dispatch = createEventDispatcher<{
     close: void;
   }>();
+
+  // Determine if viewing own profile (can edit) or another user's (read-only)
+  $: isOwnProfile = !user || user.id === currentUserId;
+  $: canEdit = isOwnProfile;
 
   $: username = user?.username || 'Dear';
   $: avatar = user?.avatar || null;
@@ -85,7 +90,9 @@
     setAuthToken(authToken);
     
     // Load profile from server
-    const { profileData: serverProfile, backgroundImage: serverBg } = await loadProfileFromServer();
+    // If viewing another user's profile, pass their ID to load their data
+    const userIdToLoad = isOwnProfile ? undefined : user?.id;
+    const { profileData: serverProfile, backgroundImage: serverBg } = await loadProfileFromServer(userIdToLoad);
     profileData = serverProfile;
     backgroundImage = serverBg;
     
@@ -210,6 +217,7 @@
   }
 
   function toggleEditMode() {
+    if (!canEdit) return; // Can't edit other users' profiles
     isEditMode = !isEditMode;
     if (!isEditMode) {
       showWidgetMenu = false;
@@ -530,11 +538,13 @@
       />
     </div>
     <div class="header-actions">
-      {#if isEditMode}
-        <button class="save-btn" on:click={saveLayout}>save changes</button>
-        <button class="cancel-btn" on:click={() => isEditMode = false}>cancel</button>
-      {:else}
-        <button class="edit-space-btn" on:click={toggleEditMode}>edit my space</button>
+      {#if canEdit}
+        {#if isEditMode}
+          <button class="save-btn" on:click={saveLayout}>save changes</button>
+          <button class="cancel-btn" on:click={() => isEditMode = false}>cancel</button>
+        {:else}
+          <button class="edit-space-btn" on:click={toggleEditMode}>edit my space</button>
+        {/if}
       {/if}
       <div class="header-avatar">
         {#if avatar}

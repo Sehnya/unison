@@ -321,6 +321,26 @@ export function createAuthRoutes(config: AuthRoutesConfig): Router {
   });
 
   /**
+   * GET /auth/users/:user_id/profile-data
+   * Get another user's profile customization data (read-only)
+   */
+  router.get('/users/:user_id/profile-data', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { user_id } = req.params;
+      
+      if (!user_id) {
+        throw new ApiError(ApiErrorCode.VALIDATION_ERROR, 400, 'User ID is required');
+      }
+
+      const profileData = await authService.getProfileData(user_id);
+
+      res.status(200).json({ profileData: profileData || null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * PUT /auth/profile-data
    * Save user's profile customization data (cards, layout, widgets, etc.)
    */

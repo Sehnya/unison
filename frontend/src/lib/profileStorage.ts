@@ -142,13 +142,19 @@ function getDefaultProfile(): ProfileData {
 }
 
 // Load profile from server
-export async function loadProfileFromServer(): Promise<{ profileData: ProfileData; backgroundImage: string | null }> {
+export async function loadProfileFromServer(userId?: string): Promise<{ profileData: ProfileData; backgroundImage: string | null }> {
   if (!authToken) {
     return { profileData: getDefaultProfile(), backgroundImage: null };
   }
 
   try {
-    const response = await fetch(apiUrl('/api/auth/profile-data'), {
+    // If userId is provided, load that user's profile (read-only view)
+    // Otherwise load the current user's profile
+    const endpoint = userId 
+      ? `/api/auth/users/${userId}/profile-data`
+      : '/api/auth/profile-data';
+    
+    const response = await fetch(apiUrl(endpoint), {
       headers: {
         'Authorization': `Bearer ${authToken}`,
       },
@@ -162,9 +168,16 @@ export async function loadProfileFromServer(): Promise<{ profileData: ProfileDat
     const data = await response.json();
     
     if (data.profileData?.profile_data) {
-      cachedProfile = data.profileData.profile_data as ProfileData;
-      cachedBackgroundImage = data.profileData.background_image || null;
-      return { profileData: cachedProfile, backgroundImage: cachedBackgroundImage };
+      const loadedProfile = data.profileData.profile_data as ProfileData;
+      const loadedBg = data.profileData.background_image || null;
+      
+      // Only cache if loading own profile (no userId provided)
+      if (!userId) {
+        cachedProfile = loadedProfile;
+        cachedBackgroundImage = loadedBg;
+      }
+      
+      return { profileData: loadedProfile, backgroundImage: loadedBg };
     }
     
     return { profileData: getDefaultProfile(), backgroundImage: null };
