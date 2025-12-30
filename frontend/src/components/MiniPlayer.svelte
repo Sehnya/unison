@@ -256,11 +256,17 @@
 
   // React to volume changes
   $: if (ytPlayer && $musicStore.playerReady) {
-    if (isMuted) {
-      ytPlayer.mute();
-    } else {
-      ytPlayer.unMute();
-      ytPlayer.setVolume(volume);
+    try {
+      if (isMuted) {
+        ytPlayer.mute();
+      } else {
+        ytPlayer.unMute();
+        // YouTube API expects volume 0-100
+        const youtubeVolume = Math.max(0, Math.min(100, volume));
+        ytPlayer.setVolume(youtubeVolume);
+      }
+    } catch (error) {
+      console.warn('Error setting volume:', error);
     }
   }
 
