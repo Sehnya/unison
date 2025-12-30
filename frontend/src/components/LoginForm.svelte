@@ -17,38 +17,59 @@
     error = '';
 
     try {
+      console.log('Attempting login for:', email);
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
 
+      console.log('Login response status:', response.status, response.statusText);
+
       // Parse response as JSON
-      const data = await response.json().catch(() => {
+      let data;
+      try {
+        const text = await response.text();
+        console.log('Login response text:', text.substring(0, 200));
+        data = text ? JSON.parse(text) : null;
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
         throw new Error('Server returned invalid response');
-      });
+      }
 
       if (!response.ok) {
         const errorMessage = data?.error?.message || data?.message || `Login failed (${response.status})`;
+        console.error('Login failed:', errorMessage, data);
         throw new Error(errorMessage);
       }
 
       // Validate response structure
+      if (!data) {
+        throw new Error('Server returned empty response');
+      }
+
       if (!data.tokens || !data.tokens.access_token) {
+        console.error('Invalid response structure:', data);
         throw new Error('Invalid response: missing access token');
       }
 
       if (!data.user) {
+        console.error('Invalid response structure:', data);
         throw new Error('Invalid response: missing user data');
       }
 
+      console.log('Login successful, dispatching authenticated event');
       dispatch('authenticated', { 
         token: data.tokens.access_token,
         user: data.user
       });
     } catch (err) {
       console.error('Login error:', err);
-      error = err instanceof Error ? err.message : 'Login failed';
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        error = 'Network error: Could not connect to server. Please check if the API server is running.';
+      } else {
+        error = err instanceof Error ? err.message : 'Login failed';
+      }
     } finally {
       loading = false;
     }
