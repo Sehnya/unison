@@ -19,6 +19,7 @@
   import { hasPlaylist } from './lib/musicStore';
   import { parseRoute, navigateToGuild, navigateToChannel, navigateToDashboard, navigateToMyspace, navigateToSettings, navigateToHome } from './utils/router';
   import { apiUrl } from './lib/api';
+  import { initAblyWithUser, closeAbly } from './lib/ably';
 
   $: hasMusicPlaying = $hasPlaylist;
 
@@ -50,6 +51,16 @@
     authStorage.set(authToken);
     if (event.detail.user) {
       currentUser = event.detail.user;
+      // Initialize Ably with user information
+      try {
+        initAblyWithUser(
+          event.detail.user.id,
+          event.detail.user.username,
+          event.detail.user.avatar || null
+        );
+      } catch (error) {
+        console.warn('Failed to initialize Ably with user:', error);
+      }
     }
     loadUserData();
   }

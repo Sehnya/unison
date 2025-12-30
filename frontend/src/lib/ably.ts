@@ -132,11 +132,27 @@ export function initAbly(apiKey?: string): Ably.Realtime {
 }
 
 /**
- * Initialize Ably with a specific client ID (user ID)
+ * Initialize Ably with a specific user (user ID, username, avatar)
+ * This ties the Ably client instance to a specific user account
  */
-export function initAblyWithUser(userId: string, _userName: string, apiKey?: string): Ably.Realtime {
+export function initAblyWithUser(
+  userId: string, 
+  userName: string, 
+  avatar?: string | null,
+  apiKey?: string
+): Ably.Realtime {
+  // Close existing connection if it exists and is for a different user
   if (ablyClient) {
-    ablyClient.close();
+    const currentClientId = (ablyClient as any).clientId;
+    if (currentClientId && currentClientId !== userId) {
+      console.log('Switching Ably user from', currentClientId, 'to', userId);
+      ablyClient.close();
+      ablyClient = null;
+      isConnected = false;
+    } else if (currentClientId === userId && isConnected) {
+      // Already connected as this user, return existing client
+      return ablyClient;
+    }
   }
 
   const key = apiKey || ABLY_API_KEY;
@@ -147,15 +163,27 @@ export function initAblyWithUser(userId: string, _userName: string, apiKey?: str
     throw new Error(errorMsg);
   }
 
+  if (!userId) {
+    throw new Error('User ID is required to initialize Ably');
+  }
+
   try {
+    // Initialize Ably with user ID as clientId
+    // This ensures all messages, presence, and typing indicators are tied to this user
     ablyClient = new Ably.Realtime({
       key,
-      clientId: userId,
+      clientId: userId, // User ID is used as Ably clientId
       echoMessages: false,
+      // Store user metadata for reference
+      clientData: {
+        userId,
+        userName,
+        avatar: avatar || null,
+      },
     });
 
     ablyClient.connection.on('connected', () => {
-      console.log('✓ Ably connected as:', userId);
+      console.log('✓ Ably connected as user:', userName, `(${userId})`);
       isConnected = true;
     });
 
@@ -166,6 +194,11 @@ export function initAblyWithUser(userId: string, _userName: string, apiKey?: str
 
     ablyClient.connection.on('failed', (stateChange: ConnectionStateChange) => {
       console.error('❌ Ably connection failed:', stateChange.reason);
+      isConnected = false;
+    });
+
+    ablyClient.connection.on('suspended', () => {
+      console.warn('⚠️  Ably connection suspended');
       isConnected = false;
     });
 

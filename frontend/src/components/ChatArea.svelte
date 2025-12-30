@@ -123,11 +123,13 @@
           throw new Error('Ably API key not configured');
         }
         
-        // Initialize Ably with user ID if available
+        // Initialize Ably with user information if available
+        // Note: Ably should already be initialized in App.svelte on login,
+        // but we ensure it's initialized here if needed
         if (currentUser?.id) {
-          initAblyWithUser(currentUser.id, userName);
+          initAblyWithUser(currentUser.id, currentUser.username, currentUser.avatar || null);
         } else {
-          initAbly();
+          console.warn('Cannot initialize Ably: currentUser not available');
         }
       }
 
