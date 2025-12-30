@@ -60,12 +60,20 @@ export default defineConfig(({ mode }) => {
         changeOrigin: true,
         secure: false,
         ws: true,
+        rewrite: (path) => path, // Keep the path as-is
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, res) => {
-            console.log('Proxy error:', err);
+            console.error('❌ Proxy error:', err);
+            if (res && !res.headersSent) {
+              res.writeHead(500, { 'Content-Type': 'text/plain' });
+              res.end('Proxy error: ' + err.message);
+            }
           });
           proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('Proxying:', req.method, req.url, '->', proxyReq.path);
+            console.log('🔄 Proxying:', req.method, req.url, '->', proxyReq.path);
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('✅ Proxy response:', req.method, req.url, '->', proxyRes.statusCode);
           });
         },
       },
