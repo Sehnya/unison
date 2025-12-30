@@ -18,6 +18,7 @@
   import { authStorage } from './utils/storage';
   import { hasPlaylist } from './lib/musicStore';
   import { parseRoute, navigateToGuild, navigateToChannel, navigateToDashboard, navigateToMyspace, navigateToSettings, navigateToHome } from './utils/router';
+  import { apiUrl } from './lib/api';
 
   $: hasMusicPlaying = $hasPlaylist;
 
@@ -167,7 +168,7 @@
       if (icon?.trim()) body.icon = icon.trim();
       if (banner?.trim()) body.banner = banner.trim();
 
-      const response = await fetch('/api/guilds', {
+      const response = await fetch(apiUrl('/api/guilds'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -201,7 +202,7 @@
 
     try {
       // Fetch current user to check terms acceptance
-      const userResponse = await fetch('/api/auth/me', {
+      const userResponse = await fetch(apiUrl('/api/auth/me'), {
         headers: {
           'Authorization': `Bearer ${authToken}`,
         },
@@ -211,7 +212,7 @@
         currentUser = userData.user;
       }
 
-      const guildsResponse = await fetch('/api/guilds', {
+      const guildsResponse = await fetch(apiUrl('/api/guilds'), {
         headers: {
           'Authorization': `Bearer ${authToken}`,
         },

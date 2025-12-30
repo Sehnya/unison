@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { LoginResponse, ApiError } from '../types';
+  import { apiUrl } from '../lib/api';
 
   const dispatch = createEventDispatcher<{ 
     authenticated: { token: string; user?: unknown };
@@ -18,7 +19,7 @@
 
     try {
       console.log('Attempting login for:', email);
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(apiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })

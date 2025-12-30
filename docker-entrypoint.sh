@@ -11,15 +11,14 @@ echo ""
 if [ -z "$API_URL" ]; then
     echo "WARNING: API_URL is not set!"
     echo "Using default: http://localhost:3001"
-    export API_URL="http://localhost:3001"
+    API_URL="http://localhost:3001"
 fi
 
 echo "Configuring nginx to proxy /api/* to: $API_URL"
 echo ""
 
-# Replace API_URL in nginx config
-# Only substitute API_URL, not nginx variables like $host
-envsubst '${API_URL}' < /etc/nginx/nginx.conf.template > /etc/nginx/conf.d/default.conf
+# Replace API_URL_PLACEHOLDER in nginx config using sed
+sed "s|API_URL_PLACEHOLDER|${API_URL}|g" /etc/nginx/nginx.conf.template > /etc/nginx/conf.d/default.conf
 
 echo "Generated nginx config:"
 echo "----------------------------------------"

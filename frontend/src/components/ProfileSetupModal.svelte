@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { apiUrl } from '../lib/api';
 
   export let authToken: string = '';
   export let currentUser: { id: string; username: string; avatar?: string; bio?: string } | null = null;
@@ -63,7 +64,7 @@
       }
 
       // Update user profile
-      const response = await fetch('/api/auth/profile', {
+      const response = await fetch(apiUrl('/api/auth/profile'), {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -110,7 +111,7 @@
       }
 
       // Save current username/avatar if they exist, and set bio to empty string
-      const response = await fetch('/api/auth/profile', {
+      const response = await fetch(apiUrl('/api/auth/profile'), {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${authToken}`,

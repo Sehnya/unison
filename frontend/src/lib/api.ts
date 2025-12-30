@@ -1,126 +1,40 @@
 /**
- * API Client for backend communication
+ * API Configuration
+ * 
+ * Handles API base URL for different environments.
+ * In development: uses /api/ (proxied by Vite)
+ * In production: uses VITE_API_URL if set, otherwise /api/
  */
 
-const API_BASE = '/api';
-
-export interface ApiResponse<T> {
-  data?: T;
-  error?: string;
-}
-
-export interface Guild {
-  id: string;
-  name: string;
-  description?: string;
-  icon: string | null;
-  banner?: string;
-  owner_id: string;
-  member_count?: number;
-  online_count?: number;
-  created_at: string;
-}
-
-export interface GuildsResponse {
-  guilds: Guild[];
-}
-
-export interface CreateGuildOptions {
-  name: string;
-  description?: string;
-  icon?: string;
-  banner?: string;
-}
+// Get API base URL from environment or default to relative path
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 /**
- * Fetch user's guilds
+ * Build full API URL
+ * @param path - API path starting with /api/
+ * @returns Full URL for the API endpoint
  */
-export async function fetchUserGuilds(authToken: string): Promise<Guild[]> {
-  try {
-    const response = await fetch(`${API_BASE}/guilds`, {
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new Error('Unauthorized');
-      }
-      throw new Error(`Failed to fetch guilds: ${response.status}`);
+export function apiUrl(path: string): string {
+  // If path doesn't start with /, add it
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  
+  // If we have a base URL, use it; otherwise use relative path
+  if (API_BASE_URL) {
+    // Remove trailing slash from base URL if present
+    const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    // Remove /api prefix from path if base URL already includes it
+    if (base.endsWith('/api') && normalizedPath.startsWith('/api/')) {
+      return `${base}${normalizedPath.slice(4)}`;
     }
-
-    const data: GuildsResponse = await response.json();
-    return data.guilds || [];
-  } catch (error) {
-    console.error('Error fetching guilds:', error);
-    return [];
+    return `${base}${normalizedPath}`;
   }
+  
+  return normalizedPath;
 }
 
 /**
- * Create a new guild
+ * Fetch wrapper that uses the correct API base URL
  */
-export async function createGuild(authToken: string, options: CreateGuildOptions): Promise<Guild | null> {
-  try {
-    const response = await fetch(`${API_BASE}/guilds`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(options),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to create guild: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.guild;
-  } catch (error) {
-    console.error('Error creating guild:', error);
-    return null;
-  }
-}
-
-/**
- * Join a guild via invite code
- */
-export async function joinGuild(authToken: string, inviteCode: string): Promise<boolean> {
-  try {
-    const response = await fetch(`${API_BASE}/guilds/join`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ invite_code: inviteCode }),
-    });
-
-    return response.ok;
-  } catch (error) {
-    console.error('Error joining guild:', error);
-    return false;
-  }
-}
-
-/**
- * Leave a guild
- */
-export async function leaveGuild(authToken: string, guildId: string, userId: string): Promise<boolean> {
-  try {
-    const response = await fetch(`${API_BASE}/guilds/${guildId}/members/${userId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-      },
-    });
-
-    return response.ok;
-  } catch (error) {
-    console.error('Error leaving guild:', error);
-    return false;
-  }
+export async function apiFetch(path: string, options?: RequestInit): Promise<Response> {
+  return fetch(apiUrl(path), options);
 }

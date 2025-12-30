@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { apiUrl } from '../lib/api';
 
   export let authToken: string = '';
   export let userId: string = '';
@@ -22,7 +23,7 @@
     error = '';
 
     try {
-      const response = await fetch('/api/auth/accept-terms', {
+      const response = await fetch(apiUrl('/api/auth/accept-terms'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${authToken}`,
