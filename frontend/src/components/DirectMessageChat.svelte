@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import type { User } from '../types';
+  import Avatar from './Avatar.svelte';
 
   export let dmUser: { id: string; name: string; avatar: string; status?: string };
   export let currentUser: User | null = null;
@@ -137,7 +138,14 @@
       
       <div class="message" class:own={message.isOwn}>
         {#if !message.isOwn}
-          <img src={dmUser.avatar} alt={dmUser.name} class="message-avatar" />
+          <div class="message-avatar">
+            <Avatar 
+              src={dmUser.avatar}
+              username={dmUser.name}
+              userId={dmUser.id}
+              size={36}
+            />
+          </div>
         {/if}
         <div class="message-content">
           <div class="message-bubble">
@@ -146,7 +154,14 @@
           <span class="message-time">{formatTime(message.timestamp)}</span>
         </div>
         {#if message.isOwn}
-          <img src={currentUser?.avatar || 'https://i.pravatar.cc/100?img=68'} alt="You" class="message-avatar" />
+          <div class="message-avatar">
+            <Avatar 
+              src={currentUser?.avatar}
+              username={currentUser?.username || ''}
+              userId={currentUser?.id || ''}
+              size={36}
+            />
+          </div>
         {/if}
       </div>
     {/each}

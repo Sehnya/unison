@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { User } from '../types';
+  import Avatar from './Avatar.svelte';
 
   export let user: User | null = null;
 
@@ -16,7 +17,7 @@
   let newPassword = '';
   let confirmPassword = '';
   let presence: PresenceStatus = 'online';
-  let avatarUrl = user?.avatar || 'https://i.pravatar.cc/100?img=68';
+  let avatarUrl = user?.avatar || null;
   let fileInput: HTMLInputElement;
   let showPasswordSection = false;
   let saveMessage = '';
@@ -104,7 +105,16 @@
       <h3>Profile Picture</h3>
       <div class="avatar-section">
         <div class="avatar-preview">
-          <img src={avatarUrl} alt="Profile" />
+          {#if avatarUrl}
+            <img src={avatarUrl} alt="Profile" />
+          {:else}
+            <Avatar 
+              src={null}
+              username={user?.username || username}
+              userId={user?.id || ''}
+              size={80}
+            />
+          {/if}
           <div class="presence-dot {presence}"></div>
         </div>
         <div class="avatar-actions">

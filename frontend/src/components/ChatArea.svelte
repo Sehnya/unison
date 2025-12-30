@@ -2,6 +2,7 @@
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import type { User, Channel } from '../types';
   import { apiUrl } from '../lib/api';
+  import Avatar from './Avatar.svelte';
   import { 
     initAbly, 
     initAblyWithUser,
@@ -90,11 +91,12 @@
         const fetchedMessages = Array.isArray(data) ? data : (data.messages || []);
         
         // Convert API messages to ChatMessage format
+        // Don't use stored author_avatar - let Avatar component generate gradient from userId
         messages = fetchedMessages.map((msg: any) => ({
           id: msg.id || msg.message?.id,
           authorId: msg.author_id || msg.message?.author_id,
           authorName: msg.author_name || msg.message?.author_name || currentUser?.username || 'Unknown',
-          authorAvatar: msg.author_avatar || msg.message?.author_avatar || currentUser?.avatar,
+          authorAvatar: undefined, // Let Avatar component generate gradient based on userId
           content: msg.content || msg.message?.content || '',
           timestamp: new Date(msg.created_at || msg.message?.created_at || Date.now()).getTime(),
           channelId,
@@ -214,7 +216,7 @@
         id: '1',
         authorId: '2',
         authorName: 'James Ryan',
-        authorAvatar: 'https://i.pravatar.cc/100?img=11',
+        authorAvatar: undefined,
         content: 'Lorem Ipsum is simply dummy text. Lorem Ipsum',
         timestamp: Date.now() - 22 * 60 * 60 * 1000,
         channelId,
@@ -223,7 +225,7 @@
         id: '2',
         authorId: '3',
         authorName: 'Alex',
-        authorAvatar: 'https://i.pravatar.cc/100?img=12',
+        authorAvatar: undefined,
         content: '@James Ryan Lorem Ipsum is simply.',
         timestamp: Date.now() - 12 * 60 * 1000,
         channelId,
@@ -240,7 +242,7 @@
         id: '4',
         authorId: '4',
         authorName: 'Julia A.',
-        authorAvatar: 'https://i.pravatar.cc/100?img=5',
+        authorAvatar: undefined,
         content: '',
         timestamp: Date.now() - 22 * 60 * 60 * 1000,
         channelId,
@@ -514,14 +516,12 @@
         <div class="message-wrapper">
           {#if shouldShowAvatar(message, index)}
             <button class="message-avatar" on:click={() => handleUserClick(message)} aria-label="View {message.authorName}'s profile">
-              {#if message.authorAvatar}
-                <img src={message.authorAvatar} alt={message.authorName} />
-              {:else}
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="12" cy="8" r="4"/>
-                  <path d="M20 21C20 16.58 16.42 13 12 13C7.58 13 4 16.58 4 21"/>
-                </svg>
-              {/if}
+              <Avatar 
+                src={message.authorAvatar}
+                username={message.authorName}
+                userId={message.authorId}
+                size={40}
+              />
             </button>
           {:else}
             <div class="message-avatar-spacer"></div>
@@ -603,7 +603,13 @@
   <!-- Input Area -->
   <div class="input-area">
     <div class="input-avatar">
-      <img src={currentUser?.avatar || 'https://i.pravatar.cc/100?img=68'} alt="You" />
+      <Avatar 
+        src={currentUser?.avatar}
+        username={currentUser?.username || ''}
+        userId={currentUser?.id || ''}
+        size={36}
+        alt="You"
+      />
     </div>
     <div class="input-container">
       <button class="attach-btn" aria-label="Attach">

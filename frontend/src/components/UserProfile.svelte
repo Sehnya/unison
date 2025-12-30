@@ -7,6 +7,7 @@
   import FavoriteGamesCard from './FavoriteGamesCard.svelte';
   import GitHubProjectsCard from './GitHubProjectsCard.svelte';
   import FriendsCard from './FriendsCard.svelte';
+  import Avatar from './Avatar.svelte';
   import {
     loadProfile,
     loadProfileFromServer,
@@ -569,16 +570,12 @@
         {/if}
       {/if}
       <div class="header-avatar">
-        {#if avatar}
-          <img src={avatar} alt={username} />
-        {:else}
-          <div class="avatar-placeholder">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="12" cy="8" r="4"/>
-              <path d="M20 21C20 16.58 16.42 13 12 13C7.58 13 4 16.58 4 21"/>
-            </svg>
-          </div>
-        {/if}
+        <Avatar 
+          src={avatar}
+          username={username}
+          userId={user?.id || currentUserId}
+          size={44}
+        />
       </div>
     </div>
   </header>

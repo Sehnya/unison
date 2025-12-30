@@ -158,7 +158,7 @@
         viewedUser = {
           id: userId,
           username: event.detail.username,
-          avatar: event.detail.avatar || 'https://i.pravatar.cc/100?img=68',
+          avatar: event.detail.avatar,
         } as User;
         showUserProfile = true;
         navigateToMyspace();
@@ -169,7 +169,7 @@
       viewedUser = {
         id: userId,
         username: event.detail.username,
-        avatar: event.detail.avatar || 'https://i.pravatar.cc/100?img=68',
+        avatar: event.detail.avatar,
       } as User;
       showUserProfile = true;
       navigateToMyspace();
@@ -191,7 +191,7 @@
       currentUser = {
         id: 'local-user',
         username: updates.username || 'User',
-        avatar: updates.avatar || 'https://i.pravatar.cc/100?img=68',
+        avatar: updates.avatar,
         ...updates
       } as User;
     }

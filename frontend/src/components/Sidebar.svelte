@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { User, Guild } from '../types';
+  import Avatar from './Avatar.svelte';
 
   export let currentUser: User | null = null;
   export let selectedSection: string = 'main';
@@ -53,10 +54,12 @@
 
   <!-- User Avatar -->
   <button class="user-avatar-btn" on:click={() => dispatch('openProfile')} aria-label="Open profile">
-    <img 
-      src={currentUser?.avatar || 'https://i.pravatar.cc/100?img=68'} 
-      alt="Your avatar" 
-      class="user-avatar"
+    <Avatar 
+      src={currentUser?.avatar}
+      username={currentUser?.username || ''}
+      userId={currentUser?.id || ''}
+      size={40}
+      alt="Your avatar"
     />
   </button>
 
