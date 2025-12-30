@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import LoginForm from './components/LoginForm.svelte';
   import RegisterForm from './components/RegisterForm.svelte';
   import Sidebar from './components/Sidebar.svelte';
@@ -17,6 +17,7 @@
   import type { User, Guild } from './types';
   import { authStorage } from './utils/storage';
   import { hasPlaylist } from './lib/musicStore';
+  import { parseRoute, navigateToGuild, navigateToChannel, navigateToDashboard, navigateToMyspace, navigateToSettings, navigateToHome } from './utils/router';
 
   $: hasMusicPlaying = $hasPlaylist;
 
@@ -57,6 +58,11 @@
     showUserProfile = false;
     selectedDMId = null;
     selectedDMUser = null;
+    
+    // Update URL
+    if (selectedGuildId && selectedChannelId) {
+      navigateToChannel(selectedGuildId, selectedChannelId);
+    }
   }
 
   function closeDM() {
@@ -68,6 +74,7 @@
     selectedSection = event.detail.section;
     if (event.detail.section === 'settings') {
       showSettings = !showSettings;
+      navigateToSettings();
     } else if (event.detail.section === 'main') {
       // Navigate to home dashboard
       selectedGuildId = null;
@@ -76,6 +83,11 @@
       showUserProfile = false;
       selectedDMId = null;
       selectedDMUser = null;
+      navigateToDashboard();
+    } else if (event.detail.section === 'myspace') {
+      showSettings = false;
+      showUserProfile = true;
+      navigateToMyspace();
     } else {
       showSettings = false;
     }
@@ -88,6 +100,11 @@
     viewedUser = null;
     selectedDMId = null;
     selectedDMUser = null;
+    
+    // Update URL
+    if (selectedGuildId) {
+      navigateToGuild(selectedGuildId);
+    }
   }
 
   function handleViewUserProfile(event: CustomEvent<{ userId: string; username: string; avatar?: string }>) {
@@ -240,14 +257,75 @@
     selectedSection = 'myspace';
   }
 
+  // Handle browser navigation (back/forward buttons)
+  function handlePopState(event: PopStateEvent) {
+    const route = parseRoute();
+    
+    if (route.guildId) {
+      selectedGuildId = route.guildId;
+      if (route.channelId) {
+        selectedChannelId = route.channelId;
+      } else {
+        selectedChannelId = null;
+      }
+    } else {
+      selectedGuildId = null;
+      selectedChannelId = null;
+    }
+    
+    if (route.section) {
+      selectedSection = route.section;
+      if (route.section === 'myspace') {
+        showUserProfile = true;
+      } else if (route.section === 'settings') {
+        showSettings = true;
+      } else {
+        showUserProfile = false;
+        showSettings = false;
+      }
+    }
+  }
+
   onMount(() => {
     const savedToken = authStorage.get();
     if (savedToken) {
       authToken = savedToken;
-      loadUserData();
+      loadUserData().then(() => {
+        // After data is loaded, check URL and restore navigation state
+        const route = parseRoute();
+        if (route.guildId) {
+          // Verify guild exists in user's guilds
+          const guild = guilds.find(g => g.id === route.guildId);
+          if (guild) {
+            selectedGuildId = route.guildId;
+            if (route.channelId) {
+              selectedChannelId = route.channelId;
+            }
+          } else {
+            // Guild not found, navigate to dashboard
+            navigateToDashboard();
+          }
+        }
+        
+        if (route.section) {
+          selectedSection = route.section;
+          if (route.section === 'myspace') {
+            showUserProfile = true;
+          } else if (route.section === 'settings') {
+            showSettings = true;
+          }
+        }
+      });
     } else {
       loading = false;
     }
+    
+    // Listen for browser navigation events
+    window.addEventListener('popstate', handlePopState);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener('popstate', handlePopState);
   });
 </script>
 
