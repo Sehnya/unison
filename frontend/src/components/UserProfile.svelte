@@ -84,14 +84,24 @@
   let cards: Card[] = [];
   let showAddCardMenu = false;
 
-  // Load profile data on mount from server
-  onMount(async () => {
+  // Track the user ID we loaded profile for to detect changes
+  let loadedUserId: string | null = null;
+
+  // Get the effective user ID for the profile being viewed
+  $: effectiveUserId = user?.id || currentUserId;
+
+  // Function to load profile data
+  async function loadProfileData() {
+    profileLoading = true;
+    
     // Set auth token for API calls
     setAuthToken(authToken);
     
-    // Load profile from server
-    // If viewing another user's profile, pass their ID to load their data
+    // Determine which user's profile to load
+    // If viewing own profile (isOwnProfile), don't pass userId to load current user's data
     const userIdToLoad = isOwnProfile ? undefined : user?.id;
+    
+    // Load profile from server
     const { profileData: serverProfile, backgroundImage: serverBg } = await loadProfileFromServer(userIdToLoad);
     profileData = serverProfile;
     backgroundImage = serverBg;
@@ -108,8 +118,20 @@
       );
     }
     
+    // Track which user we loaded (use effectiveUserId for consistency)
+    loadedUserId = effectiveUserId;
     profileLoading = false;
+  }
+
+  // Load profile data on mount
+  onMount(() => {
+    loadProfileData();
   });
+
+  // Reload profile when the viewed user changes
+  $: if (effectiveUserId !== loadedUserId && loadedUserId !== null) {
+    loadProfileData();
+  }
 
   function getQuoteContent(cardId: string): string {
     return quoteContents[cardId] || `<h1>BE<br>KIND<br>AND<br>BRIGHT</h1><p><strong>Lorem ipsum</strong> dolor sit amet.</p>`;
