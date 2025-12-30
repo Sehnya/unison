@@ -7,11 +7,11 @@ import { config } from 'dotenv';
 import { join } from 'path';
 import { Pool } from 'pg';
 import { createApiServer, startApiServer } from './server.js';
-import { AuthService } from '../../auth/src/service.js';
-import { GuildService } from '../../guild/src/service.js';
-import { ChannelService } from '../../channel/src/service.js';
-import { MessagingService } from '../../messaging/src/service.js';
-import { PermissionsService } from '../../permissions/src/service.js';
+import { AuthService } from '@discord-clone/auth';
+import { GuildService } from '@discord-clone/guild';
+import { ChannelService } from '@discord-clone/channel';
+import { MessagingService } from '@discord-clone/messaging';
+import { PermissionsService } from '@discord-clone/permissions';
 
 // Load .env file from project root
 const cwd = process.cwd();

@@ -36,7 +36,7 @@ export interface GuildServiceInterface {
  */
 export interface GuildRoutesConfig {
   guildService: GuildServiceInterface;
-  authService: { getUserById: (userId: string) => Promise<{ email: string }> };
+  authService: { getUserById: (userId: string) => Promise<unknown> };
   validateToken: TokenValidator;
 }
 
@@ -82,8 +82,8 @@ export function createGuildRoutes(config: GuildRoutesConfig): Router {
       const { name, description, icon, banner } = req.body;
 
       // Check if user is allowed to create guilds (only sehnyaw@gmail.com)
-      const user = await authService.getUserById(userId);
-      if (user.email !== 'sehnyaw@gmail.com') {
+      const user = await authService.getUserById(userId) as { email: string } | null;
+      if (!user || user.email !== 'sehnyaw@gmail.com') {
         throw new ApiError(
           ApiErrorCode.FORBIDDEN,
           403,

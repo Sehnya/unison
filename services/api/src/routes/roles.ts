@@ -42,7 +42,14 @@ export function createRoleRoutes(config: RoleRoutesConfig): Router {
   const authMiddleware = createAuthMiddleware(validateToken);
 
   // All role routes require authentication
-  router.use(authMiddleware);
+  // Apply middleware only to routes that match (not to /auth paths)
+  router.use((req, res, next) => {
+    // Skip auth middleware for /auth paths
+    if (req.path.startsWith('/auth')) {
+      return next('route'); // Skip this router
+    }
+    return authMiddleware(req, res, next);
+  });
 
   // ============================================
   // Role CRUD

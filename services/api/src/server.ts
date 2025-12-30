@@ -55,7 +55,7 @@ export function createApiServer(config: ApiServerConfig): Express {
     res.status(200).json({ status: 'ok' });
   });
 
-  // Auth routes
+  // Auth routes - MUST be registered before other /api routes to avoid conflicts
   app.use('/api/auth', createAuthRoutes({
     authService: config.authService,
     validateToken: config.validateToken,
@@ -82,6 +82,7 @@ export function createApiServer(config: ApiServerConfig): Express {
   }));
 
   // Channel routes (includes /guilds/:guild_id/channels and /channels/:channel_id)
+  // Mount at root since routes are defined with full paths like /guilds/:guild_id/channels
   const channelRoutes = createChannelRoutes({
     channelService: config.channelService,
     guildService: config.guildService,
@@ -90,7 +91,8 @@ export function createApiServer(config: ApiServerConfig): Express {
   app.use('/api', channelRoutes);
   app.use('/', channelRoutes);
 
-  // Message routes
+  // Message routes (includes /channels/:channel_id/messages)
+  // Mount at root since routes are defined with full paths like /channels/:channel_id/messages
   const messageRoutes = createMessageRoutes({
     messagingService: config.messagingService,
     validateToken: config.validateToken,
@@ -99,6 +101,7 @@ export function createApiServer(config: ApiServerConfig): Express {
   app.use('/', messageRoutes);
 
   // Role routes (includes /guilds/:guild_id/roles and /channels/:channel_id/overwrites)
+  // Mount at root since routes are defined with full paths
   const roleRoutes = createRoleRoutes({
     permissionsService: config.permissionsService,
     validateToken: config.validateToken,
