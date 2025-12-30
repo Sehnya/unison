@@ -141,7 +141,18 @@
 
   function onPlayerReady(event: any) {
     musicStore.setPlayerReady(true);
-    ytPlayer.setVolume(effectiveVolume);
+    try {
+      // Set initial volume (YouTube API expects 0-100)
+      const youtubeVolume = Math.max(0, Math.min(100, effectiveVolume));
+      ytPlayer.setVolume(youtubeVolume);
+      if (isMuted) {
+        ytPlayer.mute();
+      } else {
+        ytPlayer.unMute();
+      }
+    } catch (error) {
+      console.warn('Error setting initial volume:', error);
+    }
     if (isPlaying) {
       ytPlayer.playVideo();
     }
