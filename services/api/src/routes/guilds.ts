@@ -32,10 +32,6 @@ export interface GuildServiceInterface {
   getRepository(): { isOwner: (guildId: string, userId: string) => Promise<boolean> };
 }
 
-export interface ChannelServiceInterface {
-  getGuildChannels(guildId: string): Promise<unknown[]>;
-}
-
 /**
  * Guild routes configuration
  */
