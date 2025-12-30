@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import type { Channel, Guild } from '../types';
+  import { apiUrl } from '../lib/api';
 
   export let authToken: string | null = null;
   export let selectedGuildId: string | null = null;
@@ -49,7 +50,7 @@
     error = null;
 
     try {
-      const response = await fetch(`/api/guilds/${selectedGuildId}/channels`, {
+      const response = await fetch(apiUrl(`/api/guilds/${selectedGuildId}/channels`), {
         headers: {
           'Authorization': `Bearer ${authToken}`,
         },

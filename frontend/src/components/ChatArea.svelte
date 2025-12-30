@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import type { User, Channel } from '../types';
+  import { apiUrl } from '../lib/api';
   import { 
     initAbly, 
     initAblyWithUser,
@@ -58,7 +59,7 @@
 
     // Fetch channel data
     try {
-      const channelResponse = await fetch(`/api/channels/${channelId}`, {
+      const channelResponse = await fetch(apiUrl(`/api/channels/${channelId}`), {
         headers: {
           'Authorization': `Bearer ${authToken}`,
         },
@@ -78,7 +79,7 @@
 
     try {
       // Load messages from backend API
-      const response = await fetch(`/api/channels/${channelId}/messages`, {
+      const response = await fetch(apiUrl(`/api/channels/${channelId}/messages`), {
         headers: {
           'Authorization': `Bearer ${authToken}`,
         },
@@ -335,7 +336,7 @@
 
     try {
       // Save message to backend first
-      const response = await fetch(`/api/channels/${channelId}/messages`, {
+      const response = await fetch(apiUrl(`/api/channels/${channelId}/messages`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

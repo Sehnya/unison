@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { Message, ApiError } from '../types';
+  import { apiUrl } from '../lib/api';
 
   export let channelId: string;
   export let authToken: string;
@@ -18,7 +19,7 @@
     error = '';
 
     try {
-      const response = await fetch(`/channels/${channelId}/messages`, {
+      const response = await fetch(apiUrl(`/channels/${channelId}/messages`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

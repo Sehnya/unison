@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import type { Message } from '../types';
   import { sortBySnowflake } from '../utils';
+  import { apiUrl } from '../lib/api';
 
   export let channelId: string;
   export let authToken: string;
@@ -13,8 +14,8 @@
 
   async function fetchMessages(after?: string): Promise<Message[]> {
     const url = after
-      ? `/channels/${channelId}/messages?after=${after}`
-      : `/channels/${channelId}/messages`;
+      ? apiUrl(`/channels/${channelId}/messages?after=${after}`)
+      : apiUrl(`/channels/${channelId}/messages`);
 
     const response = await fetch(url, {
       headers: { 'Authorization': `Bearer ${authToken}` }
