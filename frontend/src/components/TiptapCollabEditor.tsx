@@ -239,9 +239,8 @@ const EditorWithProvider: React.FC<{
     }
   }, [ydoc, isSynced, provider?.status, stableCurrentUser]);
 
-  // Only create editor when synced - use stable key based on sync state only
-  // Don't include extensions in dependencies to prevent recreation loops
-  const editorKey = isSynced ? 'synced' : 'not-synced';
+  // Only create editor when we have extensions (even if not synced yet)
+  // The editor will work without CollaborationCursor initially, then add it when synced
   const editor = useEditor({
     extensions,
     editorProps: {
@@ -254,6 +253,7 @@ const EditorWithProvider: React.FC<{
         hasEditor: !!editor,
         extensionsCount: editor.extensionManager.extensions.length,
         extensionNames: editor.extensionManager.extensions.map(ext => ext.name),
+        isSynced,
       });
     },
     onUpdate: () => {
@@ -270,7 +270,7 @@ const EditorWithProvider: React.FC<{
         hasEditor: !!editor,
       });
     },
-  }, [editorKey]); // Only depend on sync state, not extensions array
+  }, [isSynced ? 'synced' : 'not-synced']); // Only depend on sync state to control recreation
 
   // Get online users
   const users = useMemo(() => {
