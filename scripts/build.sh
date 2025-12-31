@@ -19,6 +19,9 @@ npm run build -w @discord-clone/eventbus
 echo "Building @discord-clone/database..."
 npm run build -w @discord-clone/database
 
+echo "Building @discord-clone/cache..."
+npm run build -w @discord-clone/cache
+
 # Build services
 echo "Building @discord-clone/auth..."
 npm run build -w @discord-clone/auth
