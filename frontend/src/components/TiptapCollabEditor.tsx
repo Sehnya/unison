@@ -141,8 +141,13 @@ const EditorWithProvider: React.FC<{
     });
 
     try {
+      // StarterKit without History extension (Collaboration has its own history)
+      const starterKitWithoutHistory = StarterKit.configure({
+        history: false, // Disable history since Collaboration provides its own
+      });
+
       const baseExtensions = [
-        StarterKit,
+        starterKitWithoutHistory,
         Highlight,
         TaskList,
         TaskItem.configure({ nested: true }),
