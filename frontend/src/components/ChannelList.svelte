@@ -466,18 +466,16 @@
                     <ul class="voice-users">
                       {#each getVoiceUsers(channel.id) as user (user.id)}
                         <li class="voice-user">
-                          <Avatar 
-                            userId={user.id} 
-                            username={user.username} 
-                            src={user.avatar} 
-                            size={24} 
-                          />
-                          <span class="voice-user-name">{user.username}</span>
-                          <div class="voice-user-status">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                            </svg>
+                          <div class="voice-user-avatar">
+                            <Avatar 
+                              userId={user.id} 
+                              username={user.username} 
+                              src={user.avatar} 
+                              size={24} 
+                            />
+                            <div class="voice-connected-dot"></div>
                           </div>
+                          <span class="voice-user-name">{user.username}</span>
                         </li>
                       {/each}
                     </ul>
@@ -805,6 +803,11 @@
 
   .channel-item.voice.has-users {
     color: #22c55e;
+    background: rgba(34, 197, 94, 0.08);
+  }
+
+  .channel-item.voice.has-users:hover {
+    background: rgba(34, 197, 94, 0.12);
   }
 
   .voice-icon {
@@ -823,6 +826,8 @@
     padding: 2px 6px;
     border-radius: 10px;
     font-weight: 600;
+    min-width: 18px;
+    text-align: center;
   }
 
   /* Voice channel wrapper for users list */
@@ -835,8 +840,8 @@
   .voice-users {
     list-style: none;
     padding: 0;
-    margin: 0 0 4px 0;
-    padding-left: 24px;
+    margin: 2px 0 8px 0;
+    padding-left: 20px;
   }
 
   .voice-user {
@@ -844,27 +849,44 @@
     align-items: center;
     gap: 8px;
     padding: 4px 8px;
+    margin-left: 8px;
     border-radius: 4px;
     transition: background 0.15s ease;
+    cursor: pointer;
   }
 
   .voice-user:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .voice-user-avatar {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .voice-connected-dot {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 10px;
+    height: 10px;
+    background: #22c55e;
+    border: 2px solid rgba(15, 15, 25, 0.95);
+    border-radius: 50%;
   }
 
   .voice-user-name {
     flex: 1;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.75);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-weight: 500;
   }
 
-  .voice-user-status {
-    display: flex;
-    align-items: center;
-    color: #22c55e;
+  .voice-user:hover .voice-user-name {
+    color: rgba(255, 255, 255, 0.9);
   }
 
   .empty-state {
