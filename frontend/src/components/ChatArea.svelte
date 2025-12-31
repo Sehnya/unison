@@ -15,7 +15,8 @@
     leavePresence,
     getAblyClient,
     type ChatMessage,
-    type TypingIndicator
+    type TypingIndicator,
+    type MessageReaction
   } from '../lib/ably';
 
   export let channelId: string = 'general';
@@ -71,6 +72,9 @@
   let editingContent: string = '';
   let hoveredMessageId: string | null = null;
   let showMessageMenu: string | null = null;
+
+  // Reaction picker state
+  let showReactionPicker: string | null = null; // message ID or null
 
   // Get last read message ID from localStorage
   function getLastReadMessageId(chId: string): string | null {
@@ -300,6 +304,144 @@
   // Load guild emojis when guildId changes
   $: if (guildId && authToken) {
     loadGuildEmojis();
+  }
+
+  // Reaction functions
+  async function addReaction(messageId: string, emoji: string, emojiUrl?: string) {
+    if (!authToken) return;
+    
+    try {
+      const response = await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`), {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ emoji_url: emojiUrl }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        updateMessageReaction(messageId, data.reaction);
+        
+        // Broadcast reaction via Ably
+        const ablyChannel = getAblyClient()?.channels.get(`channel:${channelId}`);
+        if (ablyChannel) {
+          await ablyChannel.publish('reaction.added', {
+            messageId,
+            reaction: data.reaction,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to add reaction:', error);
+    }
+    
+    showReactionPicker = null;
+  }
+
+  async function removeReaction(messageId: string, emoji: string) {
+    if (!authToken) return;
+    
+    try {
+      const response = await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`), {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.reaction) {
+          updateMessageReaction(messageId, data.reaction);
+        } else {
+          // Remove reaction entirely if count is 0
+          removeMessageReaction(messageId, emoji);
+        }
+        
+        // Broadcast reaction removal via Ably
+        const ablyChannel = getAblyClient()?.channels.get(`channel:${channelId}`);
+        if (ablyChannel) {
+          await ablyChannel.publish('reaction.removed', {
+            messageId,
+            emoji,
+            reaction: data.reaction,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to remove reaction:', error);
+    }
+  }
+
+  function updateMessageReaction(messageId: string, reaction: MessageReaction) {
+    messages = messages.map(msg => {
+      if (msg.id !== messageId) return msg;
+      
+      const reactions = msg.reactions || [];
+      const existingIdx = reactions.findIndex(r => r.emoji === reaction.emoji);
+      
+      if (existingIdx >= 0) {
+        reactions[existingIdx] = reaction;
+      } else {
+        reactions.push(reaction);
+      }
+      
+      return { ...msg, reactions: [...reactions] };
+    });
+  }
+
+  function removeMessageReaction(messageId: string, emoji: string) {
+    messages = messages.map(msg => {
+      if (msg.id !== messageId) return msg;
+      
+      const reactions = (msg.reactions || []).filter(r => r.emoji !== emoji);
+      return { ...msg, reactions };
+    });
+  }
+
+  function toggleReaction(messageId: string, emoji: string, emojiUrl?: string, currentlyReacted?: boolean) {
+    if (currentlyReacted) {
+      removeReaction(messageId, emoji);
+    } else {
+      addReaction(messageId, emoji, emojiUrl);
+    }
+  }
+
+  function handleReactionSelect(messageId: string, event: CustomEvent<{ emoji: string; isCustom: boolean; url?: string }>) {
+    const { emoji, url } = event.detail;
+    addReaction(messageId, emoji, url);
+  }
+
+  // Load reactions for multiple messages
+  async function loadMessageReactions(messageIds: string[]) {
+    if (!authToken || messageIds.length === 0) return;
+    
+    // Load reactions for each message in parallel
+    const results = await Promise.allSettled(
+      messageIds.map(async (messageId) => {
+        const response = await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}/reactions`), {
+          headers: { 'Authorization': `Bearer ${authToken}` },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          return { messageId, reactions: data.reactions || [] };
+        }
+        return { messageId, reactions: [] };
+      })
+    );
+    
+    // Update messages with their reactions
+    const reactionMap = new Map<string, MessageReaction[]>();
+    results.forEach(result => {
+      if (result.status === 'fulfilled') {
+        reactionMap.set(result.value.messageId, result.value.reactions);
+      }
+    });
+    
+    messages = messages.map(msg => ({
+      ...msg,
+      reactions: reactionMap.get(msg.id) || msg.reactions || [],
+    }));
   }
 
   // Check if content is a GIF URL or image
@@ -575,7 +717,11 @@
         timestamp: new Date(msg.created_at || msg.message?.created_at || Date.now()).getTime(),
         channelId,
         edited: msg.edited_at ? true : false,
+        reactions: [], // Will be loaded separately
       })).sort((a: ChatMessage, b: ChatMessage) => a.timestamp - b.timestamp);
+      
+      // Load reactions for all messages in background
+      loadMessageReactions(messages.map(m => m.id));
       
       // Load Google fonts asynchronously (don't block)
       const uniqueFonts = [...new Set(messages.map(m => m.authorFont).filter(Boolean))];
@@ -683,6 +829,21 @@
           const data = msg.data as { id: string; channelId: string };
           if (data.channelId === channelId) {
             messages = messages.filter(m => m.id !== data.id);
+          }
+        });
+
+        // Subscribe to reaction events
+        ablyChannelRef.subscribe('reaction.added', (msg) => {
+          const data = msg.data as { messageId: string; reaction: MessageReaction };
+          updateMessageReaction(data.messageId, data.reaction);
+        });
+
+        ablyChannelRef.subscribe('reaction.removed', (msg) => {
+          const data = msg.data as { messageId: string; emoji: string; reaction: MessageReaction | null };
+          if (data.reaction) {
+            updateMessageReaction(data.messageId, data.reaction);
+          } else {
+            removeMessageReaction(data.messageId, data.emoji);
           }
         });
       }
@@ -1444,7 +1605,80 @@
                 </button>
               </div>
             {/if}
+
+            <!-- Message Reactions -->
+            {#if message.reactions && message.reactions.length > 0}
+              <div class="message-reactions">
+                {#each message.reactions as reaction}
+                  <button 
+                    class="reaction" 
+                    class:reacted={reaction.me}
+                    on:click={() => toggleReaction(message.id, reaction.emoji, reaction.emoji_url, reaction.me)}
+                    title={`${reaction.count} reaction${reaction.count > 1 ? 's' : ''}`}
+                  >
+                    {#if reaction.emoji_url}
+                      <img src={reaction.emoji_url} alt={reaction.emoji} class="reaction-emoji-img" />
+                    {:else if reaction.emoji.startsWith(':')}
+                      {@const emojiName = reaction.emoji.replace(/:/g, '')}
+                      {@const url = guildEmojis.get(emojiName)}
+                      {#if url}
+                        <img src={url} alt={reaction.emoji} class="reaction-emoji-img" />
+                      {:else}
+                        <span class="reaction-emoji">{reaction.emoji}</span>
+                      {/if}
+                    {:else}
+                      <span class="reaction-emoji">{reaction.emoji}</span>
+                    {/if}
+                    <span class="reaction-count">{reaction.count}</span>
+                  </button>
+                {/each}
+                <button 
+                  class="add-reaction-btn"
+                  on:click={() => showReactionPicker = showReactionPicker === message.id ? null : message.id}
+                  title="Add reaction"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                    <line x1="9" y1="9" x2="9.01" y2="9"/>
+                    <line x1="15" y1="9" x2="15.01" y2="9"/>
+                  </svg>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="plus-icon">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                </button>
+              </div>
+            {/if}
           </div>
+
+          <!-- Add Reaction Button (shown on hover) -->
+          {#if hoveredMessageId === message.id && editingMessageId !== message.id}
+            <button 
+              class="hover-add-reaction"
+              on:click={() => showReactionPicker = showReactionPicker === message.id ? null : message.id}
+              title="Add reaction"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                <line x1="9" y1="9" x2="9.01" y2="9"/>
+                <line x1="15" y1="9" x2="15.01" y2="9"/>
+              </svg>
+            </button>
+          {/if}
+
+          <!-- Reaction Picker for this message -->
+          {#if showReactionPicker === message.id}
+            <div class="reaction-picker-container">
+              <EmojiPicker 
+                {guildId}
+                {authToken}
+                isOpen={true}
+                on:select={(e) => handleReactionSelect(message.id, e)}
+                on:close={() => showReactionPicker = null}
+              />
+            </div>
+          {/if}
 
           <!-- Message Actions (Edit/Delete) -->
           {#if hoveredMessageId === message.id && message.authorId === visitorId && editingMessageId !== message.id}
@@ -2008,6 +2242,7 @@
 
   .message-reactions {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     margin-top: 6px;
   }
@@ -2015,26 +2250,116 @@
   .reaction {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 14px;
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 12px;
+    gap: 4px;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 13px;
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
   .reaction:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .reaction.reacted {
+    background: rgba(49, 130, 206, 0.2);
+    border-color: rgba(49, 130, 206, 0.4);
+    color: #63b3ed;
   }
 
   .reaction.purple {
     background: rgba(26, 54, 93, 0.3);
     border-color: rgba(26, 54, 93, 0.4);
     color: #63b3ed;
+  }
+
+  .reaction-emoji {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .reaction-emoji-img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+  }
+
+  .reaction-count {
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 12px;
+    text-align: center;
+  }
+
+  .add-reaction-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .add-reaction-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .add-reaction-btn .plus-icon {
+    margin-left: -2px;
+  }
+
+  .hover-add-reaction {
+    position: absolute;
+    right: 60px;
+    top: 4px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(30, 30, 30, 0.9);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    opacity: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .message-wrapper:hover .hover-add-reaction {
+    opacity: 1;
+  }
+
+  .hover-add-reaction:hover {
+    background: rgba(49, 130, 206, 0.3);
+    color: #63b3ed;
+  }
+
+  .reaction-picker-container {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 200;
+  }
+
+  .reaction-picker-container :global(.emoji-picker) {
+    position: relative;
+    bottom: auto;
+    left: auto;
+    margin-bottom: 0;
   }
 
   /* Attachments */

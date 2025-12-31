@@ -17,6 +17,7 @@ import {
   createMessageRoutes,
   createRoleRoutes,
   createEmojiRoutes,
+  createReactionRoutes,
   type AuthServiceInterface,
   type GuildServiceInterface,
   type ChannelServiceInterface,
@@ -26,6 +27,7 @@ import {
 } from './routes/index.js';
 import { createLiveKitRoutes } from './routes/livekit.js';
 import type { LiveKitService } from './services/livekit.js';
+import type { Pool } from 'pg';
 
 /**
  * API Server configuration
@@ -38,6 +40,7 @@ export interface ApiServerConfig {
   permissionsService: PermissionsServiceInterface;
   livekitService: LiveKitService;
   emojiService?: EmojiServiceInterface;
+  pool?: Pool;
   validateToken: TokenValidator;
 }
 
@@ -159,6 +162,16 @@ export function createApiServer(config: ApiServerConfig): Express {
   });
   app.use('/api', messageRoutes);
   app.use('/', messageRoutes);
+
+  // Reaction routes (nested under messages)
+  if (config.pool) {
+    const reactionRoutes = createReactionRoutes({
+      pool: config.pool,
+      validateToken: config.validateToken,
+    });
+    app.use('/api/channels/:channel_id/messages/:message_id/reactions', reactionRoutes);
+    app.use('/channels/:channel_id/messages/:message_id/reactions', reactionRoutes);
+  }
 
   // Role routes (includes /guilds/:guild_id/roles and /channels/:channel_id/overwrites)
   // Routes are defined with full paths, so mount at /api (but auth router is registered first)

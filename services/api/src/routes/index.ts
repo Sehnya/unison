@@ -10,3 +10,4 @@ export { createChannelRoutes, type ChannelRoutesConfig, type ChannelServiceInter
 export { createMessageRoutes, type MessageRoutesConfig, type MessagingServiceInterface } from './messages.js';
 export { createRoleRoutes, type RoleRoutesConfig, type PermissionsServiceInterface } from './roles.js';
 export { createEmojiRoutes, type EmojiRoutesConfig, type EmojiServiceInterface, type GuildEmoji } from './emojis.js';
+export { createReactionRoutes, type ReactionRoutesConfig, type MessageReaction } from './reactions.js';

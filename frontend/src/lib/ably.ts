@@ -53,6 +53,15 @@ export interface ChatMessage {
     name?: string;
   }>;
   edited?: boolean;
+  reactions?: MessageReaction[];
+}
+
+export interface MessageReaction {
+  emoji: string;
+  emoji_url?: string;
+  count: number;
+  users: string[];
+  me: boolean;
 }
 
 export interface TypingIndicator {
