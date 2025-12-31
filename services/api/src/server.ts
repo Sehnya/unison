@@ -58,6 +58,8 @@ export function createApiServer(config: ApiServerConfig): Express {
         'http://localhost:5173',
         'http://localhost:3000',
         'https://unison-production-1938.up.railway.app',
+        'https://www.inunison.dev',
+        'https://inunison.dev',
         // Add other frontend origins as needed
       ];
 
