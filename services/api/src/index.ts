@@ -46,9 +46,13 @@ export {
   createChannelRoutes,
   createMessageRoutes,
   createRoleRoutes,
+  createEmojiRoutes,
   type AuthRoutesConfig,
   type GuildRoutesConfig,
   type ChannelRoutesConfig,
   type MessageRoutesConfig,
   type RoleRoutesConfig,
+  type EmojiRoutesConfig,
+  type EmojiServiceInterface,
+  type GuildEmoji,
 } from './routes/index.js';

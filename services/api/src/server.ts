@@ -16,11 +16,13 @@ import {
   createChannelRoutes,
   createMessageRoutes,
   createRoleRoutes,
+  createEmojiRoutes,
   type AuthServiceInterface,
   type GuildServiceInterface,
   type ChannelServiceInterface,
   type MessagingServiceInterface,
   type PermissionsServiceInterface,
+  type EmojiServiceInterface,
 } from './routes/index.js';
 import { createLiveKitRoutes } from './routes/livekit.js';
 import type { LiveKitService } from './services/livekit.js';
@@ -35,6 +37,7 @@ export interface ApiServerConfig {
   messagingService: MessagingServiceInterface;
   permissionsService: PermissionsServiceInterface;
   livekitService: LiveKitService;
+  emojiService?: EmojiServiceInterface;
   validateToken: TokenValidator;
 }
 
@@ -126,6 +129,16 @@ export function createApiServer(config: ApiServerConfig): Express {
     authService: config.authService,
     validateToken: config.validateToken,
   }));
+
+  // Emoji routes (nested under guilds)
+  if (config.emojiService) {
+    const emojiRoutes = createEmojiRoutes({
+      emojiService: config.emojiService,
+      validateToken: config.validateToken,
+    });
+    app.use('/api/guilds/:guild_id/emojis', emojiRoutes);
+    app.use('/guilds/:guild_id/emojis', emojiRoutes);
+  }
 
   // Channel routes (includes /guilds/:guild_id/channels and /channels/:channel_id)
   // Routes are defined with full paths, so mount at /api (but auth router is registered first)

@@ -543,6 +543,7 @@
         {:else}
           <ChatArea 
             channelId={selectedChannelId}
+            guildId={selectedGuildId}
             {authToken}
             currentUser={currentUser}
             on:openGroupInfo={() => showGroupInfo = !showGroupInfo}

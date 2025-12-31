@@ -3,6 +3,7 @@
   import type { User, Channel } from '../types';
   import { apiUrl } from '../lib/api';
   import Avatar from './Avatar.svelte';
+  import EmojiPicker from './EmojiPicker.svelte';
   import { 
     initAbly, 
     initAblyWithUser,
@@ -18,6 +19,7 @@
   } from '../lib/ably';
 
   export let channelId: string = 'general';
+  export let guildId: string | null = null;
   export let authToken: string = '';
   export let currentUser: User | null = null;
 
@@ -44,6 +46,12 @@
   let gifLoading = false;
   let gifSearchTimeout: ReturnType<typeof setTimeout> | null = null;
   const GIPHY_API_KEY = 'GlVGYHkr3WSBnllca54iNt0yFbjz7L65'; // Public beta key
+
+  // Emoji picker state
+  let showEmojiPicker = false;
+  
+  // Guild emojis cache for rendering in messages
+  let guildEmojis: Map<string, string> = new Map(); // name -> url
 
   // Image upload state
   let fileInput: HTMLInputElement;
@@ -167,6 +175,7 @@
 
   function toggleGifPicker() {
     showGifPicker = !showGifPicker;
+    showEmojiPicker = false; // Close emoji picker when opening GIF picker
     if (showGifPicker && gifResults.length === 0) {
       loadTrendingGifs();
     }
@@ -248,6 +257,49 @@
       messages = messages.filter(msg => msg.id !== tempMessage.id);
       alert('Failed to send GIF. Please try again.');
     }
+  }
+
+  // Emoji picker functions
+  function toggleEmojiPicker() {
+    showEmojiPicker = !showEmojiPicker;
+    showGifPicker = false; // Close GIF picker when opening emoji picker
+  }
+
+  function handleEmojiSelect(event: CustomEvent<{ emoji: string; isCustom: boolean; url?: string }>) {
+    const { emoji, isCustom, url } = event.detail;
+    
+    if (isCustom && url) {
+      // Store custom emoji URL for rendering
+      const emojiName = emoji.replace(/:/g, '');
+      guildEmojis.set(emojiName, url);
+    }
+    
+    // Insert emoji at cursor position or append to message
+    messageContent += emoji;
+    showEmojiPicker = false;
+  }
+
+  // Load guild emojis for rendering in messages
+  async function loadGuildEmojis() {
+    if (!guildId || !authToken) return;
+    
+    try {
+      const response = await fetch(apiUrl(`/api/guilds/${guildId}/emojis`), {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const emojis = data.emojis || [];
+        guildEmojis = new Map(emojis.map((e: { name: string; image_url: string }) => [e.name, e.image_url]));
+      }
+    } catch (error) {
+      console.error('Failed to load guild emojis:', error);
+    }
+  }
+
+  // Load guild emojis when guildId changes
+  $: if (guildId && authToken) {
+    loadGuildEmojis();
   }
 
   // Check if content is a GIF URL or image
@@ -1021,7 +1073,19 @@
   }
 
   function highlightMention(content: string): string {
-    return content.replace(/@(\w+\s?\w*)/g, '<span class="mention">@$1</span>');
+    // First handle mentions
+    let result = content.replace(/@(\w+\s?\w*)/g, '<span class="mention">@$1</span>');
+    
+    // Then render custom emojis :emoji_name:
+    result = result.replace(/:([a-z0-9_]+):/gi, (match, emojiName) => {
+      const url = guildEmojis.get(emojiName.toLowerCase());
+      if (url) {
+        return `<img src="${url}" alt=":${emojiName}:" class="custom-emoji-inline" title=":${emojiName}:" />`;
+      }
+      return match; // Return original if not found
+    });
+    
+    return result;
   }
 
   function handleUserClick(message: ChatMessage) {
@@ -1470,6 +1534,14 @@
           <path d="M21.44 11.05L12.25 20.24C10.45 22.04 7.51 22.04 5.71 20.24C3.91 18.44 3.91 15.5 5.71 13.7L14.9 4.51C16.04 3.37 17.88 3.37 19.02 4.51C20.16 5.65 20.16 7.49 19.02 8.63L9.83 17.82C9.26 18.39 8.34 18.39 7.77 17.82C7.2 17.25 7.2 16.33 7.77 15.76L16.96 6.57"/>
         </svg>
       </button>
+      <button class="emoji-btn" class:active={showEmojiPicker} on:click={toggleEmojiPicker} aria-label="Emoji">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+          <line x1="9" y1="9" x2="9.01" y2="9"/>
+          <line x1="15" y1="9" x2="15.01" y2="9"/>
+        </svg>
+      </button>
       <button class="gif-btn" class:active={showGifPicker} on:click={toggleGifPicker} aria-label="GIF">
         <span class="gif-label">GIF</span>
       </button>
@@ -1566,6 +1638,15 @@
         </div>
       </div>
     {/if}
+
+    <!-- Emoji Picker -->
+    <EmojiPicker 
+      {guildId}
+      {authToken}
+      isOpen={showEmojiPicker}
+      on:select={handleEmojiSelect}
+      on:close={() => showEmojiPicker = false}
+    />
   </div>
 </div>
 
@@ -1917,6 +1998,14 @@
     border-radius: 3px;
   }
 
+  .message-text :global(.custom-emoji-inline) {
+    width: 22px;
+    height: 22px;
+    vertical-align: middle;
+    margin: 0 2px;
+    object-fit: contain;
+  }
+
   .message-reactions {
     display: flex;
     gap: 6px;
@@ -2120,6 +2209,30 @@
 
   .attach-btn:hover {
     color: #fff;
+  }
+
+  .emoji-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: none;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .emoji-btn:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .emoji-btn.active {
+    color: #63b3ed;
+    background: rgba(49, 130, 206, 0.2);
   }
 
   .gif-btn {
