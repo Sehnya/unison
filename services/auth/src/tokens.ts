@@ -17,8 +17,8 @@ export interface TokenConfig {
  */
 export const DEFAULT_TOKEN_CONFIG: TokenConfig = {
   jwtSecret: process.env.JWT_SECRET || 'development-secret-change-in-production',
-  accessTokenExpiresIn: 15 * 60, // 15 minutes
-  refreshTokenExpiresIn: 7 * 24 * 60 * 60, // 7 days
+  accessTokenExpiresIn: 5 * 24 * 60 * 60, // 5 days
+  refreshTokenExpiresIn: 30 * 24 * 60 * 60, // 30 days
 };
 
 /**
