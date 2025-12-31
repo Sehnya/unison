@@ -46,6 +46,7 @@
   // Voice presence tracking - maps channelId to array of users in that channel
   let voicePresence: Map<string, VoiceUser[]> = new Map();
   let voicePresenceChannels: Map<string, any> = new Map();
+  let presenceRefreshInterval: ReturnType<typeof setInterval> | null = null;
 
   // Load view mode from localStorage on mount
   onMount(() => {
@@ -53,7 +54,29 @@
     if (savedViewMode && ['list', 'box', 'icon'].includes(savedViewMode)) {
       viewMode = savedViewMode as ViewMode;
     }
+    
+    // Refresh presence every 5 seconds to catch any missed updates
+    presenceRefreshInterval = setInterval(() => {
+      refreshVoicePresence();
+    }, 5000);
   });
+  
+  // Refresh voice presence for all channels
+  function refreshVoicePresence() {
+    voicePresenceChannels.forEach((presenceChannel, channelId) => {
+      presenceChannel.presence.get({ waitForSync: true }).then((members: any[]) => {
+        const users: VoiceUser[] = members.map((m: any) => ({
+          id: m.clientId,
+          username: m.data?.username || `User ${m.clientId.slice(0, 6)}`,
+          avatar: m.data?.avatar || null,
+        }));
+        voicePresence.set(channelId, users);
+        voicePresence = new Map(voicePresence);
+      }).catch(() => {
+        // Ignore errors during refresh
+      });
+    });
+  }
 
   // Subscribe to guild channel updates via Ably
   function subscribeToGuildChannels(guildId: string) {
@@ -103,6 +126,11 @@
       }
     });
     voicePresenceChannels.clear();
+    
+    // Clear presence refresh interval
+    if (presenceRefreshInterval) {
+      clearInterval(presenceRefreshInterval);
+    }
   });
 
   // Subscribe to guild channels when guild changes
@@ -126,8 +154,8 @@
       const presenceChannel = client.channels.get(`voice:${channel.id}`);
       voicePresenceChannels.set(channel.id, presenceChannel);
       
-      // Get initial presence
-      presenceChannel.presence.get().then((members: any[]) => {
+      // Get initial presence (including self)
+      presenceChannel.presence.get({ waitForSync: true }).then((members: any[]) => {
         const users: VoiceUser[] = members.map((m) => ({
           id: m.clientId,
           username: m.data?.username || `User ${m.clientId.slice(0, 6)}`,
@@ -158,6 +186,20 @@
         const filtered = users.filter(u => u.id !== member.clientId);
         voicePresence.set(channel.id, filtered);
         voicePresence = new Map(voicePresence);
+      });
+      
+      // Also subscribe to 'present' for when we enter ourselves
+      presenceChannel.presence.subscribe('present', (member: any) => {
+        const users = voicePresence.get(channel.id) || [];
+        if (!users.find(u => u.id === member.clientId)) {
+          users.push({
+            id: member.clientId,
+            username: member.data?.username || `User ${member.clientId.slice(0, 6)}`,
+            avatar: member.data?.avatar || null,
+          });
+          voicePresence.set(channel.id, users);
+          voicePresence = new Map(voicePresence);
+        }
       });
     });
   }
