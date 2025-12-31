@@ -702,53 +702,55 @@
     {:else if isConnected}
       <!-- Stage Layout -->
       <div class="stage-layout" class:with-sidebar={showParticipantList}>
-        <!-- Main Stage Area (focused participant) -->
-        {#if focusedParticipant}
-          <div class="main-stage" class:has-stream={hasActiveStream}>
-            <div class="stage-video-container" class:speaking={focusedParticipant.isSpeaking}>
-              {#if focusedParticipant.videoTrack}
-                <video 
-                  class="stage-video"
-                  autoplay 
-                  playsinline
-                  muted={focusedParticipant.id === room?.localParticipant?.identity}
-                  use:attachVideo={focusedParticipant.videoTrack}
-                ></video>
-              {:else}
-                <div class="stage-avatar-wrapper">
-                  <Avatar 
-                    userId={focusedParticipant.id} 
-                    username={focusedParticipant.name} 
-                    src={focusedParticipant.avatar} 
-                    size={160} 
-                  />
+        <!-- Content wrapper for stage + speakers -->
+        <div class="stage-content-wrapper">
+          <!-- Main Stage Area (focused participant) -->
+          {#if focusedParticipant}
+            <div class="main-stage" class:has-stream={hasActiveStream}>
+              <div class="stage-video-container" class:speaking={focusedParticipant.isSpeaking}>
+                {#if focusedParticipant.videoTrack}
+                  <video 
+                    class="stage-video"
+                    autoplay 
+                    playsinline
+                    muted={focusedParticipant.id === room?.localParticipant?.identity}
+                    use:attachVideo={focusedParticipant.videoTrack}
+                  ></video>
+                {:else}
+                  <div class="stage-avatar-wrapper">
+                    <Avatar 
+                      userId={focusedParticipant.id} 
+                      username={focusedParticipant.name} 
+                      src={focusedParticipant.avatar} 
+                      size={160} 
+                    />
+                  </div>
+                {/if}
+                
+                <!-- Stage Overlay -->
+                <div class="stage-overlay">
+                  <div class="stage-info">
+                    <span class="stage-name">{focusedParticipant.name}</span>
+                    {#if focusedParticipant.isScreenSharing}
+                      <span class="stage-badge screen">Screen Sharing</span>
+                    {/if}
+                    {#if focusedParticipant.isMuted}
+                      <span class="stage-badge muted">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+                        </svg>
+                      </span>
+                    {/if}
+                  </div>
                 </div>
-              {/if}
-              
-              <!-- Stage Overlay -->
-              <div class="stage-overlay">
-                <div class="stage-info">
-                  <span class="stage-name">{focusedParticipant.name}</span>
-                  {#if focusedParticipant.isScreenSharing}
-                    <span class="stage-badge screen">Screen Sharing</span>
-                  {/if}
-                  {#if focusedParticipant.isMuted}
-                    <span class="stage-badge muted">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
-                      </svg>
-                    </span>
-                  {/if}
-                </div>
+                
+                <!-- Speaking Ring -->
+                {#if focusedParticipant.isSpeaking}
+                  <div class="stage-speaking-ring"></div>
+                {/if}
               </div>
-              
-              <!-- Speaking Ring -->
-              {#if focusedParticipant.isSpeaking}
-                <div class="stage-speaking-ring"></div>
-              {/if}
             </div>
-          </div>
-        {/if}
+          {/if}
         
         <!-- Speakers Section (collapsible) -->
         <div class="speakers-section" class:collapsed={speakersCollapsed}>
@@ -813,6 +815,7 @@
             </div>
           {/if}
         </div>
+        </div><!-- End stage-content-wrapper -->
 
         <!-- Participant Sidebar -->
         {#if showParticipantList}
@@ -1496,13 +1499,20 @@
     flex-direction: row;
   }
 
-  .stage-layout.with-sidebar .main-stage,
-  .stage-layout.with-sidebar .speakers-section {
+  /* Main content wrapper (stage + speakers) */
+  .stage-layout.with-sidebar > .stage-content-wrapper {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
   }
 
-  .stage-layout.with-sidebar .participant-sidebar {
-    flex-shrink: 0;
+  .stage-content-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   /* Main Stage */
@@ -1512,7 +1522,8 @@
     align-items: center;
     justify-content: center;
     padding: 16px;
-    min-height: 300px;
+    min-height: 200px;
+    overflow: hidden;
   }
 
   .main-stage.has-stream {
@@ -1770,30 +1781,13 @@
     color: #ef4444;
   }
 
-  /* Stage layout with sidebar adjustments */
-  .stage-layout.with-sidebar {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-
-  .stage-layout.with-sidebar .main-stage {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .stage-layout.with-sidebar .speakers-section {
-    width: 100%;
-    order: 2;
-  }
-
-  .stage-layout.with-sidebar .participant-sidebar {
-    order: 3;
+  /* Participant Sidebar - fixed positioning */
+  .stage-layout .participant-sidebar {
     width: 240px;
-    height: 100%;
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.3);
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    overflow-y: auto;
   }
 
   /* Responsive adjustments */
@@ -1815,6 +1809,17 @@
 
     .stage-video-container {
       border-radius: 12px;
+    }
+    
+    .stage-layout.with-sidebar {
+      flex-direction: column;
+    }
+    
+    .stage-layout .participant-sidebar {
+      width: 100%;
+      max-height: 200px;
+      border-left: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
     }
   }
 </style>
