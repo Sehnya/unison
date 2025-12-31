@@ -1,7 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import type { User } from '../types';
-  import TipTapEditor from './TipTapEditor.svelte';
   import MusicCard from './MusicCard.svelte';
   import ImageGalleryCard from './ImageGalleryCard.svelte';
   import FavoriteGamesCard from './FavoriteGamesCard.svelte';
@@ -619,12 +618,9 @@
 
           {#if card.type === 'quote'}
             <div class="quote-content">
-              <TipTapEditor 
-                content={getQuoteContent(card.id)}
-                editable={isEditMode}
-                placeholder="Write your creative quote..."
-                on:update={(e) => handleQuoteUpdate(card.id, e)}
-              />
+              <div class="quote-text" contenteditable={isEditMode} on:blur={(e) => handleQuoteUpdate(card.id, { detail: { content: e.currentTarget.innerHTML } })}>
+                {@html getQuoteContent(card.id) || '<p>Write your creative quote...</p>'}
+              </div>
             </div>
 
           {:else if card.type === 'gradient'}

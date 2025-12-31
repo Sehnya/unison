@@ -7,7 +7,6 @@ export enum ChannelType {
   TEXT = 0,
   CATEGORY = 1,
   VOICE = 2,
-  DOCUMENT = 3,
 }
 
 /**

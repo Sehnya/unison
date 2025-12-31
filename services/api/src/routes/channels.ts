@@ -22,11 +22,22 @@ export interface ChannelServiceInterface {
 }
 
 /**
+ * User lookup interface for admin checks
+ */
+export interface UserLookupInterface {
+  getUserById(userId: string): Promise<{ email: string } | null>;
+}
+
+// Admin email that can delete any channel
+const ADMIN_EMAIL = 'sehnyaw@gmail.com';
+
+/**
  * Channel routes configuration
  */
 export interface ChannelRoutesConfig {
   channelService: ChannelServiceInterface;
   guildService: { getRepository: () => { isOwner: (guildId: string, userId: string) => Promise<boolean> } };
+  userLookup?: UserLookupInterface;
   validateToken: TokenValidator;
 }
 
@@ -35,7 +46,7 @@ export interface ChannelRoutesConfig {
  */
 export function createChannelRoutes(config: ChannelRoutesConfig): Router {
   const router = Router();
-  const { channelService, guildService, validateToken } = config;
+  const { channelService, guildService, userLookup, validateToken } = config;
   const authMiddleware = createAuthMiddleware(validateToken);
 
   // All channel routes require authentication
@@ -91,8 +102,6 @@ export function createChannelRoutes(config: ChannelRoutesConfig): Router {
           channelType = ChannelType.CATEGORY;
         } else if (type === 'voice' || type === 'VOICE' || type === 2) {
           channelType = ChannelType.VOICE;
-        } else if (type === 'document' || type === 'DOCUMENT' || type === 3) {
-          channelType = ChannelType.DOCUMENT;
         } else if (type !== 'TEXT' && type !== 'text' && type !== 0) {
           throw new ApiError(ApiErrorCode.INVALID_CHANNEL_TYPE, 400, 'Invalid channel type');
         }
@@ -197,10 +206,31 @@ export function createChannelRoutes(config: ChannelRoutesConfig): Router {
    * DELETE /channels/:channel_id
    * Delete a channel
    * Requirements: 8.4
+   * Only admin (sehnyaw@gmail.com) can delete channels
    */
   router.delete('/channels/:channel_id', async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { id: userId } = (req as AuthenticatedRequest).user;
       const channelId = requireSnowflake('channel_id', req.params.channel_id);
+
+      // Check if user is the admin
+      if (userLookup) {
+        const user = await userLookup.getUserById(userId);
+        if (!user || user.email !== ADMIN_EMAIL) {
+          throw new ApiError(
+            ApiErrorCode.FORBIDDEN,
+            403,
+            'Only the admin can delete channels'
+          );
+        }
+      } else {
+        // If no user lookup available, deny all deletes for safety
+        throw new ApiError(
+          ApiErrorCode.FORBIDDEN,
+          403,
+          'Channel deletion is not available'
+        );
+      }
 
       await channelService.deleteChannel(channelId);
 
