@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { createEventDispatcher } from 'svelte';
   import { apiUrl } from '../lib/api';
 
   export let guildId: string | null = null;
@@ -84,11 +84,48 @@
     });
   }
 
+  // Convert emoji.gg page URL to CDN URL
+  // e.g., https://emoji.gg/emoji/631592-satisfiedbob -> https://cdn.emoji.gg/emojis/631592-satisfiedbob.png
+  function convertEmojiGgUrl(url: string): string {
+    // Check if it's an emoji.gg page URL (not already a CDN URL)
+    const emojiGgMatch = url.match(/emoji\.gg\/emoji\/(\d+-[\w-]+)/);
+    if (emojiGgMatch) {
+      const emojiId = emojiGgMatch[1];
+      // Check if it's animated (GIF) based on URL or user selection
+      const ext = uploadAnimated ? 'gif' : 'png';
+      return `https://cdn.emoji.gg/emojis/${emojiId}.${ext}`;
+    }
+    return url;
+  }
+
+  // Auto-extract emoji name from emoji.gg URL
+  function extractEmojiName(url: string): string {
+    const emojiGgMatch = url.match(/emoji\.gg\/emoji\/\d+-(.+)/);
+    if (emojiGgMatch) {
+      return emojiGgMatch[1].replace(/-/g, '_');
+    }
+    return '';
+  }
+
+  // Handle URL input change
+  function handleUrlChange() {
+    // Auto-fill name if empty and URL is from emoji.gg
+    if (!uploadName && uploadUrl) {
+      const extractedName = extractEmojiName(uploadUrl);
+      if (extractedName) {
+        uploadName = extractedName;
+      }
+    }
+  }
+
   async function uploadEmoji() {
     if (!uploadUrl.trim() || !uploadName.trim() || !guildId || !authToken) return;
     
     uploading = true;
     uploadError = '';
+    
+    // Convert emoji.gg page URL to CDN URL
+    const finalUrl = convertEmojiGgUrl(uploadUrl.trim());
     
     try {
       const response = await fetch(apiUrl(`/api/guilds/${guildId}/emojis`), {
@@ -99,7 +136,7 @@
         },
         body: JSON.stringify({
           name: uploadName.trim(),
-          image_url: uploadUrl.trim(),
+          image_url: finalUrl,
           animated: uploadAnimated,
         }),
       });
@@ -255,7 +292,7 @@
       {:else if activeTab === 'upload'}
         <div class="upload-section">
           <p class="upload-hint">
-            Upload custom emojis from <a href="https://emoji.gg" target="_blank" rel="noopener">emoji.gg</a> or any image URL
+            Paste an <a href="https://emoji.gg" target="_blank" rel="noopener">emoji.gg</a> page URL or direct image URL
           </p>
           
           <div class="upload-form">
@@ -271,12 +308,13 @@
             </label>
             
             <label class="form-label">
-              Image URL
+              URL (emoji.gg page or image)
               <input
                 type="url"
                 class="form-input"
-                placeholder="https://emoji.gg/assets/emoji/..."
+                placeholder="https://emoji.gg/emoji/631592-satisfiedbob"
                 bind:value={uploadUrl}
+                on:input={handleUrlChange}
               />
             </label>
 
@@ -286,10 +324,17 @@
             </label>
 
             {#if uploadUrl}
+              {@const previewUrl = convertEmojiGgUrl(uploadUrl)}
               <div class="preview">
                 <span>Preview:</span>
-                <img src={uploadUrl} alt="Preview" class="preview-img" />
+                <img src={previewUrl} alt="Preview" class="preview-img" />
               </div>
+              {#if previewUrl !== uploadUrl}
+                <div class="url-converted">
+                  <span class="converted-label">CDN URL:</span>
+                  <code class="converted-url">{previewUrl}</code>
+                </div>
+              {/if}
             {/if}
 
             {#if uploadError}
@@ -586,6 +631,29 @@
     height: 48px;
     object-fit: contain;
     border-radius: 4px;
+  }
+
+  .url-converted {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: 8px;
+  }
+
+  .converted-label {
+    font-size: 11px;
+    color: #22c55e;
+    font-weight: 500;
+  }
+
+  .converted-url {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    word-break: break-all;
+    font-family: monospace;
   }
 
   .error {
