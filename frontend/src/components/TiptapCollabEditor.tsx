@@ -301,7 +301,9 @@ const EditorWithProvider: React.FC<{
   );
 
 
-  if (!isSynced || !editor) {
+  // Show loading state only if editor hasn't been created yet
+  // Once editor exists, show it even if not fully synced (it will work)
+  if (!editor) {
     const debugInfo = {
       isSynced,
       hasEditor: !!editor,
@@ -309,13 +311,14 @@ const EditorWithProvider: React.FC<{
       providerStatus: provider?.status,
       providerIsSynced: provider?.isSynced,
       hasYdoc: !!ydoc,
+      extensionsLength: extensions.length,
     };
-    console.log('[EditorWithProvider] Waiting for editor to be ready:', debugInfo);
+    console.log('[EditorWithProvider] Waiting for editor to be created:', debugInfo);
     
     return (
       <div className="collab-editor loading">
         <div className="spinner" />
-        <p>Syncing document...</p>
+        <p>Initializing editor...</p>
         <p className="status-hint">{status}</p>
         {process.env.NODE_ENV === 'development' && (
           <details style={{ marginTop: '10px', fontSize: '12px', color: '#888' }}>
