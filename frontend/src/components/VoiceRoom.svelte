@@ -52,9 +52,9 @@
   let selectedResolution: VideoResolution = '1080p';
   
   const resolutionPresets: Record<VideoResolution, { width: number; height: number; frameRate: number; bitrate: number }> = {
-    '4k': { width: 3840, height: 2160, frameRate: 30, bitrate: 8_000_000 },
-    '1080p': { width: 1920, height: 1080, frameRate: 30, bitrate: 3_000_000 },
-    '720p': { width: 1280, height: 720, frameRate: 30, bitrate: 1_500_000 },
+    '4k': { width: 3840, height: 2160, frameRate: 30, bitrate: 15_000_000 },  // 15 Mbps for 4K
+    '1080p': { width: 1920, height: 1080, frameRate: 30, bitrate: 6_000_000 }, // 6 Mbps for 1080p
+    '720p': { width: 1280, height: 720, frameRate: 30, bitrate: 3_000_000 },   // 3 Mbps for 720p
   };
   
   // Ably presence channel
@@ -200,16 +200,24 @@
         },
         publishDefaults: {
           audioPreset: {
-            maxBitrate: 128_000, // 128 kbps for high quality audio
+            maxBitrate: 192_000, // 192 kbps for high quality audio (increased from 128)
           },
           videoCodec: 'vp9', // Better quality codec
           videoSimulcastLayers: [
-            { width: 640, height: 360, bitrate: 500_000, suffix: 'q' },
-            { width: 1280, height: 720, bitrate: 1_500_000, suffix: 'h' },
-            { width: currentPreset.width, height: currentPreset.height, bitrate: currentPreset.bitrate, suffix: 'f' },
+            { width: 640, height: 360, bitrate: 800_000, suffix: 'q' },    // Low quality layer
+            { width: 1280, height: 720, bitrate: 3_000_000, suffix: 'h' }, // Medium quality layer
+            { width: currentPreset.width, height: currentPreset.height, bitrate: currentPreset.bitrate, suffix: 'f' }, // Full quality layer
           ],
           dtx: true, // Discontinuous transmission - saves bandwidth when not speaking
           red: true, // Redundant encoding for packet loss resilience
+          screenShareEncoding: {
+            maxBitrate: 10_000_000, // 10 Mbps for screen sharing
+            maxFramerate: 30,
+          },
+          screenShareSimulcastLayers: [
+            { width: 1280, height: 720, bitrate: 2_000_000, suffix: 'h' },
+            { width: 1920, height: 1080, bitrate: 5_000_000, suffix: 'f' },
+          ],
         },
       });
 
