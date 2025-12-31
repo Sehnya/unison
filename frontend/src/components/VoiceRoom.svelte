@@ -43,6 +43,10 @@
   let localVideoElement: HTMLVideoElement | null = null;
   let screenShareElement: HTMLVideoElement | null = null;
   
+  // Stage view state
+  let focusedParticipantId: string | null = null;
+  let speakersCollapsed = false;
+  
   // Video resolution options
   type VideoResolution = '4k' | '1080p' | '720p';
   let selectedResolution: VideoResolution = '1080p';
@@ -89,6 +93,36 @@
 
   let participantDisplays: ParticipantDisplay[] = [];
   let speakingInterval: ReturnType<typeof setInterval> | null = null;
+  
+  // Computed: Get the focused participant (or auto-focus on screen sharer/speaker)
+  $: focusedParticipant = (() => {
+    // If someone is screen sharing, focus them
+    const screenSharer = participantDisplays.find(p => p.isScreenSharing);
+    if (screenSharer) return screenSharer;
+    
+    // If manually focused, use that
+    if (focusedParticipantId) {
+      const focused = participantDisplays.find(p => p.id === focusedParticipantId);
+      if (focused) return focused;
+    }
+    
+    // Otherwise focus on the first participant with video, or first participant
+    const withVideo = participantDisplays.find(p => p.isVideoEnabled);
+    if (withVideo) return withVideo;
+    
+    return participantDisplays[0] || null;
+  })();
+  
+  // Computed: Get other participants (not focused)
+  $: otherParticipants = participantDisplays.filter(p => p.id !== focusedParticipant?.id);
+  
+  // Computed: Check if anyone has video/screen share active (stage mode)
+  $: hasActiveStream = participantDisplays.some(p => p.isVideoEnabled || p.isScreenSharing);
+  
+  // Focus on a specific participant
+  function focusParticipant(participantId: string) {
+    focusedParticipantId = participantId;
+  }
   
   // Enter Ably presence when connected
   async function enterAblyPresence() {
@@ -470,6 +504,26 @@
     }
   }
 
+  // Generate a consistent color for a participant based on their ID
+  function getParticipantColor(id: string): string {
+    const colors = [
+      'linear-gradient(135deg, #a5b4fc 0%, #818cf8 100%)', // Light purple
+      'linear-gradient(135deg, #93c5fd 0%, #3b82f6 100%)', // Blue
+      'linear-gradient(135deg, #fca5a5 0%, #f87171 100%)', // Pink/Red
+      'linear-gradient(135deg, #86efac 0%, #22c55e 100%)', // Green
+      'linear-gradient(135deg, #fcd34d 0%, #f59e0b 100%)', // Yellow/Orange
+      'linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%)', // Purple
+    ];
+    
+    // Simple hash of the ID to pick a color
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = ((hash << 5) - hash) + id.charCodeAt(i);
+      hash = hash & hash;
+    }
+    return colors[Math.abs(hash) % colors.length];
+  }
+
   async function disconnect() {
     if (speakingInterval) clearInterval(speakingInterval);
     
@@ -646,59 +700,118 @@
         <p>Connecting to voice channel...</p>
       </div>
     {:else if isConnected}
-      <!-- Participants Grid -->
-      <div class="participants-area" class:with-sidebar={showParticipantList}>
-        <div class="video-grid">
-          {#each participantDisplays as participant (participant.id)}
-            <div class="participant-tile" class:speaking={participant.isSpeaking} class:video-active={participant.isVideoEnabled || participant.isScreenSharing}>
-              {#if participant.videoTrack}
+      <!-- Stage Layout -->
+      <div class="stage-layout" class:with-sidebar={showParticipantList}>
+        <!-- Main Stage Area (focused participant) -->
+        {#if focusedParticipant}
+          <div class="main-stage" class:has-stream={hasActiveStream}>
+            <div class="stage-video-container" class:speaking={focusedParticipant.isSpeaking}>
+              {#if focusedParticipant.videoTrack}
                 <video 
-                  class="participant-video"
+                  class="stage-video"
                   autoplay 
                   playsinline
-                  muted={participant.id === room?.localParticipant?.identity}
-                  use:attachVideo={participant.videoTrack}
+                  muted={focusedParticipant.id === room?.localParticipant?.identity}
+                  use:attachVideo={focusedParticipant.videoTrack}
                 ></video>
               {:else}
-                <div class="participant-avatar-wrapper">
+                <div class="stage-avatar-wrapper">
                   <Avatar 
-                    userId={participant.id} 
-                    username={participant.name} 
-                    src={participant.avatar} 
-                    size={80} 
+                    userId={focusedParticipant.id} 
+                    username={focusedParticipant.name} 
+                    src={focusedParticipant.avatar} 
+                    size={160} 
                   />
                 </div>
               {/if}
               
-              <!-- Participant Info Overlay -->
-              <div class="participant-overlay">
-                <div class="participant-name-row">
-                  <span class="participant-name">{participant.name}</span>
-                  <div class="participant-indicators">
-                    {#if participant.isMuted}
-                      <div class="indicator muted" title="Muted">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
-                        </svg>
-                      </div>
-                    {/if}
-                    {#if participant.isScreenSharing}
-                      <div class="indicator screen" title="Screen sharing">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
-                        </svg>
-                      </div>
-                    {/if}
-                  </div>
+              <!-- Stage Overlay -->
+              <div class="stage-overlay">
+                <div class="stage-info">
+                  <span class="stage-name">{focusedParticipant.name}</span>
+                  {#if focusedParticipant.isScreenSharing}
+                    <span class="stage-badge screen">Screen Sharing</span>
+                  {/if}
+                  {#if focusedParticipant.isMuted}
+                    <span class="stage-badge muted">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+                      </svg>
+                    </span>
+                  {/if}
                 </div>
               </div>
               
               <!-- Speaking Ring -->
-              {#if participant.isSpeaking}
-                <div class="speaking-ring"></div>
+              {#if focusedParticipant.isSpeaking}
+                <div class="stage-speaking-ring"></div>
               {/if}
             </div>
-          {/each}
+          </div>
+        {/if}
+        
+        <!-- Speakers Section (collapsible) -->
+        <div class="speakers-section" class:collapsed={speakersCollapsed}>
+          <button class="speakers-header" on:click={() => speakersCollapsed = !speakersCollapsed}>
+            <div class="speakers-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
+                <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
+              </svg>
+              <span>Speakers - {participantDisplays.length}</span>
+            </div>
+            <svg class="collapse-icon" class:rotated={speakersCollapsed} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
+          
+          {#if !speakersCollapsed}
+            <div class="speakers-grid">
+              {#each participantDisplays as participant (participant.id)}
+                <button 
+                  class="speaker-tile" 
+                  class:speaking={participant.isSpeaking}
+                  class:focused={participant.id === focusedParticipant?.id}
+                  on:click={() => focusParticipant(participant.id)}
+                >
+                  <div class="speaker-avatar-container" class:has-video={participant.isVideoEnabled || participant.isScreenSharing}>
+                    {#if participant.videoTrack}
+                      <video 
+                        class="speaker-video"
+                        autoplay 
+                        playsinline
+                        muted={participant.id === room?.localParticipant?.identity}
+                        use:attachVideo={participant.videoTrack}
+                      ></video>
+                    {:else}
+                      <div class="speaker-avatar-bg" style="background: {getParticipantColor(participant.id)}">
+                        <Avatar 
+                          userId={participant.id} 
+                          username={participant.name} 
+                          src={participant.avatar} 
+                          size={64} 
+                        />
+                      </div>
+                    {/if}
+                    
+                    <!-- Speaking indicator ring -->
+                    {#if participant.isSpeaking}
+                      <div class="speaker-ring"></div>
+                    {/if}
+                  </div>
+                  
+                  <div class="speaker-info">
+                    <span class="speaker-name">{participant.name}</span>
+                    {#if participant.isMuted}
+                      <svg class="speaker-muted-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+                      </svg>
+                    {/if}
+                  </div>
+                </button>
+              {/each}
+            </div>
+          {/if}
         </div>
 
         <!-- Participant Sidebar -->
@@ -1222,124 +1335,6 @@
     font-size: 14px;
   }
 
-  /* Participants Area */
-  .participants-area {
-    flex: 1;
-    display: flex;
-    overflow: hidden;
-  }
-
-  .participants-area.with-sidebar {
-    padding-right: 0;
-  }
-
-  .video-grid {
-    flex: 1;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 12px;
-    padding: 16px;
-    overflow-y: auto;
-    align-content: start;
-  }
-
-  .participant-tile {
-    position: relative;
-    aspect-ratio: 16 / 9;
-    background: rgba(0, 0, 0, 0.4);
-    border-radius: 12px;
-    overflow: hidden;
-    border: 2px solid transparent;
-    transition: all 0.2s;
-  }
-
-  .participant-tile.speaking {
-    border-color: #22c55e;
-    box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
-  }
-
-  .participant-tile.video-active {
-    background: #000;
-  }
-
-  .participant-video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    background: #000;
-    /* Prevent flickering during track changes */
-    transition: opacity 0.15s ease-in-out;
-    will-change: opacity;
-  }
-
-  .participant-avatar-wrapper {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, rgba(26, 54, 93, 0.5) 0%, rgba(15, 15, 25, 0.8) 100%);
-  }
-
-  .participant-overlay {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 12px;
-    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
-  }
-
-  .participant-name-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .participant-name {
-    font-size: 13px;
-    font-weight: 500;
-    color: #fff;
-  }
-
-  .participant-indicators {
-    display: flex;
-    gap: 6px;
-  }
-
-  .indicator {
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .indicator.muted {
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
-  }
-
-  .indicator.screen {
-    background: rgba(59, 130, 246, 0.2);
-    color: #3b82f6;
-  }
-
-  .speaking-ring {
-    position: absolute;
-    inset: -2px;
-    border-radius: 14px;
-    border: 2px solid #22c55e;
-    animation: speaking-pulse 1s ease-in-out infinite;
-    pointer-events: none;
-  }
-
-  @keyframes speaking-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-  }
-
   /* Participant Sidebar */
   .participant-sidebar {
     width: 240px;
@@ -1487,5 +1482,339 @@
     padding: 2px 4px;
     border-radius: 4px;
     line-height: 1;
+  }
+
+  /* Stage Layout */
+  .stage-layout {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .stage-layout.with-sidebar {
+    flex-direction: row;
+  }
+
+  .stage-layout.with-sidebar .main-stage,
+  .stage-layout.with-sidebar .speakers-section {
+    flex: 1;
+  }
+
+  .stage-layout.with-sidebar .participant-sidebar {
+    flex-shrink: 0;
+  }
+
+  /* Main Stage */
+  .main-stage {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    min-height: 300px;
+  }
+
+  .main-stage.has-stream {
+    background: #000;
+  }
+
+  .stage-video-container {
+    position: relative;
+    width: 100%;
+    max-width: 1200px;
+    aspect-ratio: 16 / 9;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 16px;
+    overflow: hidden;
+    border: 3px solid transparent;
+    transition: all 0.3s ease;
+  }
+
+  .stage-video-container.speaking {
+    border-color: #22c55e;
+    box-shadow: 0 0 40px rgba(34, 197, 94, 0.4);
+  }
+
+  .stage-video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+    transition: opacity 0.15s ease-in-out;
+    will-change: opacity;
+  }
+
+  .stage-avatar-wrapper {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(26, 54, 93, 0.3) 0%, rgba(15, 15, 25, 0.6) 100%);
+  }
+
+  .stage-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 16px 20px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.9));
+  }
+
+  .stage-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .stage-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .stage-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .stage-badge.screen {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+  }
+
+  .stage-badge.muted {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+  }
+
+  .stage-speaking-ring {
+    position: absolute;
+    inset: -3px;
+    border-radius: 19px;
+    border: 3px solid #22c55e;
+    animation: stage-pulse 1.5s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes stage-pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
+    50% { opacity: 0.6; box-shadow: 0 0 40px rgba(34, 197, 94, 0.3); }
+  }
+
+  /* Speakers Section */
+  .speakers-section {
+    background: rgba(0, 0, 0, 0.3);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+  }
+
+  .speakers-section.collapsed {
+    border-top: none;
+  }
+
+  .speakers-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 12px 20px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .speakers-header:hover {
+    background: rgba(255, 255, 255, 0.03);
+    color: #fff;
+  }
+
+  .speakers-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .collapse-icon {
+    transition: transform 0.2s ease;
+  }
+
+  .collapse-icon.rotated {
+    transform: rotate(180deg);
+  }
+
+  .speakers-grid {
+    display: flex;
+    gap: 12px;
+    padding: 0 20px 16px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+
+  .speakers-grid::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .speakers-grid::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .speakers-grid::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+  }
+
+  /* Speaker Tile */
+  .speaker-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    min-width: 120px;
+    background: none;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .speaker-tile:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .speaker-tile.focused {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+
+  .speaker-tile.speaking {
+    background: rgba(34, 197, 94, 0.1);
+  }
+
+  .speaker-avatar-container {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .speaker-avatar-container.has-video {
+    border-radius: 8px;
+  }
+
+  .speaker-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity 0.15s ease-in-out;
+  }
+
+  .speaker-avatar-bg {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+  }
+
+  .speaker-ring {
+    position: absolute;
+    inset: -3px;
+    border-radius: 15px;
+    border: 3px solid #22c55e;
+    animation: speaker-pulse 1s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes speaker-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .speaker-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+  }
+
+  .speaker-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 90px;
+  }
+
+  .speaker-muted-icon {
+    flex-shrink: 0;
+    color: #ef4444;
+  }
+
+  /* Stage layout with sidebar adjustments */
+  .stage-layout.with-sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .stage-layout.with-sidebar .main-stage {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .stage-layout.with-sidebar .speakers-section {
+    width: 100%;
+    order: 2;
+  }
+
+  .stage-layout.with-sidebar .participant-sidebar {
+    order: 3;
+    width: 240px;
+    height: 100%;
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .speaker-tile {
+      min-width: 100px;
+      padding: 8px;
+    }
+
+    .speaker-avatar-container {
+      width: 64px;
+      height: 64px;
+    }
+
+    .speaker-name {
+      font-size: 12px;
+      max-width: 70px;
+    }
+
+    .stage-video-container {
+      border-radius: 12px;
+    }
   }
 </style>
