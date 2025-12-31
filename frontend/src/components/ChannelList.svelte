@@ -14,6 +14,7 @@
   export let collapsed: boolean = false;
   export let currentUser: User | null = null;
   export let activeVoiceChannelId: string | null = null;
+  export let channelSettingsVersion: number = 0; // Triggers reload when settings change
 
   const dispatch = createEventDispatcher<{
     selectChannel: { channelId: string; channelType?: 'text' | 'voice' };
@@ -57,6 +58,38 @@
   let voiceUsersTrigger = 0;
   $: if (activeVoiceChannelId !== undefined) {
     voiceUsersTrigger++;
+  }
+
+  // Channel settings cache for backgrounds
+  let channelBackgrounds: Map<string, string | null> = new Map();
+  
+  // Load channel background from localStorage
+  function getChannelBackground(channelId: string): string | null {
+    // Check cache first
+    if (channelBackgrounds.has(channelId)) {
+      return channelBackgrounds.get(channelId) || null;
+    }
+    
+    try {
+      const stored = localStorage.getItem(`channel_settings_${channelId}`);
+      if (stored) {
+        const settings = JSON.parse(stored);
+        const bgUrl = settings.background_url || '';
+        if (bgUrl.startsWith('http://') || bgUrl.startsWith('https://')) {
+          channelBackgrounds.set(channelId, bgUrl);
+          return bgUrl;
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+    channelBackgrounds.set(channelId, null);
+    return null;
+  }
+  
+  // Reload all channel backgrounds when settings version changes
+  $: if (channelSettingsVersion >= 0) {
+    channelBackgrounds = new Map(); // Clear cache to force reload
   }
 
   // Check if current user can edit channel (guild owner)
@@ -527,13 +560,19 @@
         {#if generalExpanded}
           <ul class="channel-items">
             {#each textChannels as channel}
+              {@const bgUrl = selectedChannelId === channel.id ? getChannelBackground(channel.id) : null}
               <li>
                 <button 
                   class="channel-btn"
                   class:active={selectedChannelId === channel.id}
+                  class:has-bg={bgUrl}
                   on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: 'text' })}
                   on:contextmenu={(e) => handleChannelContextMenu(e, channel)}
                 >
+                  {#if bgUrl}
+                    <img src={bgUrl} alt="" class="channel-bg-img" />
+                    <span class="channel-bg-overlay"></span>
+                  {/if}
                   <span class="channel-icon">#</span>
                   <span class="channel-name">{channel.name.toLowerCase()}</span>
                   {#if isAdmin}
@@ -575,14 +614,20 @@
         {#if voiceExpanded}
           <ul class="channel-items">
             {#each voiceChannels as channel}
+              {@const bgUrl = selectedChannelId === channel.id ? getChannelBackground(channel.id) : null}
               <li class="voice-item">
                 <button 
                   class="channel-btn voice"
                   class:active={selectedChannelId === channel.id}
+                  class:has-bg={bgUrl}
                   class:has-users={getVoiceUsers(channel.id, voiceUsersTrigger).length > 0}
                   on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: 'voice' })}
                   on:contextmenu={(e) => handleChannelContextMenu(e, channel)}
                 >
+                  {#if bgUrl}
+                    <img src={bgUrl} alt="" class="channel-bg-img" />
+                    <span class="channel-bg-overlay"></span>
+                  {/if}
                   <svg class="channel-icon voice-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
                     <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
@@ -907,6 +952,39 @@
     text-align: left;
     font-size: 14px;
     transition: all 0.15s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .channel-btn.has-bg {
+    color: #fff;
+  }
+
+  .channel-bg-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .channel-bg-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, rgba(5, 5, 5, 0.85) 0%, rgba(5, 5, 5, 0.6) 50%, rgba(5, 5, 5, 0.4) 100%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .channel-btn.has-bg .channel-icon,
+  .channel-btn.has-bg .channel-name,
+  .channel-btn.has-bg .delete-btn,
+  .channel-btn.has-bg .voice-icon,
+  .channel-btn.has-bg .voice-count {
+    position: relative;
+    z-index: 2;
   }
 
   .channel-btn:hover {

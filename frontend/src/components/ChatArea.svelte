@@ -23,6 +23,7 @@
   export let guildId: string | null = null;
   export let authToken: string = '';
   export let currentUser: User | null = null;
+  export let channelSettingsVersion: number = 0; // Triggers reload when settings change
 
   const dispatch = createEventDispatcher<{
     openGroupInfo: void;
@@ -39,6 +40,38 @@
   let ablyChannel: ReturnType<typeof subscribeToChannel> = null;
   let channel: Channel | null = null;
   let channelLoading = true;
+
+  // Channel custom settings (background, text color)
+  let channelSettings: { background_url?: string | null; text_color?: string } = {};
+  
+  // Load channel settings from localStorage
+  function loadChannelSettings(chId: string) {
+    try {
+      const stored = localStorage.getItem(`channel_settings_${chId}`);
+      if (stored) {
+        const settings = JSON.parse(stored);
+        // Only use URL if it's a valid http(s) URL, not a data URL
+        const bgUrl = settings.background_url || '';
+        if (bgUrl.startsWith('http://') || bgUrl.startsWith('https://')) {
+          channelSettings = {
+            background_url: bgUrl,
+            text_color: settings.text_color || '#ffffff'
+          };
+        } else {
+          channelSettings = { text_color: settings.text_color || '#ffffff' };
+        }
+      } else {
+        channelSettings = {};
+      }
+    } catch {
+      channelSettings = {};
+    }
+  }
+  
+  // Reactive: load settings when channelId or channelSettingsVersion changes
+  $: if (channelId || channelSettingsVersion) {
+    loadChannelSettings(channelId);
+  }
 
   // Giphy picker state
   let showGifPicker = false;
@@ -1396,7 +1429,14 @@
   <div class="bg-gradient"></div>
   
   <!-- Frosted Glass Header -->
-  <header class="chat-header">
+  <header 
+    class="chat-header" 
+    class:has-background={channelSettings.background_url}
+  >
+    {#if channelSettings.background_url}
+      <img src={channelSettings.background_url} alt="" class="header-bg-img" />
+    {/if}
+    <div class="header-overlay"></div>
     <div class="channel-info">
       <div class="channel-avatar">
         {#if channelLoading}
@@ -1419,27 +1459,6 @@
           <h2 class="channel-name">unknown channel</h2>
         {/if}
       </div>
-    </div>
-    <div class="header-actions">
-      <button class="header-btn" aria-label="Call">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M22 16.92V19.92C22 20.48 21.56 20.93 21 20.97C20.83 20.99 20.67 21 20.5 21C10.29 21 2 12.71 2 2.5C2 2.33 2.01 2.17 2.03 2C2.07 1.44 2.52 1 3.08 1H6.08C6.57 1 6.99 1.36 7.07 1.84C7.14 2.28 7.25 2.71 7.4 3.12C7.55 3.53 7.45 3.99 7.14 4.3L5.39 6.05C6.51 8.18 8.32 9.99 10.45 11.11L12.2 9.36C12.51 9.05 12.97 8.95 13.38 9.1C13.79 9.25 14.22 9.36 14.66 9.43C15.14 9.51 15.5 9.93 15.5 10.42V13.42"/>
-        </svg>
-      </button>
-      <button class="header-btn" aria-label="Search">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/>
-          <path d="M21 21L16.65 16.65"/>
-        </svg>
-      </button>
-      <button class="header-btn grid" aria-label="Grid view" on:click={() => dispatch('openGroupInfo')}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-        </svg>
-      </button>
     </div>
   </header>
 
@@ -1922,10 +1941,39 @@
     z-index: 10;
   }
 
+  .chat-header.has-background {
+    min-height: 80px;
+    padding: 16px 20px;
+  }
+
+  .header-bg-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .header-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, rgba(5, 5, 5, 0.85) 0%, rgba(5, 5, 5, 0.6) 50%, rgba(5, 5, 5, 0.4) 100%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .chat-header.has-background .header-overlay {
+    background: linear-gradient(to right, rgba(5, 5, 5, 0.9) 0%, rgba(5, 5, 5, 0.7) 40%, rgba(5, 5, 5, 0.3) 100%);
+  }
+
   .channel-info {
     display: flex;
     align-items: center;
     gap: 12px;
+    position: relative;
+    z-index: 2;
   }
 
   .channel-avatar {
@@ -1955,41 +2003,6 @@
     font-size: 12px;
     color: rgba(255, 255, 255, 0.4);
     text-transform: lowercase;
-  }
-
-  .header-actions {
-    display: flex;
-    gap: 6px;
-  }
-
-  .header-btn {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.03);
-    color: rgba(255, 255, 255, 0.5);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
-  }
-
-  .header-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.12);
-    color: #fff;
-  }
-
-  .header-btn.grid {
-    background: #fff;
-    border-color: #fff;
-    color: #050505;
-  }
-
-  .header-btn.grid:hover {
-    background: rgba(255, 255, 255, 0.9);
   }
 
   /* Messages Container */

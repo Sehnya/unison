@@ -55,6 +55,7 @@
   let guildToEdit: Guild | null = null;
   let showChannelSettingsModal = false;
   let channelToEdit: Channel | null = null;
+  let channelSettingsVersion = 0; // Increments when channel settings are saved to trigger ChatArea reload
   // Voice call state - separate from selected channel so call persists during navigation
   let activeVoiceCallChannelId: string | null = null;
   let activeVoiceCallChannelName: string | null = null;
@@ -533,6 +534,7 @@
           {currentUser}
           collapsed={channelListCollapsed}
           activeVoiceChannelId={activeVoiceCallChannelId}
+          {channelSettingsVersion}
           on:selectChannel={handleSelectChannel}
           on:selectGuild={(e) => handleSelectGuildFromChannelList(e.detail.guildId)}
           on:openChannelSettings={(e) => { channelToEdit = e.detail.channel; showChannelSettingsModal = true; }}
@@ -581,6 +583,7 @@
             guildId={selectedGuildId}
             {authToken}
             currentUser={currentUser}
+            {channelSettingsVersion}
             on:openGroupInfo={() => showGroupInfo = !showGroupInfo}
             on:viewUserProfile={handleViewUserProfile}
           />
@@ -661,7 +664,8 @@
         authToken={authToken || ''}
         on:close={() => { showChannelSettingsModal = false; channelToEdit = null; }}
         on:update={(e) => {
-          // Channel updated - could refresh channel list if needed
+          // Channel updated - increment version to trigger ChatArea to reload settings
+          channelSettingsVersion++;
           console.log('Channel updated:', e.detail.channel);
         }}
       />

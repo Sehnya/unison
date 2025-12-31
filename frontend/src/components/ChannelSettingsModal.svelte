@@ -19,8 +19,7 @@
   let textColor = '#ffffff';
   let saving = false;
   let error = '';
-
-  let backgroundInput: HTMLInputElement;
+  let initialized = false;
 
   // Preset colors for text
   const colorPresets = [
@@ -30,17 +29,36 @@
     '#f0abfc', '#fb7185'
   ];
 
-  // Initialize form when channel changes
-  $: if (channel && isOpen) {
+  // Initialize form when modal opens (only once per open)
+  $: if (channel && isOpen && !initialized) {
+    initializeForm();
+  }
+
+  // Reset initialized flag when modal closes
+  $: if (!isOpen) {
+    initialized = false;
+  }
+
+  function initializeForm() {
+    if (!channel) return;
+    
     name = channel.name || '';
     topic = channel.topic || '';
+    
     // Load custom settings from localStorage
     try {
       const stored = localStorage.getItem(`channel_settings_${channel.id}`);
       if (stored) {
         const settings = JSON.parse(stored);
-        backgroundUrl = settings.background_url || '';
-        backgroundPreview = settings.background_url || null;
+        // Only load URL if it's a valid http(s) URL, not a data URL
+        const storedBg = settings.background_url || '';
+        if (storedBg.startsWith('http://') || storedBg.startsWith('https://')) {
+          backgroundUrl = storedBg;
+          backgroundPreview = storedBg;
+        } else {
+          backgroundUrl = '';
+          backgroundPreview = null;
+        }
         textColor = settings.text_color || '#ffffff';
       } else {
         backgroundUrl = '';
@@ -53,25 +71,17 @@
       textColor = '#ffffff';
     }
     error = '';
+    initialized = true;
   }
 
-  function handleBackgroundUpload(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      error = 'please upload an image or gif file';
-      return;
+  function clearStoredSettings() {
+    if (channel) {
+      localStorage.removeItem(`channel_settings_${channel.id}`);
+      backgroundUrl = '';
+      backgroundPreview = null;
+      textColor = '#ffffff';
+      error = '';
     }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      backgroundPreview = base64;
-      backgroundUrl = base64;
-    };
-    reader.readAsDataURL(file);
   }
 
   function removeBackground() {
@@ -79,9 +89,17 @@
     backgroundUrl = '';
   }
 
-  function setBackgroundFromUrl() {
-    if (backgroundUrl.trim()) {
-      backgroundPreview = backgroundUrl.trim();
+  function applyBackgroundUrl() {
+    const url = backgroundUrl.trim();
+    if (url) {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        backgroundPreview = url;
+        error = '';
+      } else {
+        error = 'please enter a valid url (https://...)';
+      }
+    } else {
+      backgroundPreview = null;
     }
   }
 
@@ -89,6 +107,12 @@
     if (!channel || !authToken) return;
     if (!name.trim()) {
       error = 'channel name is required';
+      return;
+    }
+
+    const bgUrl = backgroundUrl.trim();
+    if (bgUrl && !bgUrl.startsWith('http://') && !bgUrl.startsWith('https://')) {
+      error = 'background must be a valid url';
       return;
     }
 
@@ -116,12 +140,16 @@
       }
 
       const data = await response.json();
-      // Store custom settings in localStorage for now (until backend supports it)
       const customSettings = {
-        background_url: backgroundUrl || null,
+        background_url: bgUrl || null,
         text_color: textColor
       };
-      localStorage.setItem(`channel_settings_${channel.id}`, JSON.stringify(customSettings));
+      
+      try {
+        localStorage.setItem(`channel_settings_${channel.id}`, JSON.stringify(customSettings));
+      } catch (storageError) {
+        console.warn('Failed to save channel settings:', storageError);
+      }
       
       dispatch('update', { channel: { ...data.channel, settings: customSettings } });
       dispatch('close');
@@ -154,7 +182,6 @@
       </header>
 
       <div class="modal-content">
-        <!-- Name Section -->
         <section class="section">
           <label class="section-label" for="channel-name">channel name</label>
           <input 
@@ -166,7 +193,6 @@
           />
         </section>
 
-        <!-- Topic Section -->
         <section class="section">
           <label class="section-label" for="channel-topic">topic</label>
           <input 
@@ -178,9 +204,8 @@
           />
         </section>
 
-        <!-- Background Section -->
         <section class="section">
-          <label class="section-label">background image / gif</label>
+          <label class="section-label">background image / gif url</label>
           <div class="background-preview" class:has-bg={backgroundPreview}>
             {#if backgroundPreview}
               <img src={backgroundPreview} alt="Channel background" />
@@ -192,31 +217,24 @@
                   <circle cx="8.5" cy="8.5" r="1.5"/>
                   <path d="M21 15l-5-5L5 21"/>
                 </svg>
-                <span>add background</span>
+                <span>paste a url below</span>
               </div>
             {/if}
-            <input type="file" bind:this={backgroundInput} on:change={handleBackgroundUpload} accept="image/*,.gif" class="hidden" />
           </div>
-          <div class="bg-actions">
-            <button class="btn-secondary small" on:click={() => backgroundInput?.click()}>
-              upload file
+          <div class="url-input-row">
+            <input 
+              type="text" 
+              bind:value={backgroundUrl}
+              placeholder="https://example.com/image.gif"
+              class="url-input"
+            />
+            <button class="btn-secondary small" on:click={applyBackgroundUrl}>
+              preview
             </button>
-            <span class="or-text">or</span>
-            <div class="url-input-row">
-              <input 
-                type="text" 
-                bind:value={backgroundUrl}
-                placeholder="paste image/gif url"
-                class="url-input"
-              />
-              <button class="btn-secondary small" on:click={setBackgroundFromUrl}>
-                apply
-              </button>
-            </div>
           </div>
+          <p class="hint">use a direct link to an image or gif (tenor, giphy, imgur, etc.)</p>
         </section>
 
-        <!-- Text Color Section -->
         <section class="section">
           <label class="section-label">text color</label>
           <div class="color-preview-row">
@@ -247,6 +265,10 @@
         {#if error}
           <div class="error-message">{error}</div>
         {/if}
+
+        <button class="btn-text-danger" on:click={clearStoredSettings}>
+          reset all customizations
+        </button>
       </div>
 
       <footer class="modal-footer">
@@ -353,7 +375,7 @@
     margin-bottom: 10px;
   }
 
-  input[type="text"], textarea {
+  input[type="text"] {
     width: 100%;
     padding: 12px 14px;
     background: rgba(255, 255, 255, 0.04);
@@ -426,29 +448,21 @@
     background: rgba(239, 68, 68, 0.8);
   }
 
-  .bg-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .or-text {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.3);
-  }
-
   .url-input-row {
     display: flex;
     gap: 8px;
-    flex: 1;
-    min-width: 200px;
   }
 
   .url-input {
     flex: 1;
-    padding: 8px 12px !important;
-    font-size: 12px !important;
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+  }
+
+  .hint {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.3);
   }
 
   .color-preview-row {
@@ -502,10 +516,6 @@
     border: 1px solid rgba(255, 255, 255, 0.06);
     font-size: 14px;
     text-align: center;
-  }
-
-  .hidden {
-    display: none;
   }
 
   .error-message {
@@ -563,7 +573,25 @@
   }
 
   .btn-secondary.small {
-    padding: 8px 12px;
+    padding: 10px 14px;
     font-size: 12px;
+  }
+
+  .btn-text-danger {
+    width: 100%;
+    padding: 10px;
+    background: none;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 8px;
+    color: rgba(239, 68, 68, 0.7);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 8px;
+  }
+
+  .btn-text-danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
   }
 </style>
