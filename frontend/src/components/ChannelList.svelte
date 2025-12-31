@@ -544,38 +544,6 @@
     {/if}
   </div>
 
-  <!-- Voice Status Bar -->
-  <div class="voice-status">
-    <div class="voice-info">
-      <div class="voice-status-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
-          <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
-          <path d="M12 19V23M8 23H16"/>
-        </svg>
-      </div>
-      <div class="voice-details">
-        <span class="voice-label">Voice Connected</span>
-        <span class="voice-channel">UI/UX - Society</span>
-      </div>
-    </div>
-    <div class="voice-controls">
-      <button class="voice-btn" aria-label="Mute">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
-          <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
-          <line x1="1" y1="1" x2="23" y2="23"/>
-        </svg>
-      </button>
-      <button class="voice-btn" aria-label="Deafen">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 18V12C3 7.03 7.03 3 12 3C16.97 3 21 7.03 21 12V18"/>
-          <path d="M21 19C21 19.53 20.79 20.04 20.41 20.41C20.04 20.79 19.53 21 19 21H18C17.47 21 16.96 20.79 16.59 20.41C16.21 20.04 16 19.53 16 19V16C16 15.47 16.21 14.96 16.59 14.59C16.96 14.21 17.47 14 18 14H21V19Z"/>
-          <path d="M3 19C3 19.53 3.21 20.04 3.59 20.41C3.96 20.79 4.47 21 5 21H6C6.53 21 7.04 20.79 7.41 20.41C7.79 20.04 8 19.53 8 19V16C8 15.47 7.79 14.96 7.41 14.59C7.04 14.21 6.53 14 6 14H3V19Z"/>
-        </svg>
-      </button>
-    </div>
-  </div>
 </aside>
 
 <!-- Create Channel Modal -->
@@ -1019,66 +987,5 @@
   .icon-hash {
     font-size: 18px;
     font-weight: 600;
-  }
-
-  /* Voice Status Bar */
-  .voice-status {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    background: rgba(10, 10, 20, 0.8);
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    margin-top: auto;
-  }
-
-  .voice-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .voice-status-icon {
-    color: #22c55e;
-  }
-
-  .voice-details {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .voice-label {
-    font-size: 13px;
-    font-weight: 500;
-    color: #fff;
-  }
-
-  .voice-channel {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.45);
-  }
-
-  .voice-controls {
-    display: flex;
-    gap: 8px;
-  }
-
-  .voice-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.7);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
-  }
-
-  .voice-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: #fff;
   }
 </style>

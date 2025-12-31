@@ -47,18 +47,29 @@ export class RedisCache {
     this.defaultTTL = options.defaultTTL || 300; // 5 minutes default
 
     this.client.on('connect', () => {
+      console.log('🔄 Redis connecting...');
+    });
+
+    this.client.on('ready', () => {
       this.connected = true;
-      console.log('✓ Redis connected');
+      console.log('✓ Redis connected and ready');
+      console.log(`  └─ Host: ${this.client.options.host || 'from URL'}`);
+      console.log(`  └─ Key prefix: ${this.keyPrefix}`);
+      console.log(`  └─ Default TTL: ${this.defaultTTL}s`);
     });
 
     this.client.on('error', (err: Error) => {
-      console.error('Redis error:', err.message);
+      console.error('✗ Redis error:', err.message);
       this.connected = false;
     });
 
     this.client.on('close', () => {
       this.connected = false;
-      console.log('Redis connection closed');
+      console.log('⚠️  Redis connection closed');
+    });
+
+    this.client.on('reconnecting', () => {
+      console.log('🔄 Redis reconnecting...');
     });
   }
 
@@ -88,7 +99,10 @@ export class RedisCache {
     messages: MessageCache[],
     ttl?: number
   ): Promise<void> {
-    if (!this.connected) return;
+    if (!this.connected) {
+      console.log('⚠️  Redis not connected, skipping cache write');
+      return;
+    }
 
     try {
       const key = this.key(['channel', channelId, 'messages']);
@@ -97,6 +111,7 @@ export class RedisCache {
         cachedAt: Date.now(),
       };
       await this.client.setex(key, ttl || this.defaultTTL, JSON.stringify(data));
+      console.log(`📦 Cached ${messages.length} messages for channel ${channelId} (TTL: ${ttl || this.defaultTTL}s)`);
     } catch (err) {
       console.warn('Failed to cache messages:', err);
     }
@@ -106,14 +121,22 @@ export class RedisCache {
    * Get cached messages for a channel
    */
   async getChannelMessages(channelId: string): Promise<MessageCache[] | null> {
-    if (!this.connected) return null;
+    if (!this.connected) {
+      console.log('⚠️  Redis not connected, cache miss');
+      return null;
+    }
 
     try {
       const key = this.key(['channel', channelId, 'messages']);
       const data = await this.client.get(key);
-      if (!data) return null;
+      if (!data) {
+        console.log(`📭 Cache MISS for channel ${channelId} messages`);
+        return null;
+      }
 
       const parsed: ChannelMessagesCache = JSON.parse(data);
+      const age = Math.round((Date.now() - parsed.cachedAt) / 1000);
+      console.log(`📬 Cache HIT for channel ${channelId} (${parsed.messages.length} messages, ${age}s old)`);
       return parsed.messages;
     } catch (err) {
       console.warn('Failed to get cached messages:', err);
@@ -147,6 +170,7 @@ export class RedisCache {
         // Add new message and keep only last 50
         const updated = [...existing, message].slice(-50);
         await this.cacheChannelMessages(channelId, updated);
+        console.log(`➕ Added message ${message.id} to channel ${channelId} cache`);
       }
     } catch (err) {
       console.warn('Failed to add message to cache:', err);
@@ -210,6 +234,7 @@ export class RedisCache {
     try {
       const key = this.key(['user', userId]);
       await this.client.setex(key, ttl || 600, JSON.stringify(userData)); // 10 min default for users
+      console.log(`👤 Cached user ${userData.username} (${userId})`);
     } catch (err) {
       console.warn('Failed to cache user:', err);
     }
@@ -224,7 +249,11 @@ export class RedisCache {
     try {
       const key = this.key(['user', userId]);
       const data = await this.client.get(key);
-      if (!data) return null;
+      if (!data) {
+        console.log(`👤 User cache MISS for ${userId}`);
+        return null;
+      }
+      console.log(`👤 User cache HIT for ${userId}`);
       return JSON.parse(data);
     } catch (err) {
       console.warn('Failed to get cached user:', err);
