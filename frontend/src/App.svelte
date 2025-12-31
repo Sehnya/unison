@@ -284,6 +284,30 @@
     }
   }
 
+  function handleLogout() {
+    // Clear all auth state
+    authToken = null;
+    currentUser = null;
+    guilds = [];
+    selectedGuildId = null;
+    selectedChannelId = null;
+    selectedChannelType = null;
+    selectedChannelName = null;
+    showSettings = false;
+    showUserProfile = false;
+    selectedDMId = null;
+    selectedDMUser = null;
+    viewedUser = null;
+    
+    // Disconnect from voice if active
+    if (activeVoiceCallChannelId) {
+      handleVoiceDisconnect();
+    }
+    
+    // Navigate to home
+    navigateToHome();
+  }
+
   function handleSelectGuildFromChannelList(guildId: string) {
     selectedGuildId = guildId;
     selectedChannelId = null;
@@ -580,6 +604,7 @@
           authToken={authToken || ''}
           on:close={() => { showSettings = false; selectedSection = 'main'; }}
           on:updateUser={handleUpdateUser}
+          on:logout={handleLogout}
         />
       {/if}
       

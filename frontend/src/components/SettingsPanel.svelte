@@ -3,6 +3,8 @@
   import type { User } from '../types';
   import Avatar from './Avatar.svelte';
   import { apiUrl } from '../lib/api';
+  import { authStorage } from '../utils/storage';
+  import { closeAbly } from '../lib/ably';
 
   export let user: User | null = null;
   export let authToken: string = '';
@@ -10,6 +12,7 @@
   const dispatch = createEventDispatcher<{
     close: void;
     updateUser: { user: Partial<User> };
+    logout: void;
   }>();
 
   type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline';
@@ -170,6 +173,27 @@
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') dispatch('close');
+  }
+
+  async function handleLogout() {
+    try {
+      // Call logout API to invalidate session
+      if (authToken) {
+        await fetch(apiUrl('/api/auth/logout'), {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Logout API error:', error);
+    } finally {
+      // Always clear local state regardless of API result
+      authStorage.remove();
+      closeAbly();
+      dispatch('logout');
+    }
   }
 </script>
 
@@ -343,6 +367,18 @@
               <span class="danger-desc">permanently remove your account and all data</span>
             </div>
             <button class="btn-danger">delete</button>
+          </div>
+        </section>
+
+        <!-- Logout Section -->
+        <section class="section">
+          <div class="section-label">session</div>
+          <div class="logout-card">
+            <div class="logout-info">
+              <span class="logout-title">log out</span>
+              <span class="logout-desc">sign out of your account on this device</span>
+            </div>
+            <button class="btn-logout" on:click={handleLogout}>log out</button>
           </div>
         </section>
 
@@ -932,6 +968,50 @@
 
   .btn-danger:hover {
     background: rgba(239, 68, 68, 0.25);
+  }
+
+  /* Logout Section */
+  .logout-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+  }
+
+  .logout-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .logout-title {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .logout-desc {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .btn-logout {
+    padding: 10px 18px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-logout:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
   }
 
   /* Footer */
