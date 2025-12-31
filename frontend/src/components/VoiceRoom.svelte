@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { Room, RoomEvent, RemoteParticipant, LocalParticipant, TrackPublication, Track, ConnectionQuality, VideoPresets } from 'livekit-client';
   import { KrispNoiseFilter } from '@livekit/krisp-noise-filter';
   import type { User } from '../types';
@@ -12,6 +12,12 @@
   export let authToken: string;
   export let currentUser: User | null = null;
   export let onDisconnect: () => void = () => {};
+  export let hidden: boolean = false; // When true, component is mounted but not visible
+
+  const dispatch = createEventDispatcher<{
+    muteChange: { isMuted: boolean };
+    deafenChange: { isDeafened: boolean };
+  }>();
 
   let room: Room | null = null;
   let isConnected = false;
@@ -37,8 +43,35 @@
   let localVideoElement: HTMLVideoElement | null = null;
   let screenShareElement: HTMLVideoElement | null = null;
   
+  // Video resolution options
+  type VideoResolution = '4k' | '1080p' | '720p';
+  let selectedResolution: VideoResolution = '1080p';
+  
+  const resolutionPresets: Record<VideoResolution, { width: number; height: number; frameRate: number; bitrate: number }> = {
+    '4k': { width: 3840, height: 2160, frameRate: 30, bitrate: 8_000_000 },
+    '1080p': { width: 1920, height: 1080, frameRate: 30, bitrate: 3_000_000 },
+    '720p': { width: 1280, height: 720, frameRate: 30, bitrate: 1_500_000 },
+  };
+  
   // Ably presence channel
   let ablyPresenceChannel: any = null;
+  
+  // Expose methods for external control
+  export function setMuted(muted: boolean) {
+    if (muted !== isMuted) {
+      toggleMute();
+    }
+  }
+  
+  export function setDeafened(deafened: boolean) {
+    if (deafened !== isDeafened) {
+      toggleDeafen();
+    }
+  }
+  
+  export function getState() {
+    return { isMuted, isDeafened, isConnected };
+  }
 
   // Participant display data
   interface ParticipantDisplay {
@@ -109,6 +142,8 @@
 
       const { token, wsUrl } = await response.json();
 
+      const currentPreset = resolutionPresets[selectedResolution];
+      
       room = new Room({
         adaptiveStream: true,
         dynacast: true,
@@ -123,12 +158,22 @@
           deviceId: 'default',
         },
         videoCaptureDefaults: {
-          resolution: VideoPresets.h720.resolution,
+          resolution: {
+            width: currentPreset.width,
+            height: currentPreset.height,
+            frameRate: currentPreset.frameRate,
+          },
         },
         publishDefaults: {
           audioPreset: {
             maxBitrate: 128_000, // 128 kbps for high quality audio
           },
+          videoCodec: 'vp9', // Better quality codec
+          videoSimulcastLayers: [
+            { width: 640, height: 360, bitrate: 500_000, suffix: 'q' },
+            { width: 1280, height: 720, bitrate: 1_500_000, suffix: 'h' },
+            { width: currentPreset.width, height: currentPreset.height, bitrate: currentPreset.bitrate, suffix: 'f' },
+          ],
           dtx: true, // Discontinuous transmission - saves bandwidth when not speaking
           red: true, // Redundant encoding for packet loss resilience
         },
@@ -172,7 +217,7 @@
 
     room.on(RoomEvent.TrackUnsubscribed, (track: Track) => {
       const elements = track.detach();
-      elements.forEach((el) => el.parentNode?.removeChild(el));
+      elements.forEach((el: any) => el.parentNode?.removeChild(el));
       updateParticipantDisplays();
     });
 
@@ -202,8 +247,10 @@
 
     if (room.localParticipant) {
       const lp = room.localParticipant;
-      const videoTrack = Array.from(lp.videoTrackPublications.values()).find(p => p.source === Track.Source.Camera)?.track;
-      const screenTrack = Array.from(lp.videoTrackPublications.values()).find(p => p.source === Track.Source.ScreenShare)?.track;
+      const videoPub = Array.from(lp.videoTrackPublications.values()).find((p: any) => p.source === Track.Source.Camera);
+      const screenPub = Array.from(lp.videoTrackPublications.values()).find((p: any) => p.source === Track.Source.ScreenShare);
+      const videoTrack = (videoPub as any)?.track;
+      const screenTrack = (screenPub as any)?.track;
       
       displays.push({
         id: lp.identity,
@@ -219,9 +266,11 @@
       });
     }
 
-    room.remoteParticipants.forEach((participant) => {
-      const videoTrack = Array.from(participant.videoTrackPublications.values()).find(p => p.source === Track.Source.Camera)?.track;
-      const screenTrack = Array.from(participant.videoTrackPublications.values()).find(p => p.source === Track.Source.ScreenShare)?.track;
+    room.remoteParticipants.forEach((participant: any) => {
+      const videoPub = Array.from(participant.videoTrackPublications.values()).find((p: any) => p.source === Track.Source.Camera);
+      const screenPub = Array.from(participant.videoTrackPublications.values()).find((p: any) => p.source === Track.Source.ScreenShare);
+      const videoTrack = (videoPub as any)?.track;
+      const screenTrack = (screenPub as any)?.track;
       const audioPub = participant.audioTrackPublications.values().next().value;
       
       displays.push({
@@ -306,6 +355,7 @@
     try {
       isMuted = !isMuted;
       await room.localParticipant.setMicrophoneEnabled(!isMuted);
+      dispatch('muteChange', { isMuted });
       updateParticipantDisplays();
     } catch (err) {
       console.error('Failed to toggle mute:', err);
@@ -320,10 +370,12 @@
       if (isDeafened) {
         await room.localParticipant.setMicrophoneEnabled(false);
         isMuted = true;
+        dispatch('muteChange', { isMuted });
       }
       document.querySelectorAll('audio').forEach((el) => {
         el.muted = isDeafened;
       });
+      dispatch('deafenChange', { isDeafened });
       updateParticipantDisplays();
     } catch (err) {
       console.error('Failed to toggle deafen:', err);
@@ -335,12 +387,46 @@
     if (!room) return;
     try {
       isVideoEnabled = !isVideoEnabled;
-      await room.localParticipant.setCameraEnabled(isVideoEnabled);
+      if (isVideoEnabled) {
+        const currentPreset = resolutionPresets[selectedResolution];
+        await room.localParticipant.setCameraEnabled(true, {
+          resolution: {
+            width: currentPreset.width,
+            height: currentPreset.height,
+            frameRate: currentPreset.frameRate,
+          },
+        });
+      } else {
+        await room.localParticipant.setCameraEnabled(false);
+      }
       updateParticipantDisplays();
     } catch (err) {
       console.error('Failed to toggle video:', err);
       isVideoEnabled = !isVideoEnabled;
       error = 'Failed to enable camera. Please check permissions.';
+    }
+  }
+
+  async function changeResolution(newResolution: VideoResolution) {
+    if (selectedResolution === newResolution) return;
+    selectedResolution = newResolution;
+    
+    // If video is currently enabled, restart with new resolution
+    if (room && isVideoEnabled) {
+      try {
+        const currentPreset = resolutionPresets[selectedResolution];
+        await room.localParticipant.setCameraEnabled(false);
+        await room.localParticipant.setCameraEnabled(true, {
+          resolution: {
+            width: currentPreset.width,
+            height: currentPreset.height,
+            frameRate: currentPreset.frameRate,
+          },
+        });
+        updateParticipantDisplays();
+      } catch (err) {
+        console.error('Failed to change resolution:', err);
+      }
     }
   }
 
@@ -403,7 +489,7 @@
   onDestroy(() => disconnect());
 </script>
 
-<div class="voice-room">
+<div class="voice-room" class:hidden>
   <!-- Header -->
   <header class="voice-header">
     <div class="channel-info">
@@ -493,6 +579,42 @@
           </button>
         </div>
         <span class="settings-hint">AI-powered noise removal for crystal-clear audio</span>
+      </div>
+      
+      <!-- Video Resolution Selector -->
+      <div class="settings-section">
+        <span class="settings-label">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+          Video Quality
+        </span>
+        <div class="resolution-selector">
+          <button 
+            class="resolution-btn" 
+            class:active={selectedResolution === '720p'}
+            on:click={() => changeResolution('720p')}
+          >
+            720p
+          </button>
+          <button 
+            class="resolution-btn" 
+            class:active={selectedResolution === '1080p'}
+            on:click={() => changeResolution('1080p')}
+          >
+            1080p
+          </button>
+          <button 
+            class="resolution-btn" 
+            class:active={selectedResolution === '4k'}
+            on:click={() => changeResolution('4k')}
+          >
+            4K
+          </button>
+        </div>
+        <span class="settings-hint">Higher quality uses more bandwidth</span>
       </div>
     </div>
   {/if}
@@ -722,21 +844,58 @@
   </footer>
 </div>
 
-<!-- Video attachment action - removed dummy element -->
+<!-- Video attachment action - improved to prevent flickering -->
 
 <script context="module" lang="ts">
-  function attachVideo(node: HTMLVideoElement, track: Track | undefined) {
-    if (track) {
+  // Track cache to prevent re-attaching the same track
+  const attachedTracks = new WeakMap<HTMLVideoElement, any>();
+  
+  function attachVideo(node: HTMLVideoElement, track: any | undefined) {
+    // Prevent flickering by checking if track is already attached
+    if (track && attachedTracks.get(node) !== track) {
+      // Set video element properties to reduce flickering
+      node.style.opacity = '0';
+      node.style.transition = 'opacity 0.15s ease-in-out';
+      
       track.attach(node);
+      attachedTracks.set(node, track);
+      
+      // Fade in after track is attached
+      requestAnimationFrame(() => {
+        node.style.opacity = '1';
+      });
     }
+    
     return {
-      update(newTrack: Track | undefined) {
-        if (track) track.detach(node);
-        if (newTrack) newTrack.attach(node);
-        track = newTrack;
+      update(newTrack: any | undefined) {
+        const currentTrack = attachedTracks.get(node);
+        
+        // Only update if track actually changed
+        if (currentTrack === newTrack) return;
+        
+        if (currentTrack) {
+          currentTrack.detach(node);
+        }
+        
+        if (newTrack) {
+          // Smooth transition
+          node.style.opacity = '0';
+          newTrack.attach(node);
+          attachedTracks.set(node, newTrack);
+          
+          requestAnimationFrame(() => {
+            node.style.opacity = '1';
+          });
+        } else {
+          attachedTracks.delete(node);
+        }
       },
       destroy() {
-        if (track) track.detach(node);
+        const currentTrack = attachedTracks.get(node);
+        if (currentTrack) {
+          currentTrack.detach(node);
+          attachedTracks.delete(node);
+        }
       }
     };
   }
@@ -750,6 +909,12 @@
     background: linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%);
     color: #fff;
     flex: 1;
+  }
+  
+  .voice-room.hidden {
+    position: absolute;
+    left: -9999px;
+    visibility: hidden;
   }
 
   /* Header */
@@ -950,6 +1115,38 @@
     border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
+  /* Resolution Selector */
+  .resolution-selector {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .resolution-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .resolution-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #fff;
+  }
+
+  .resolution-btn.active {
+    background: rgba(49, 130, 206, 0.2);
+    border-color: #3182ce;
+    color: #63b3ed;
+  }
+
   /* Error Banner */
   .error-banner {
     display: flex;
@@ -1069,6 +1266,10 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    background: #000;
+    /* Prevent flickering during track changes */
+    transition: opacity 0.15s ease-in-out;
+    will-change: opacity;
   }
 
   .participant-avatar-wrapper {

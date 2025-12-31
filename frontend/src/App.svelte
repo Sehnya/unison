@@ -6,6 +6,7 @@
   import ChannelList from './components/ChannelList.svelte';
   import ChatArea from './components/ChatArea.svelte';
   import VoiceRoom from './components/VoiceRoom.svelte';
+  import VoiceMiniPlayer from './components/VoiceMiniPlayer.svelte';
   import GroupInfo from './components/GroupInfo.svelte';
   import UserProfile from './components/UserProfile.svelte';
   import SettingsPanel from './components/SettingsPanel.svelte';
@@ -44,23 +45,74 @@
   let showBetaModal = false;
   let showProfileSetup = false;
   let viewedUser: User | null = null; // User being viewed (when clicking on someone's name in chat)
+  
+  // Voice call state - separate from selected channel so call persists during navigation
+  let activeVoiceCallChannelId: string | null = null;
+  let activeVoiceCallChannelName: string | null = null;
+  let activeVoiceCallGuildId: string | null = null;
+  
+  // Voice call UI state (controlled from VoiceRoom or MiniPlayer)
+  let voiceIsMuted: boolean = false;
+  let voiceIsDeafened: boolean = false;
+  let voiceRoomRef: VoiceRoom | null = null;
+  
+  // Computed: is user viewing the active voice call channel?
+  $: isViewingVoiceCall = selectedChannelId === activeVoiceCallChannelId && selectedChannelType === 'voice';
+  $: hasActiveVoiceCall = activeVoiceCallChannelId !== null;
+  
+  // Handle disconnecting from voice call
+  function handleVoiceDisconnect() {
+    activeVoiceCallChannelId = null;
+    activeVoiceCallChannelName = null;
+    activeVoiceCallGuildId = null;
+    voiceIsMuted = false;
+    voiceIsDeafened = false;
+  }
+  
+  // Navigate back to the voice channel
+  function expandVoiceCall() {
+    if (activeVoiceCallChannelId && activeVoiceCallGuildId) {
+      selectedGuildId = activeVoiceCallGuildId;
+      selectedChannelId = activeVoiceCallChannelId;
+      selectedChannelType = 'voice';
+      selectedChannelName = activeVoiceCallChannelName;
+    }
+  }
+  
+  // Toggle mute from mini player
+  function handleMiniPlayerToggleMute() {
+    voiceIsMuted = !voiceIsMuted;
+    if (voiceRoomRef) {
+      voiceRoomRef.setMuted(voiceIsMuted);
+    }
+  }
+  
+  // Toggle deafen from mini player
+  function handleMiniPlayerToggleDeafen() {
+    voiceIsDeafened = !voiceIsDeafened;
+    if (voiceIsDeafened) voiceIsMuted = true;
+    if (voiceRoomRef) {
+      voiceRoomRef.setDeafened(voiceIsDeafened);
+    }
+  }
 
   $: isAuthenticated = authToken !== null;
   $: showBetaModal = !!(isAuthenticated && currentUser && !currentUser.terms_accepted_at);
   // Profile setup is now optional - users can set it up later via settings
   $: showProfileSetup = false;
 
-  function handleAuthenticated(event: CustomEvent<{ token: string; user?: User }>) {
+  function handleAuthenticated(event: CustomEvent<{ token: string; user?: unknown }>) {
     authToken = event.detail.token;
     authStorage.set(authToken);
     if (event.detail.user) {
-      currentUser = event.detail.user;
+      currentUser = event.detail.user as User;
       // Initialize Ably with user information
       try {
+        const user = event.detail.user as User;
         initAblyWithUser(
-          event.detail.user.id,
-          event.detail.user.username,
-          event.detail.user.avatar || null
+          user.id,
+          user.username,
+          user.avatar || null
         );
       } catch (error) {
         console.warn('Failed to initialize Ably with user:', error);
@@ -95,6 +147,13 @@
       } catch (err) {
         console.error('Failed to fetch channel details:', err);
       }
+    }
+    
+    // If clicking a voice channel, start/join the call
+    if (selectedChannelType === 'voice' && selectedChannelId) {
+      activeVoiceCallChannelId = selectedChannelId;
+      activeVoiceCallChannelName = selectedChannelName;
+      activeVoiceCallGuildId = selectedGuildId;
     }
     
     // Update URL
@@ -439,7 +498,7 @@
           {guilds}
           {currentUser}
           collapsed={channelListCollapsed}
-          activeVoiceChannelId={selectedChannelType === 'voice' ? selectedChannelId : null}
+          activeVoiceChannelId={activeVoiceCallChannelId}
           on:selectChannel={handleSelectChannel}
           on:selectGuild={(e) => handleSelectGuildFromChannelList(e.detail.guildId)}
         />
@@ -468,13 +527,18 @@
           on:close={closeDM}
         />
       {:else if selectedChannelId}
-        {#if selectedChannelType === 'voice'}
+        {#if selectedChannelType === 'voice' && isViewingVoiceCall}
+          <!-- Show VoiceRoom in main area when viewing the active call -->
           <VoiceRoom 
-            channelId={selectedChannelId}
-            channelName={selectedChannelName || 'Voice Channel'}
+            bind:this={voiceRoomRef}
+            channelId={activeVoiceCallChannelId || selectedChannelId}
+            channelName={activeVoiceCallChannelName || selectedChannelName || 'Voice Channel'}
             {authToken}
             currentUser={currentUser}
-            onDisconnect={() => { selectedChannelId = null; selectedChannelType = null; }}
+            hidden={false}
+            onDisconnect={handleVoiceDisconnect}
+            on:muteChange={(e) => voiceIsMuted = e.detail.isMuted}
+            on:deafenChange={(e) => voiceIsDeafened = e.detail.isDeafened}
           />
         {:else}
           <ChatArea 
@@ -535,6 +599,36 @@
           on:completed={handleProfileSetupCompleted}
         />
       {/if}
+      
+      <!-- Hidden VoiceRoom that persists when navigating away -->
+      {#if hasActiveVoiceCall && !isViewingVoiceCall}
+        <VoiceRoom 
+          bind:this={voiceRoomRef}
+          channelId={activeVoiceCallChannelId || ''}
+          channelName={activeVoiceCallChannelName || 'Voice Channel'}
+          {authToken}
+          currentUser={currentUser}
+          hidden={true}
+          onDisconnect={handleVoiceDisconnect}
+          on:muteChange={(e) => voiceIsMuted = e.detail.isMuted}
+          on:deafenChange={(e) => voiceIsDeafened = e.detail.isDeafened}
+        />
+      {/if}
+
+      <!-- Voice Mini Player (shows when in call but viewing other content) -->
+      {#if hasActiveVoiceCall && !isViewingVoiceCall}
+        <div class="voice-mini-player-container">
+          <VoiceMiniPlayer 
+            channelName={activeVoiceCallChannelName || 'Voice Channel'}
+            isMuted={voiceIsMuted}
+            isDeafened={voiceIsDeafened}
+            on:toggleMute={handleMiniPlayerToggleMute}
+            on:toggleDeafen={handleMiniPlayerToggleDeafen}
+            on:disconnect={handleVoiceDisconnect}
+            on:expand={expandVoiceCall}
+          />
+        </div>
+      {/if}
 
       <!-- Global Music Player -->
       <MiniPlayer />
@@ -577,6 +671,18 @@
 
   .app-layout.has-player {
     padding-bottom: 72px; /* Space for mini player */
+  }
+  
+  .voice-mini-player-container {
+    position: fixed;
+    bottom: 72px; /* Above the music mini player */
+    left: 72px; /* After the sidebar */
+    width: 280px; /* Same width as channel list */
+    z-index: 100;
+  }
+  
+  .app-layout:not(.has-player) .voice-mini-player-container {
+    bottom: 0;
   }
 
   .auth-container {
