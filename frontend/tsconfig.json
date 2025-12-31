@@ -10,8 +10,10 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "strict": true,
-    "noEmit": true
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.svelte"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

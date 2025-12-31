@@ -18,6 +18,7 @@ import {
   createRoleRoutes,
   createEmojiRoutes,
   createReactionRoutes,
+  createDocumentRoutes,
   type AuthServiceInterface,
   type GuildServiceInterface,
   type ChannelServiceInterface,
@@ -171,6 +172,14 @@ export function createApiServer(config: ApiServerConfig): Express {
     });
     app.use('/api/channels/:channel_id/messages/:message_id/reactions', reactionRoutes);
     app.use('/channels/:channel_id/messages/:message_id/reactions', reactionRoutes);
+
+    // Document routes (for document channels)
+    const documentRoutes = createDocumentRoutes({
+      pool: config.pool,
+      validateToken: config.validateToken,
+    });
+    app.use('/api/channels/:channel_id/document', documentRoutes);
+    app.use('/channels/:channel_id/document', documentRoutes);
   }
 
   // Role routes (includes /guilds/:guild_id/roles and /channels/:channel_id/overwrites)

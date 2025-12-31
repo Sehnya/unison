@@ -119,6 +119,7 @@ async function main() {
     messagingService,
     permissionsService,
     livekitService,
+    pool,
     validateToken,
   });
 

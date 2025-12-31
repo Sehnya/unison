@@ -16,6 +16,7 @@
   import BetaWelcomeModal from './components/BetaWelcomeModal.svelte';
   import ProfileSetupModal from './components/ProfileSetupModal.svelte';
   import MiniPlayer from './components/MiniPlayer.svelte';
+  import CollaborativeEditor from './components/CollaborativeEditor.svelte';
   import type { User, Guild } from './types';
   import { authStorage } from './utils/storage';
   import { hasPlaylist } from './lib/musicStore';
@@ -30,7 +31,7 @@
   let showGroupInfo: boolean = false;
   let selectedGuildId: string | null = null;
   let selectedChannelId: string | null = null;
-  let selectedChannelType: 'text' | 'voice' | null = null;
+  let selectedChannelType: 'text' | 'voice' | 'document' | null = null;
   let selectedChannelName: string | null = null;
   let currentUser: User | null = null;
   let guilds: Guild[] = [];
@@ -121,7 +122,7 @@
     loadUserData();
   }
 
-  async function handleSelectChannel(event: CustomEvent<{ channelId: string; channelType?: 'text' | 'voice' }>) {
+  async function handleSelectChannel(event: CustomEvent<{ channelId: string; channelType?: 'text' | 'voice' | 'document' }>) {
     selectedChannelId = event.detail.channelId;
     selectedChannelType = event.detail.channelType || null;
     showUserProfile = false;
@@ -141,7 +142,7 @@
           selectedChannelName = data.channel?.name || null;
           // Use type from API if not provided
           if (!selectedChannelType && data.channel?.type !== undefined) {
-            selectedChannelType = data.channel.type === 2 ? 'voice' : 'text';
+            selectedChannelType = data.channel.type === 2 ? 'voice' : data.channel.type === 3 ? 'document' : 'text';
           }
         }
       } catch (err) {
@@ -539,6 +540,14 @@
             onDisconnect={handleVoiceDisconnect}
             on:muteChange={(e) => voiceIsMuted = e.detail.isMuted}
             on:deafenChange={(e) => voiceIsDeafened = e.detail.isDeafened}
+          />
+        {:else if selectedChannelType === 'document'}
+          <!-- Show CollaborativeEditor for document channels -->
+          <CollaborativeEditor 
+            channelId={selectedChannelId}
+            channelName={selectedChannelName || 'Document'}
+            {authToken}
+            currentUser={currentUser}
           />
         {:else}
           <ChatArea 

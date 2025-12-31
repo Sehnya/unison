@@ -15,7 +15,7 @@
   export let activeVoiceChannelId: string | null = null;
 
   const dispatch = createEventDispatcher<{
-    selectChannel: { channelId: string; channelType?: 'text' | 'voice' };
+    selectChannel: { channelId: string; channelType?: 'text' | 'voice' | 'document' };
     selectGuild: { guildId: string };
     channelCreated: { channel: Channel };
   }>();
@@ -31,15 +31,17 @@
   
   let textChannels: Channel[] = [];
   let voiceChannels: Channel[] = [];
+  let documentChannels: Channel[] = [];
   let loading = false;
   let error: string | null = null;
   let generalExpanded = true;
   let voiceExpanded = true;
+  let documentExpanded = true;
   let viewMode: ViewMode = 'list';
   
   // Channel creation modal state
   let showCreateChannelModal = false;
-  let createChannelType: 'text' | 'voice' = 'text';
+  let createChannelType: 'text' | 'voice' | 'document' = 'text';
   
   // Ably channel subscription for real-time updates
   let ablyChannel: any = null;
@@ -299,36 +301,43 @@
       const rawChannels = data.channels || [];
       
       // Map numeric types to string types
+      // ChannelType: TEXT = 0, CATEGORY = 1, VOICE = 2, DOCUMENT = 3
       const allChannels: Channel[] = rawChannels.map((c: any) => ({
         ...c,
-        type: c.type === 2 ? 'voice' : 'text'
+        type: c.type === 2 ? 'voice' : c.type === 3 ? 'document' : 'text'
       }));
 
-      // Separate text and voice channels
+      // Separate text, voice, and document channels
       textChannels = allChannels.filter(c => c.type === 'text');
       voiceChannels = allChannels.filter(c => c.type === 'voice');
+      documentChannels = allChannels.filter(c => c.type === 'document');
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load channels';
       textChannels = [];
       voiceChannels = [];
+      documentChannels = [];
     } finally {
       loading = false;
     }
   }
 
   // Get all channels combined for box/icon views
-  $: allChannels = [...textChannels, ...voiceChannels];
+  $: allChannels = [...textChannels, ...voiceChannels, ...documentChannels];
 
   function isVoiceChannel(channel: Channel): boolean {
     return channel.type === 'voice';
   }
 
-  function openCreateChannelModal(type: 'text' | 'voice') {
+  function isDocumentChannel(channel: Channel): boolean {
+    return channel.type === 'document';
+  }
+
+  function openCreateChannelModal(type: 'text' | 'voice' | 'document') {
     createChannelType = type;
     showCreateChannelModal = true;
   }
 
-  async function handleCreateChannel(event: CustomEvent<{ name: string; type: 'text' | 'voice' }>) {
+  async function handleCreateChannel(event: CustomEvent<{ name: string; type: 'text' | 'voice' | 'document' }>) {
     if (!selectedGuildId || !authToken) return;
 
     const { name, type } = event.detail;
@@ -342,7 +351,7 @@
         },
         body: JSON.stringify({
           name,
-          type: type === 'voice' ? 'voice' : 'TEXT',
+          type: type === 'voice' ? 'voice' : type === 'document' ? 'document' : 'TEXT',
         }),
       });
 
@@ -361,6 +370,8 @@
       // Add to appropriate list
       if (type === 'voice') {
         voiceChannels = [...voiceChannels, newChannel];
+      } else if (type === 'document') {
+        documentChannels = [...documentChannels, newChannel];
       } else {
         textChannels = [...textChannels, newChannel];
       }
@@ -585,6 +596,46 @@
           {/if}
         </div>
 
+        <!-- Document Channels Section -->
+        <div class="section">
+          <button class="section-header" on:click={() => documentExpanded = !documentExpanded}>
+            <svg class="chevron" class:expanded={documentExpanded} width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M9 18L15 12L9 6"/>
+            </svg>
+            <span class="section-title">DOCUMENT CHANNELS</span>
+            <button class="add-btn" aria-label="Add document channel" on:click|stopPropagation={() => openCreateChannelModal('document')}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5V19M5 12H19"/>
+              </svg>
+            </button>
+          </button>
+          
+          {#if documentExpanded}
+            <ul class="channel-list-items">
+              {#each documentChannels as channel}
+                <li>
+                  <button 
+                    class="channel-item document"
+                    class:active={selectedChannelId === channel.id}
+                    on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: 'document' })}
+                  >
+                    <svg class="document-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <line x1="16" y1="13" x2="8" y2="13"/>
+                      <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    <span class="channel-name">{channel.name}</span>
+                  </button>
+                </li>
+              {/each}
+              {#if documentChannels.length === 0}
+                <li class="empty-state">No document channels</li>
+              {/if}
+            </ul>
+          {/if}
+        </div>
+
       <!-- BOX VIEW -->
       {:else if viewMode === 'box'}
         <div class="box-grid">
@@ -593,21 +644,29 @@
               class="box-item"
               class:active={selectedChannelId === channel.id}
               class:voice={isVoiceChannel(channel)}
+              class:document={isDocumentChannel(channel)}
               on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: channel.type })}
             >
-              <div class="box-icon">
+              <div class="box-icon" class:document={isDocumentChannel(channel)}>
                 {#if isVoiceChannel(channel)}
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
                     <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
                     <path d="M12 19V23M8 23H16"/>
                   </svg>
+                {:else if isDocumentChannel(channel)}
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                  </svg>
                 {:else}
                   <span class="box-hash">#</span>
                 {/if}
               </div>
               <span class="box-name">{channel.name}</span>
-              <span class="box-type">{isVoiceChannel(channel) ? 'Voice' : 'Text'}</span>
+              <span class="box-type">{isVoiceChannel(channel) ? 'Voice' : isDocumentChannel(channel) ? 'Document' : 'Text'}</span>
             </button>
           {/each}
         </div>
@@ -620,6 +679,7 @@
               class="icon-item"
               class:active={selectedChannelId === channel.id}
               class:voice={isVoiceChannel(channel)}
+              class:document={isDocumentChannel(channel)}
               on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: channel.type })}
               title={channel.name}
             >
@@ -627,6 +687,11 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
                   <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
+                </svg>
+              {:else if isDocumentChannel(channel)}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
                 </svg>
               {:else}
                 <span class="icon-hash">#</span>
@@ -906,6 +971,29 @@
     background: rgba(34, 197, 94, 0.12);
   }
 
+  .channel-item.document {
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .channel-item.document:hover {
+    color: #3b82f6;
+  }
+
+  .channel-item.document.active {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.08);
+  }
+
+  .document-icon {
+    color: rgba(255, 255, 255, 0.4);
+    flex-shrink: 0;
+  }
+
+  .channel-item.document:hover .document-icon,
+  .channel-item.document.active .document-icon {
+    color: #3b82f6;
+  }
+
   .voice-icon {
     color: rgba(255, 255, 255, 0.4);
     flex-shrink: 0;
@@ -1040,6 +1128,12 @@
     color: #22c55e;
   }
 
+  .box-item.document .box-icon,
+  .box-icon.document {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+  }
+
   .box-hash {
     font-size: 22px;
     font-weight: 600;
@@ -1100,6 +1194,10 @@
 
   .icon-item.voice {
     color: #22c55e;
+  }
+
+  .icon-item.document {
+    color: #3b82f6;
   }
 
   .icon-hash {

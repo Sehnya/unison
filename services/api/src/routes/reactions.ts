@@ -79,7 +79,11 @@ export function createReactionRoutes(config: ReactionRoutesConfig): Router {
     try {
       const { id: userId } = (req as AuthenticatedRequest).user;
       const messageId = requireSnowflake('message_id', req.params.message_id);
-      const emoji = decodeURIComponent(req.params.emoji);
+      const emojiParam = req.params.emoji;
+      if (!emojiParam) {
+        throw new ApiError(ApiErrorCode.VALIDATION_ERROR, 400, 'Emoji is required', 'emoji');
+      }
+      const emoji = decodeURIComponent(emojiParam);
       const { emoji_url } = req.body;
 
       // Insert reaction (ignore if already exists)
@@ -90,18 +94,19 @@ export function createReactionRoutes(config: ReactionRoutesConfig): Router {
         [messageId, userId, emoji, emoji_url || null]
       );
 
-      // Get updated reaction count
+      // Get updated reaction count and emoji_url
       const countResult = await pool.query(
-        `SELECT COUNT(*) as count, array_agg(user_id::text) as users
+        `SELECT COUNT(*) as count, array_agg(user_id::text) as users, MAX(emoji_url) as emoji_url
          FROM message_reactions
          WHERE message_id = $1 AND emoji = $2`,
         [messageId, emoji]
       );
 
       const row = countResult.rows[0];
+      const storedEmojiUrl = row?.emoji_url || emoji_url;
       const reaction: MessageReaction = {
         emoji,
-        emoji_url: emoji_url || undefined,
+        emoji_url: storedEmojiUrl || undefined,
         count: parseInt(row?.count || '0', 10),
         users: row?.users || [],
         me: true,
@@ -121,7 +126,11 @@ export function createReactionRoutes(config: ReactionRoutesConfig): Router {
     try {
       const { id: userId } = (req as AuthenticatedRequest).user;
       const messageId = requireSnowflake('message_id', req.params.message_id);
-      const emoji = decodeURIComponent(req.params.emoji);
+      const emojiParam = req.params.emoji;
+      if (!emojiParam) {
+        throw new ApiError(ApiErrorCode.VALIDATION_ERROR, 400, 'Emoji is required', 'emoji');
+      }
+      const emoji = decodeURIComponent(emojiParam);
 
       await pool.query(
         `DELETE FROM message_reactions
@@ -131,7 +140,7 @@ export function createReactionRoutes(config: ReactionRoutesConfig): Router {
 
       // Get updated reaction count
       const countResult = await pool.query(
-        `SELECT COUNT(*) as count, array_agg(user_id::text) as users
+        `SELECT COUNT(*) as count, array_agg(user_id::text) as users, MAX(emoji_url) as emoji_url
          FROM message_reactions
          WHERE message_id = $1 AND emoji = $2`,
         [messageId, emoji]
@@ -139,10 +148,12 @@ export function createReactionRoutes(config: ReactionRoutesConfig): Router {
 
       const row = countResult.rows[0];
       const count = parseInt(row?.count || '0', 10);
+      const storedEmojiUrl = row?.emoji_url;
 
       res.status(200).json({ 
         reaction: count > 0 ? {
           emoji,
+          emoji_url: storedEmojiUrl || undefined,
           count,
           users: row?.users || [],
           me: false,
