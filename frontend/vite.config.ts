@@ -1,6 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
-import react from '@vitejs/plugin-react';
 import { config } from 'dotenv';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
@@ -41,21 +40,19 @@ export default defineConfig(({ mode }) => {
   
   // Get the API key from multiple sources
   const ablyKey = env.VITE_ABLY_API_KEY || process.env.VITE_ABLY_API_KEY || '';
-  const tiptapAppId = env.VITE_TIPTAP_APP_ID || process.env.VITE_TIPTAP_APP_ID || '';
   
   // Log for debugging
   console.log('🔍 Environment variables loaded:', {
     'Project root': projectRoot,
     'VITE_ABLY_API_KEY exists': !!ablyKey,
     'VITE_ABLY_API_KEY length': ablyKey.length,
-    'VITE_TIPTAP_APP_ID exists': !!tiptapAppId,
     'From env object': !!env.VITE_ABLY_API_KEY,
     'From process.env': !!process.env.VITE_ABLY_API_KEY,
     'All VITE_ vars in env': Object.keys(env).filter(k => k.startsWith('VITE_')),
   });
   
   return {
-  plugins: [svelte(), react()],
+  plugins: [svelte()],
   server: {
     proxy: {
       '/api': {
@@ -112,7 +109,6 @@ export default defineConfig(({ mode }) => {
   // Using define ensures the variable is available at build/runtime
   define: {
     ...(ablyKey ? { 'import.meta.env.VITE_ABLY_API_KEY': JSON.stringify(ablyKey) } : {}),
-    ...(tiptapAppId ? { 'import.meta.env.VITE_TIPTAP_APP_ID': JSON.stringify(tiptapAppId) } : {}),
   },
   // Vite automatically exposes VITE_ prefixed vars, but we're being explicit
   envPrefix: ['VITE_']
