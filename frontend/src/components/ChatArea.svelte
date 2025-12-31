@@ -1409,14 +1409,14 @@
       </div>
       <div class="channel-details">
         {#if channelLoading}
-          <h2 class="channel-name">Loading...</h2>
+          <h2 class="channel-name">loading...</h2>
         {:else if channel}
           <h2 class="channel-name">{channel.name}</h2>
           {#if channel.topic}
             <span class="channel-meta">{channel.topic}</span>
           {/if}
         {:else}
-          <h2 class="channel-name">Unknown Channel</h2>
+          <h2 class="channel-name">unknown channel</h2>
         {/if}
       </div>
     </div>
@@ -1446,13 +1446,13 @@
   <!-- Messages -->
   <div class="messages-container" bind:this={messagesContainer} on:scroll={handleScroll}>
     {#if loading}
-      <div class="loading">Loading messages...</div>
+      <div class="loading">loading messages...</div>
     {:else}
       {#each messages as message, index (message.id)}
         {#if index === firstUnreadIndex && hasUnreadMessages}
           <div class="unread-separator">
             <div class="unread-line"></div>
-            <span class="unread-text">New Messages ({unreadCount})</span>
+            <span class="unread-text">new messages ({unreadCount})</span>
             <div class="unread-line"></div>
           </div>
         {/if}
@@ -1506,8 +1506,8 @@
                   autofocus
                 />
                 <div class="edit-actions">
-                  <button class="edit-cancel-btn" on:click={cancelEditing}>Cancel</button>
-                  <button class="edit-save-btn" on:click={saveEdit}>Save</button>
+                  <button class="edit-cancel-btn" on:click={cancelEditing}>cancel</button>
+                  <button class="edit-save-btn" on:click={saveEdit}>save</button>
                 </div>
               </div>
             {:else if message.content}
@@ -1702,14 +1702,14 @@
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                       </svg>
-                      Edit
+                      edit
                     </button>
                   {/if}
                   <button class="menu-item delete" on:click={() => deleteMessage(message.id)}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                     </svg>
-                    Delete
+                    delete
                   </button>
                 </div>
               {/if}
@@ -1784,7 +1784,7 @@
         bind:value={messageContent}
         on:keydown={handleKeydown}
         on:input={handleInput}
-        placeholder="Type something here..."
+        placeholder="type something here..."
         class="message-input"
       />
       <div class="input-actions">
@@ -1839,7 +1839,7 @@
           <input
             type="text"
             class="gif-search"
-            placeholder="Search GIFs..."
+            placeholder="search gifs..."
             bind:value={gifSearchQuery}
             on:input={handleGifSearch}
           />
@@ -1851,9 +1851,9 @@
         </div>
         <div class="gif-grid">
           {#if gifLoading}
-            <div class="gif-loading">Loading...</div>
+            <div class="gif-loading">loading...</div>
           {:else if gifResults.length === 0}
-            <div class="gif-empty">No GIFs found</div>
+            <div class="gif-empty">no gifs found</div>
           {:else}
             {#each gifResults as gif}
               <button class="gif-item" on:click={() => selectGif(gif)}>
@@ -1867,7 +1867,7 @@
           {/if}
         </div>
         <div class="gif-powered">
-          <span>Powered by</span>
+          <span>powered by</span>
           <img src="https://giphy.com/static/img/giphy_logo_square_social.png" alt="GIPHY" class="giphy-logo" />
         </div>
       </div>
@@ -1891,18 +1891,20 @@
     height: 100%;
     flex: 1;
     position: relative;
-    background: #0a0a14;
+    background: #050505;
     overflow: hidden;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Radial gradient background */
+  /* Subtle radial gradient background */
   .bg-gradient {
     position: absolute;
     inset: 0;
     background: 
-      radial-gradient(ellipse 80% 50% at 50% 100%, rgba(26, 54, 93, 0.2) 0%, transparent 50%),
-      radial-gradient(ellipse 60% 40% at 70% 90%, rgba(49, 130, 206, 0.12) 0%, transparent 40%),
-      radial-gradient(ellipse 50% 30% at 30% 95%, rgba(99, 179, 237, 0.08) 0%, transparent 35%);
+      radial-gradient(ellipse 80% 50% at 50% 100%, rgba(255, 255, 255, 0.02) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 70% 90%, rgba(255, 255, 255, 0.015) 0%, transparent 40%);
     pointer-events: none;
   }
 
@@ -1912,7 +1914,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 20px;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.02);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -1927,11 +1929,11 @@
   }
 
   .channel-avatar {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     overflow: hidden;
-    border: 2px solid rgba(26, 54, 93, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .channel-avatar img {
@@ -1942,28 +1944,31 @@
 
   .channel-name {
     margin: 0;
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 500;
     color: #fff;
+    text-transform: lowercase;
+    letter-spacing: -0.01em;
   }
 
   .channel-meta {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: lowercase;
   }
 
   .header-actions {
     display: flex;
-    gap: 8px;
+    gap: 6px;
   }
 
   .header-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    border: none;
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.7);
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1972,13 +1977,19 @@
   }
 
   .header-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
     color: #fff;
   }
 
   .header-btn.grid {
-    background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
-    color: #fff;
+    background: #fff;
+    border-color: #fff;
+    color: #050505;
+  }
+
+  .header-btn.grid:hover {
+    background: rgba(255, 255, 255, 0.9);
   }
 
   /* Messages Container */
@@ -1986,20 +1997,38 @@
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 20px;
+    padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 0;
     position: relative;
     z-index: 1;
-    /* Ensure scrolling starts from bottom */
     scroll-behavior: smooth;
+  }
+
+  .messages-container::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .messages-container::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .messages-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+  }
+
+  .messages-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.15);
   }
 
   .loading {
     text-align: center;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
     padding: 40px;
+    font-size: 13px;
+    text-transform: lowercase;
   }
 
   .channel-icon {
@@ -2008,16 +2037,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.7);
-    background: rgba(255, 255, 255, 0.1);
+    font-size: 18px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .avatar-placeholder {
     width: 100%;
     height: 100%;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
     border-radius: 50%;
     animation: pulse 1.5s ease-in-out infinite;
   }
@@ -2027,17 +2056,19 @@
     50% { opacity: 0.5; }
   }
 
-  /* Message Wrapper - Discord style */
+  /* Message Wrapper */
   .message-wrapper {
     display: flex;
+    align-items: flex-start;
     gap: 12px;
-    padding: 4px 16px;
+    padding: 6px 12px;
     position: relative;
     transition: background-color 0.1s ease;
+    border-radius: 8px;
   }
 
   .message-wrapper.new-author {
-    margin-top: 16px;
+    margin-top: 12px;
   }
 
   .message-wrapper:hover {
@@ -2049,22 +2080,22 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 16px 16px 8px;
+    padding: 16px 12px 8px;
     margin-top: 8px;
   }
 
   .day-line {
     flex: 1;
     height: 1px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .day-text {
-    font-size: 12px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
     white-space: nowrap;
   }
 
@@ -2073,27 +2104,27 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 12px 16px;
+    padding: 12px 12px;
     margin-top: 8px;
   }
 
   .unread-line {
     flex: 1;
     height: 1px;
-    background: #ef4444;
+    background: rgba(255, 255, 255, 0.3);
   }
 
   .unread-text {
-    font-size: 12px;
-    font-weight: 600;
-    color: #ef4444;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
     white-space: nowrap;
   }
 
   .message-wrapper.unread {
-    background: rgba(239, 68, 68, 0.03);
+    background: rgba(255, 255, 255, 0.02);
   }
 
   /* New Messages Banner */
@@ -2106,12 +2137,13 @@
     align-items: center;
     gap: 8px;
     padding: 10px 20px;
-    background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+    background: #fff;
     border: none;
     border-radius: 20px;
-    color: #fff;
-    font-size: 13px;
+    color: #050505;
+    font-size: 12px;
     font-weight: 500;
+    text-transform: lowercase;
     cursor: pointer;
     z-index: 100;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -2120,7 +2152,7 @@
   }
 
   .new-messages-banner:hover {
-    transform: translateX(-50%) scale(1.05);
+    transform: translateX(-50%) scale(1.02);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
   }
 
@@ -2136,8 +2168,8 @@
   }
 
   .message-avatar {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     overflow: hidden;
     flex-shrink: 0;
@@ -2146,14 +2178,18 @@
     border: none;
     background: transparent;
     padding: 0;
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .message-avatar:hover {
-    border-radius: 12px;
+    border-radius: 10px;
   }
 
   .message-avatar:focus {
-    outline: 2px solid #3182ce;
+    outline: 2px solid rgba(255, 255, 255, 0.3);
     outline-offset: 2px;
   }
 
@@ -2166,18 +2202,19 @@
   .message-avatar svg {
     width: 100%;
     height: 100%;
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.2);
   }
 
   .message-avatar-spacer {
-    width: 40px;
+    width: 36px;
+    height: 36px;
     flex-shrink: 0;
   }
 
   .message-content {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     flex: 1;
     min-width: 0;
   }
@@ -2186,18 +2223,19 @@
     display: flex;
     align-items: baseline;
     gap: 8px;
-    line-height: 1.375;
+    line-height: 1.4;
   }
 
   .message-author {
-    font-weight: 300;
+    font-weight: 500;
     color: #fff;
-    font-size: 18px;
+    font-size: 14px;
     cursor: pointer;
     background: none;
     border: none;
     padding: 0;
     font-family: inherit;
+    text-transform: lowercase;
   }
 
   .message-author:hover {
@@ -2210,31 +2248,32 @@
   }
 
   .message-time {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.4);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.3);
     font-weight: 400;
+    text-transform: lowercase;
   }
 
-  /* Message Text - Discord style */
+  /* Message Text */
   .message-text {
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 16px;
-    line-height: 1.375;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+    line-height: 1.5;
     word-wrap: break-word;
     white-space: pre-wrap;
   }
 
   .message-text :global(.mention) {
-    color: #63b3ed;
+    color: #fff;
     font-weight: 500;
-    background-color: rgba(99, 179, 237, 0.1);
-    padding: 0 2px;
-    border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 0 4px;
+    border-radius: 4px;
   }
 
   .message-text :global(.custom-emoji-inline) {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     vertical-align: middle;
     margin: 0 2px;
     object-fit: contain;
@@ -2243,7 +2282,7 @@
   .message-reactions {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
     margin-top: 6px;
   }
 
@@ -2252,47 +2291,47 @@
     align-items: center;
     gap: 4px;
     padding: 4px 8px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 13px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
   .reaction:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.1);
   }
 
   .reaction.reacted {
-    background: rgba(49, 130, 206, 0.2);
-    border-color: rgba(49, 130, 206, 0.4);
-    color: #63b3ed;
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
   }
 
   .reaction.purple {
-    background: rgba(26, 54, 93, 0.3);
-    border-color: rgba(26, 54, 93, 0.4);
-    color: #63b3ed;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #fff;
   }
 
   .reaction-emoji {
-    font-size: 16px;
+    font-size: 14px;
     line-height: 1;
   }
 
   .reaction-emoji-img {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     object-fit: contain;
   }
 
   .reaction-count {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
-    min-width: 12px;
+    min-width: 10px;
     text-align: center;
   }
 
@@ -2302,18 +2341,18 @@
     justify-content: center;
     gap: 2px;
     padding: 4px 8px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px dashed rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
-    color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.3);
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
   .add-reaction-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.25);
-    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.6);
   }
 
   .add-reaction-btn .plus-icon {
@@ -2324,19 +2363,18 @@
     position: absolute;
     right: 60px;
     top: 4px;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: none;
-    background: rgba(30, 30, 30, 0.9);
-    color: rgba(255, 255, 255, 0.6);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(5, 5, 5, 0.95);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.15s ease;
     opacity: 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 
   .message-wrapper:hover .hover-add-reaction {
@@ -2344,8 +2382,9 @@
   }
 
   .hover-add-reaction:hover {
-    background: rgba(49, 130, 206, 0.3);
-    color: #63b3ed;
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
   }
 
   .reaction-picker-container {
@@ -2366,28 +2405,27 @@
   .attachments {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 8px;
+    gap: 6px;
+    margin-top: 6px;
   }
 
   .audio-attachment {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
-    background: rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 24px;
+    gap: 10px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
   }
 
   .play-btn {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     border: none;
-    background: #1a365d;
-    color: #fff;
+    background: #fff;
+    color: #050505;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2403,25 +2441,26 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    height: 24px;
+    height: 20px;
   }
 
   .wave-bar {
     width: 2px;
-    background: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.3);
     border-radius: 2px;
   }
 
   .duration {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
-    margin-left: 8px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-left: 6px;
+    text-transform: lowercase;
   }
 
   .image-attachment {
-    width: 120px;
-    height: 120px;
-    border-radius: 12px;
+    width: 110px;
+    height: 110px;
+    border-radius: 10px;
     overflow: hidden;
   }
 
@@ -2432,17 +2471,16 @@
   }
 
   .more-images {
-    width: 120px;
-    height: 120px;
-    border-radius: 12px;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(10px);
+    width: 110px;
+    height: 110px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 28px;
-    font-weight: 600;
-    color: #fff;
+    font-size: 24px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
   }
 
   /* Typing Indicator */
@@ -2450,23 +2488,23 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 12px 20px;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 14px;
+    padding: 10px 20px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
     position: relative;
     z-index: 1;
   }
 
   .typing-dots {
     display: flex;
-    gap: 4px;
+    gap: 3px;
   }
 
   .dot {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.4);
     animation: bounce 1.4s infinite ease-in-out;
   }
 
@@ -2476,11 +2514,16 @@
 
   @keyframes bounce {
     0%, 80%, 100% { transform: translateY(0); }
-    40% { transform: translateY(-6px); }
+    40% { transform: translateY(-5px); }
+  }
+
+  .typing-text {
+    text-transform: lowercase;
   }
 
   .typing-text strong {
     color: #fff;
+    font-weight: 500;
   }
 
   /* Input Area */
@@ -2488,14 +2531,15 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 16px 20px;
+    padding: 14px 20px;
     position: relative;
     z-index: 10;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
   }
 
   .input-avatar {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     overflow: hidden;
     flex-shrink: 0;
@@ -2512,19 +2556,23 @@
     display: flex;
     align-items: center;
     background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 28px;
-    padding: 6px 6px 6px 6px;
+    border-radius: 24px;
+    padding: 4px 4px 4px 4px;
+    transition: border-color 0.15s ease;
+  }
+
+  .input-container:focus-within {
+    border-color: rgba(255, 255, 255, 0.12);
   }
 
   .attach-btn {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     border: none;
     background: none;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2537,12 +2585,12 @@
   }
 
   .emoji-btn {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     border: none;
     background: none;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2552,36 +2600,37 @@
 
   .emoji-btn:hover {
     color: #fff;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
   }
 
   .emoji-btn.active {
-    color: #63b3ed;
-    background: rgba(49, 130, 206, 0.2);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
   }
 
   .gif-btn {
-    padding: 6px 12px;
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 5px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
     background: none;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     transition: all 0.15s ease;
     margin-right: 8px;
+    text-transform: lowercase;
   }
 
   .gif-btn:hover {
-    border-color: rgba(255, 255, 255, 0.4);
+    border-color: rgba(255, 255, 255, 0.25);
     color: #fff;
   }
 
   .gif-btn.active {
-    background: rgba(49, 130, 206, 0.3);
-    border-color: rgba(49, 130, 206, 0.6);
-    color: #63b3ed;
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
   }
 
   .gif-label {
@@ -2595,10 +2644,12 @@
     color: #fff;
     font-size: 14px;
     padding: 10px 0;
+    font-family: inherit;
   }
 
   .message-input::placeholder {
-    color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.3);
+    text-transform: lowercase;
   }
 
   .message-input:focus {
@@ -2612,12 +2663,12 @@
   }
 
   .mic-btn {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     border: none;
     background: none;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2631,28 +2682,28 @@
 
   .divider {
     width: 1px;
-    height: 24px;
-    background: rgba(255, 255, 255, 0.1);
+    height: 20px;
+    background: rgba(255, 255, 255, 0.08);
     margin: 0 4px;
   }
 
   .send-btn {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     border: none;
-    background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+    background: #fff;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    color: #050505;
+    transition: all 0.15s ease;
   }
 
   .send-btn:hover {
     transform: scale(1.05);
-    box-shadow: 0 4px 20px rgba(26, 54, 93, 0.4);
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.2);
   }
 
   /* GIF Picker */
@@ -2661,14 +2712,13 @@
     bottom: 100%;
     left: 60px;
     right: 20px;
-    max-width: 400px;
-    background: rgba(30, 30, 30, 0.98);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 16px;
+    max-width: 380px;
+    background: #050505;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
     margin-bottom: 8px;
     overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     z-index: 100;
   }
 
@@ -2677,35 +2727,37 @@
     align-items: center;
     gap: 8px;
     padding: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .gif-search {
     flex: 1;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     padding: 10px 14px;
     color: #fff;
-    font-size: 14px;
+    font-size: 13px;
+    font-family: inherit;
   }
 
   .gif-search::placeholder {
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: lowercase;
   }
 
   .gif-search:focus {
     outline: none;
-    border-color: rgba(49, 130, 206, 0.5);
+    border-color: rgba(255, 255, 255, 0.15);
   }
 
   .gif-close {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: none;
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.6);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2714,21 +2766,22 @@
   }
 
   .gif-close:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.12);
     color: #fff;
   }
 
   .gif-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    padding: 12px;
-    max-height: 300px;
+    gap: 6px;
+    padding: 10px;
+    max-height: 280px;
     overflow-y: auto;
   }
 
   .gif-grid::-webkit-scrollbar {
-    width: 6px;
+    width: 5px;
   }
 
   .gif-grid::-webkit-scrollbar-track {
@@ -2736,7 +2789,7 @@
   }
 
   .gif-grid::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
     border-radius: 3px;
   }
 
@@ -2745,8 +2798,9 @@
     grid-column: 1 / -1;
     text-align: center;
     padding: 40px 20px;
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 14px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 13px;
+    text-transform: lowercase;
   }
 
   .gif-item {
@@ -2754,18 +2808,18 @@
     background: none;
     padding: 0;
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 6px;
     overflow: hidden;
     transition: transform 0.15s ease;
   }
 
   .gif-item:hover {
-    transform: scale(1.05);
+    transform: scale(1.03);
   }
 
   .gif-item img {
     width: 100%;
-    height: 100px;
+    height: 90px;
     object-fit: cover;
     display: block;
   }
@@ -2776,21 +2830,23 @@
     justify-content: center;
     gap: 8px;
     padding: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.4);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.3);
+    text-transform: lowercase;
   }
 
   .giphy-logo {
-    height: 16px;
+    height: 14px;
     width: auto;
+    opacity: 0.6;
   }
 
   /* Message GIF */
   .message-gif {
-    margin-top: 8px;
-    max-width: 300px;
-    border-radius: 12px;
+    margin-top: 6px;
+    max-width: 280px;
+    border-radius: 10px;
     overflow: hidden;
   }
 
@@ -2798,7 +2854,7 @@
     width: 100%;
     height: auto;
     display: block;
-    max-height: 250px;
+    max-height: 220px;
     object-fit: contain;
   }
 
@@ -2808,14 +2864,13 @@
     bottom: 100%;
     left: 60px;
     right: 20px;
-    max-width: 300px;
-    background: rgba(30, 30, 30, 0.98);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 16px;
+    max-width: 280px;
+    background: #050505;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
     margin-bottom: 8px;
     overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     z-index: 100;
   }
 
@@ -2825,7 +2880,7 @@
 
   .image-preview-content img {
     width: 100%;
-    max-height: 200px;
+    max-height: 180px;
     object-fit: contain;
     border-radius: 8px;
     display: block;
@@ -2840,26 +2895,27 @@
   }
 
   .image-preview-name {
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
+    text-transform: lowercase;
   }
 
   .image-preview-actions {
     display: flex;
-    gap: 8px;
+    gap: 6px;
   }
 
   .image-cancel-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    border: none;
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.6);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2868,7 +2924,8 @@
   }
 
   .image-cancel-btn:hover:not(:disabled) {
-    background: rgba(239, 68, 68, 0.3);
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
   }
 
   .image-cancel-btn:disabled {
@@ -2877,12 +2934,12 @@
   }
 
   .image-send-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
     border: none;
-    background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
-    color: #fff;
+    background: #fff;
+    color: #050505;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2900,10 +2957,10 @@
   }
 
   .uploading-spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-top-color: #fff;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(5, 5, 5, 0.3);
+    border-top-color: #050505;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -2914,8 +2971,8 @@
 
   /* Social Media Embeds */
   .social-embed {
-    margin-top: 8px;
-    max-width: 400px;
+    margin-top: 6px;
+    max-width: 380px;
   }
 
   /* YouTube Embed */
@@ -2923,7 +2980,7 @@
     position: relative;
     width: 100%;
     padding-bottom: 56.25%; /* 16:9 aspect ratio */
-    border-radius: 12px;
+    border-radius: 10px;
     overflow: hidden;
     background: #000;
   }
@@ -2940,30 +2997,30 @@
   /* Instagram Embed */
   .instagram-embed {
     width: 100%;
-    max-width: 400px;
-    border-radius: 12px;
+    max-width: 380px;
+    border-radius: 10px;
     overflow: hidden;
     background: #fff;
   }
 
   .instagram-embed iframe {
     width: 100%;
-    min-height: 500px;
+    min-height: 480px;
     border: none;
   }
 
   /* Twitter/X Embed */
   .twitter-embed {
     width: 100%;
-    max-width: 400px;
-    border-radius: 12px;
+    max-width: 380px;
+    border-radius: 10px;
     overflow: hidden;
-    background: #15202b;
+    background: #0a0a0a;
   }
 
   .twitter-embed iframe {
     width: 100%;
-    min-height: 300px;
+    min-height: 280px;
     border: none;
   }
 
@@ -2973,12 +3030,12 @@
   }
 
   .message-wrapper.editing {
-    background: rgba(49, 130, 206, 0.1);
+    background: rgba(255, 255, 255, 0.04);
   }
 
   .message-actions {
     position: absolute;
-    right: 16px;
+    right: 12px;
     top: 4px;
     display: flex;
     align-items: center;
@@ -2986,12 +3043,12 @@
   }
 
   .message-actions-btn {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     border-radius: 6px;
-    border: none;
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(5, 5, 5, 0.95);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -3000,7 +3057,8 @@
   }
 
   .message-actions-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.12);
     color: #fff;
   }
 
@@ -3009,13 +3067,13 @@
     top: 100%;
     right: 0;
     margin-top: 4px;
-    background: rgba(30, 30, 30, 0.98);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: #050505;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     overflow: hidden;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     z-index: 100;
-    min-width: 120px;
+    min-width: 110px;
   }
 
   .menu-item {
@@ -3026,23 +3084,27 @@
     padding: 10px 14px;
     border: none;
     background: none;
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
     cursor: pointer;
     transition: background 0.15s ease;
     text-align: left;
+    text-transform: lowercase;
+    font-family: inherit;
   }
 
   .menu-item:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
   }
 
   .menu-item.delete {
-    color: #ef4444;
+    color: rgba(255, 255, 255, 0.6);
   }
 
   .menu-item.delete:hover {
-    background: rgba(239, 68, 68, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
   }
 
   /* Edit Input */
@@ -3056,16 +3118,17 @@
   .edit-input {
     width: 100%;
     padding: 10px 14px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(49, 130, 206, 0.5);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
     color: #fff;
-    font-size: 14px;
+    font-size: 13px;
+    font-family: inherit;
   }
 
   .edit-input:focus {
     outline: none;
-    border-color: rgba(49, 130, 206, 0.8);
+    border-color: rgba(255, 255, 255, 0.25);
   }
 
   .edit-actions {
@@ -3079,25 +3142,28 @@
     padding: 6px 14px;
     border-radius: 6px;
     border: none;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s ease;
+    text-transform: lowercase;
+    font-family: inherit;
   }
 
   .edit-cancel-btn {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
   }
 
   .edit-cancel-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
     color: #fff;
   }
 
   .edit-save-btn {
-    background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
-    color: #fff;
+    background: #fff;
+    color: #050505;
   }
 
   .edit-save-btn:hover {

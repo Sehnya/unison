@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import LandingPage from './components/LandingPage.svelte';
   import LoginForm from './components/LoginForm.svelte';
   import RegisterForm from './components/RegisterForm.svelte';
   import Sidebar from './components/Sidebar.svelte';
@@ -27,6 +28,7 @@
 
   let authToken: string | null = null;
   let showRegister: boolean = false;
+  let showAuthModal: boolean = false; // Show login/register modal over landing page
   let showGroupInfo: boolean = false;
   let selectedGuildId: string | null = null;
   let selectedChannelId: string | null = null;
@@ -559,8 +561,13 @@
         />
       {:else}
         <div class="welcome-screen">
-          <h2>Select a Channel</h2>
-          <p>Choose a channel from the list to start chatting</p>
+          <div class="welcome-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <h2>select a channel</h2>
+          <p>choose a channel from the list to start chatting</p>
         </div>
       {/if}
       <GroupInfo 
@@ -639,20 +646,41 @@
       <div class="spinner"></div>
       <p>Loading...</p>
     </div>
-  {:else if showRegister}
+  {:else if showAuthModal && showRegister}
     <div class="auth-container">
-      <RegisterForm 
-        on:authenticated={handleAuthenticated} 
-        on:switchToLogin={() => showRegister = false}
-      />
+      <div class="auth-modal-backdrop" on:click={() => { showAuthModal = false; showRegister = false; }} on:keydown={(e) => e.key === 'Escape' && (showAuthModal = false)} role="button" tabindex="0"></div>
+      <div class="auth-modal">
+        <button class="auth-close" on:click={() => { showAuthModal = false; showRegister = false; }} aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+        <RegisterForm 
+          on:authenticated={handleAuthenticated} 
+          on:switchToLogin={() => showRegister = false}
+        />
+      </div>
+    </div>
+  {:else if showAuthModal}
+    <div class="auth-container">
+      <div class="auth-modal-backdrop" on:click={() => showAuthModal = false} on:keydown={(e) => e.key === 'Escape' && (showAuthModal = false)} role="button" tabindex="0"></div>
+      <div class="auth-modal">
+        <button class="auth-close" on:click={() => showAuthModal = false} aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+        <LoginForm 
+          on:authenticated={handleAuthenticated} 
+          on:switchToRegister={() => showRegister = true}
+        />
+      </div>
     </div>
   {:else}
-    <div class="auth-container">
-      <LoginForm 
-        on:authenticated={handleAuthenticated} 
-        on:switchToRegister={() => showRegister = true}
-      />
-    </div>
+    <LandingPage 
+      on:login={() => { showAuthModal = true; showRegister = false; }}
+      on:register={() => { showAuthModal = true; showRegister = true; }}
+    />
   {/if}
 </main>
 
@@ -687,11 +715,50 @@
   }
 
   .auth-container {
-    height: 100%;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(26, 26, 46, 0.9);
+  }
+
+  .auth-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(12px);
+  }
+
+  .auth-modal {
+    position: relative;
+    z-index: 1;
+    background: transparent;
+    max-width: 420px;
+    width: 90%;
+  }
+
+  .auth-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+  }
+
+  .auth-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
   }
 
   .loading-screen {
@@ -725,15 +792,39 @@
     justify-content: center;
     color: #fff;
     text-align: center;
+    background: #050505;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    gap: 16px;
+  }
+
+  .welcome-screen .welcome-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 8px;
   }
 
   .welcome-screen h2 {
-    margin: 0 0 0.5rem 0;
-    font-size: 2rem;
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    text-transform: lowercase;
   }
 
   .welcome-screen p {
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 14px;
+    margin: 0;
+    text-transform: lowercase;
   }
 
   .collapse-toggle {

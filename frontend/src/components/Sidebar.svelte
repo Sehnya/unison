@@ -28,12 +28,12 @@
   // Generate a consistent color based on guild id
   function getGuildColor(id: string): string {
     const colors = [
-      'linear-gradient(135deg, #1a365d 0%, #2c5282 100%)',
-      'linear-gradient(135deg, #2d3748 0%, #4a5568 100%)',
-      'linear-gradient(135deg, #744210 0%, #975a16 100%)',
-      'linear-gradient(135deg, #22543d 0%, #276749 100%)',
-      'linear-gradient(135deg, #702459 0%, #97266d 100%)',
-      'linear-gradient(135deg, #742a2a 0%, #9b2c2c 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 100%)',
     ];
     const index = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
     return colors[index];
@@ -47,9 +47,7 @@
 <aside class="sidebar">
   <!-- Logo -->
   <div class="logo">
-    <div class="logo-bg">
-      <img src="/unison-logo.png" alt="Unison" class="logo-img" />
-    </div>
+    <img src="/white-U.png" alt="Unison" class="logo-img" />
   </div>
 
   <!-- User Avatar -->
@@ -140,80 +138,67 @@
     min-width: 72px;
     height: 100%;
     padding: 16px 0;
-    background: rgba(10, 10, 20, 0.95);
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    background: #050505;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
 
   .logo {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
-    background: #ffffff;
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
     margin-bottom: 16px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
   }
 
-  .logo-bg {
-    width: 100%;
-    height: 100%;
-    background: #ffffff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
+  .logo:hover {
+    opacity: 0.8;
   }
 
   .logo-img {
-    width: 100%;
-    height: 100%;
+    width: 32px;
+    height: 32px;
     object-fit: contain;
   }
 
   .user-avatar-btn {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
-    border: 2px solid transparent;
-    background: linear-gradient(135deg, #1a365d, #3182ce) padding-box,
-                linear-gradient(135deg, #1a365d, #3182ce) border-box;
-    padding: 2px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    background: transparent;
+    padding: 0;
     cursor: pointer;
     margin-bottom: 24px;
-    transition: transform 0.2s ease;
+    transition: all 0.2s ease;
+    overflow: hidden;
   }
 
   .user-avatar-btn:hover {
+    border-color: rgba(255, 255, 255, 0.25);
     transform: scale(1.05);
-  }
-
-  .user-avatar {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    object-fit: cover;
   }
 
   .section {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 24px;
+    gap: 6px;
+    margin-bottom: 20px;
   }
 
   .guilds-section {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    max-height: calc(100vh - 400px);
+    max-height: calc(100vh - 380px);
   }
 
   .guilds-section::-webkit-scrollbar {
-    width: 4px;
+    width: 3px;
   }
 
   .guilds-section::-webkit-scrollbar-track {
@@ -221,25 +206,26 @@
   }
 
   .guilds-section::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
     border-radius: 2px;
   }
 
   .section-label {
     font-size: 9px;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.4);
-    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.25);
+    letter-spacing: 1.2px;
     margin-bottom: 8px;
+    text-transform: uppercase;
   }
 
   .nav-btn {
-    width: 44px;
-    height: 44px;
+    width: 42px;
+    height: 42px;
     border-radius: 12px;
-    border: none;
+    border: 1px solid transparent;
     background: transparent;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -248,37 +234,40 @@
   }
 
   .nav-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
     color: rgba(255, 255, 255, 0.8);
+    border-color: rgba(255, 255, 255, 0.08);
   }
 
   .nav-btn.active {
-    background: rgba(26, 54, 93, 0.3);
-    color: #63b3ed;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.12);
   }
 
   .guild-btn {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     border: 2px solid transparent;
     padding: 0;
     cursor: pointer;
     overflow: hidden;
     transition: all 0.2s ease;
-    background: transparent;
+    background: rgba(255, 255, 255, 0.04);
     position: relative;
   }
 
   .guild-btn:hover {
-    transform: scale(1.1);
-    border-radius: 16px;
+    transform: scale(1.08);
+    border-radius: 14px;
+    border-color: rgba(255, 255, 255, 0.15);
   }
 
   .guild-btn.active {
-    border-color: #3182ce;
-    border-radius: 16px;
-    box-shadow: 0 0 12px rgba(49, 130, 206, 0.4);
+    border-color: rgba(255, 255, 255, 0.4);
+    border-radius: 14px;
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.1);
   }
 
   .guild-icon {
@@ -293,10 +282,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
     color: #fff;
     text-transform: uppercase;
+    letter-spacing: -0.02em;
   }
 
   .no-guilds {
@@ -305,27 +295,30 @@
   }
 
   .no-guilds-text {
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.3);
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.2);
   }
 
   .add-btn {
-    width: 44px;
-    height: 44px;
+    width: 42px;
+    height: 42px;
     border-radius: 12px;
-    border: none;
-    background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
-    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     margin-top: auto;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: all 0.2s ease;
   }
 
   .add-btn:hover {
+    background: #fff;
+    color: #050505;
+    border-color: #fff;
     transform: scale(1.05);
-    box-shadow: 0 4px 20px rgba(26, 54, 93, 0.4);
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
   }
 </style>

@@ -627,33 +627,31 @@
 
   function getConnectionQualityLabel(quality: ConnectionQuality): string {
     switch (quality) {
-      case ConnectionQuality.Excellent: return 'Excellent';
-      case ConnectionQuality.Good: return 'Good';
-      case ConnectionQuality.Poor: return 'Poor';
-      case ConnectionQuality.Lost: return 'Lost';
-      default: return 'Unknown';
+      case ConnectionQuality.Excellent: return 'excellent';
+      case ConnectionQuality.Good: return 'good';
+      case ConnectionQuality.Poor: return 'poor';
+      case ConnectionQuality.Lost: return 'lost';
+      default: return 'unknown';
     }
   }
 
   function getConnectionQualityColor(quality: ConnectionQuality): string {
     switch (quality) {
-      case ConnectionQuality.Excellent: return '#22c55e';
-      case ConnectionQuality.Good: return '#84cc16';
-      case ConnectionQuality.Poor: return '#f59e0b';
-      case ConnectionQuality.Lost: return '#ef4444';
-      default: return '#6b7280';
+      case ConnectionQuality.Excellent: return 'rgba(255, 255, 255, 0.9)';
+      case ConnectionQuality.Good: return 'rgba(255, 255, 255, 0.7)';
+      case ConnectionQuality.Poor: return 'rgba(255, 255, 255, 0.4)';
+      case ConnectionQuality.Lost: return 'rgba(255, 255, 255, 0.2)';
+      default: return 'rgba(255, 255, 255, 0.3)';
     }
   }
 
   // Generate a consistent color for a participant based on their ID
   function getParticipantColor(id: string): string {
     const colors = [
-      'linear-gradient(135deg, #a5b4fc 0%, #818cf8 100%)', // Light purple
-      'linear-gradient(135deg, #93c5fd 0%, #3b82f6 100%)', // Blue
-      'linear-gradient(135deg, #fca5a5 0%, #f87171 100%)', // Pink/Red
-      'linear-gradient(135deg, #86efac 0%, #22c55e 100%)', // Green
-      'linear-gradient(135deg, #fcd34d 0%, #f59e0b 100%)', // Yellow/Orange
-      'linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%)', // Purple
+      'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.1) 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
     ];
     
     // Simple hash of the ID to pick a color
@@ -717,7 +715,7 @@
         </div>
       {/if}
       
-      <button class="icon-btn" on:click={() => showParticipantList = !showParticipantList} title="Toggle participants">
+      <button class="icon-btn" on:click={() => showParticipantList = !showParticipantList} title="toggle participants">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
           <circle cx="9" cy="7" r="4"/>
@@ -726,7 +724,7 @@
         </svg>
       </button>
       
-      <button class="icon-btn" on:click={() => showSettings = !showSettings} title="Settings">
+      <button class="icon-btn" on:click={() => showSettings = !showSettings} title="settings">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -744,7 +742,7 @@
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
           </svg>
-          Output Volume
+          output volume
         </span>
         <div class="volume-control">
           <input type="range" min="0" max="100" value={outputVolume} on:input={handleVolumeChange} aria-label="Output volume" />
@@ -761,19 +759,19 @@
               <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
               <path d="M12 19V23M8 23H16"/>
             </svg>
-            Krisp Noise Cancellation
+            krisp noise cancellation
           </span>
           <button 
             class="toggle-btn" 
             class:active={isKrispEnabled}
             on:click={toggleKrisp}
             disabled={!isConnected}
-            title={isKrispEnabled ? 'Disable noise cancellation' : 'Enable noise cancellation'}
+            title={isKrispEnabled ? 'disable noise cancellation' : 'enable noise cancellation'}
           >
             <span class="toggle-slider"></span>
           </button>
         </div>
-        <span class="settings-hint">AI-powered noise removal for crystal-clear audio</span>
+        <span class="settings-hint">ai-powered noise removal for crystal-clear audio</span>
       </div>
       
       <!-- Video Resolution Selector -->
@@ -784,7 +782,7 @@
             <line x1="8" y1="21" x2="16" y2="21"/>
             <line x1="12" y1="17" x2="12" y2="21"/>
           </svg>
-          Video Quality
+          video quality
         </span>
         <div class="resolution-selector">
           <button 
@@ -809,7 +807,7 @@
             4K
           </button>
         </div>
-        <span class="settings-hint">Higher quality uses more bandwidth</span>
+        <span class="settings-hint">higher quality uses more bandwidth</span>
       </div>
     </div>
   {/if}
@@ -838,7 +836,7 @@
             <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
           </svg>
         </div>
-        <p>Connecting to voice channel...</p>
+        <p>connecting to voice channel...</p>
       </div>
     {:else if isConnected}
       <!-- Stage Layout -->
@@ -873,7 +871,7 @@
                   <div class="stage-info">
                     <span class="stage-name">{focusedParticipant.name}</span>
                     {#if focusedParticipant.isScreenSharing}
-                      <span class="stage-badge screen">Screen Sharing</span>
+                      <span class="stage-badge screen">screen sharing</span>
                     {/if}
                     {#if focusedParticipant.isMuted}
                       <span class="stage-badge muted">
@@ -901,7 +899,7 @@
                 <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
                 <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
               </svg>
-              <span>Speakers - {participantDisplays.length}</span>
+              <span>speakers - {participantDisplays.length}</span>
             </div>
             <svg class="collapse-icon" class:rotated={speakersCollapsed} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M6 9l6 6 6-6"/>
@@ -962,7 +960,7 @@
                   <div class="speaker-info">
                     <span class="speaker-name">{participant.name}</span>
                     {#if participant.isScreenSharing}
-                      <span class="watch-label">{watchingStreamId === participant.id ? 'Watching' : 'Click to watch'}</span>
+                      <span class="watch-label">{watchingStreamId === participant.id ? 'watching' : 'click to watch'}</span>
                     {:else if participant.isMuted}
                       <svg class="speaker-muted-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
@@ -979,7 +977,7 @@
         <!-- Participant Sidebar -->
         {#if showParticipantList}
           <aside class="participant-sidebar">
-            <h4>In Voice — {participantDisplays.length}</h4>
+            <h4>in voice — {participantDisplays.length}</h4>
             <ul class="participant-list">
               {#each participantDisplays as participant (participant.id)}
                 <li class="participant-item" class:speaking={participant.isSpeaking}>
@@ -1020,7 +1018,7 @@
         class:active={!isMuted} 
         class:danger={isMuted}
         on:click={toggleMute} 
-        title={isMuted ? 'Unmute' : 'Mute'}
+        title={isMuted ? 'unmute' : 'mute'}
         disabled={!isConnected}
       >
         {#if isMuted}
@@ -1039,7 +1037,7 @@
         class="control-btn" 
         class:danger={isDeafened}
         on:click={toggleDeafen} 
-        title={isDeafened ? 'Undeafen' : 'Deafen'}
+        title={isDeafened ? 'undeafen' : 'deafen'}
         disabled={!isConnected}
       >
         {#if isDeafened}
@@ -1060,7 +1058,7 @@
         class="control-btn krisp-btn" 
         class:active={isKrispEnabled}
         on:click={toggleKrisp} 
-        title={isKrispEnabled ? 'Disable Krisp noise cancellation' : 'Enable Krisp noise cancellation'}
+        title={isKrispEnabled ? 'disable krisp noise cancellation' : 'enable krisp noise cancellation'}
         disabled={!isConnected}
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
@@ -1076,7 +1074,7 @@
         class="control-btn" 
         class:active={isVideoEnabled}
         on:click={toggleVideo} 
-        title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
+        title={isVideoEnabled ? 'turn off camera' : 'turn on camera'}
         disabled={!isConnected}
       >
         {#if isVideoEnabled}
@@ -1095,7 +1093,7 @@
         class="control-btn" 
         class:active={isScreenSharing}
         on:click={toggleScreenShare} 
-        title={isScreenSharing ? 'Stop sharing' : 'Share screen'}
+        title={isScreenSharing ? 'stop sharing' : 'share screen'}
         disabled={!isConnected}
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
@@ -1109,7 +1107,7 @@
       <button 
         class="control-btn disconnect" 
         on:click={disconnect} 
-        title="Disconnect"
+        title="disconnect"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
@@ -1181,9 +1179,12 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%);
+    background: #050505;
     color: #fff;
     flex: 1;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   
   .voice-room.hidden {
@@ -1197,8 +1198,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 20px;
-    background: rgba(0, 0, 0, 0.3);
+    padding: 14px 20px;
+    background: rgba(255, 255, 255, 0.02);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
@@ -1211,63 +1212,68 @@
   .voice-icon-wrapper {
     width: 40px;
     height: 40px;
-    border-radius: 12px;
-    background: rgba(34, 197, 94, 0.15);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #22c55e;
+    color: rgba(255, 255, 255, 0.6);
   }
 
   .channel-details h3 {
     margin: 0;
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 500;
+    text-transform: lowercase;
+    letter-spacing: -0.01em;
   }
 
   .participant-count {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: lowercase;
   }
 
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
   .connection-quality {
     padding: 6px 10px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 6px;
-    margin-right: 8px;
+    margin-right: 6px;
   }
 
   .quality-bars {
     display: flex;
     align-items: flex-end;
     gap: 2px;
-    height: 16px;
+    height: 14px;
   }
 
   .quality-bar {
-    width: 4px;
+    width: 3px;
     border-radius: 1px;
     transition: all 0.2s;
   }
 
   .quality-bar:nth-child(1) { height: 4px; }
-  .quality-bar:nth-child(2) { height: 8px; }
-  .quality-bar:nth-child(3) { height: 12px; }
-  .quality-bar:nth-child(4) { height: 16px; }
+  .quality-bar:nth-child(2) { height: 7px; }
+  .quality-bar:nth-child(3) { height: 10px; }
+  .quality-bar:nth-child(4) { height: 14px; }
 
   .icon-btn {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     border-radius: 8px;
-    border: none;
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1276,14 +1282,15 @@
   }
 
   .icon-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
     color: #fff;
   }
 
   /* Settings Panel */
   .settings-panel {
     padding: 16px 20px;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.02);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
@@ -1297,8 +1304,9 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: lowercase;
   }
 
   .volume-control {
@@ -1319,17 +1327,17 @@
 
   .volume-control input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    background: #3182ce;
+    background: #fff;
     cursor: pointer;
   }
 
   .volume-value {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
-    min-width: 36px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    min-width: 32px;
     text-align: right;
   }
 
@@ -1343,11 +1351,11 @@
 
   .toggle-btn {
     position: relative;
-    width: 44px;
-    height: 24px;
-    border-radius: 12px;
-    border: none;
-    background: rgba(255, 255, 255, 0.15);
+    width: 40px;
+    height: 22px;
+    border-radius: 11px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
     cursor: pointer;
     transition: all 0.2s ease;
     padding: 2px;
@@ -1359,29 +1367,31 @@
   }
 
   .toggle-btn.active {
-    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    background: #fff;
+    border-color: #fff;
   }
 
   .toggle-slider {
     position: absolute;
     top: 2px;
     left: 2px;
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
-    background: #fff;
+    background: rgba(255, 255, 255, 0.8);
     transition: transform 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   }
 
   .toggle-btn.active .toggle-slider {
-    transform: translateX(20px);
+    transform: translateX(18px);
+    background: #050505;
   }
 
   .settings-hint {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.4);
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.3);
     margin-top: 4px;
+    text-transform: lowercase;
   }
 
   .settings-section + .settings-section {
@@ -1393,33 +1403,35 @@
   /* Resolution Selector */
   .resolution-selector {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     margin-top: 8px;
   }
 
   .resolution-btn {
     flex: 1;
     padding: 8px 12px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 13px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s ease;
+    text-transform: lowercase;
+    font-family: inherit;
   }
 
   .resolution-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
     color: #fff;
   }
 
   .resolution-btn.active {
-    background: rgba(49, 130, 206, 0.2);
-    border-color: #3182ce;
-    color: #63b3ed;
+    background: #fff;
+    border-color: #fff;
+    color: #050505;
   }
 
   /* Error Banner */
@@ -1428,16 +1440,18 @@
     align-items: center;
     gap: 12px;
     padding: 12px 20px;
-    background: rgba(239, 68, 68, 0.15);
-    border-bottom: 1px solid rgba(239, 68, 68, 0.3);
-    color: #fca5a5;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    text-transform: lowercase;
   }
 
   .dismiss-btn {
     margin-left: auto;
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
     font-size: 18px;
     cursor: pointer;
     padding: 0 4px;
@@ -1470,7 +1484,7 @@
     width: 100px;
     height: 100px;
     border-radius: 50%;
-    background: rgba(34, 197, 94, 0.2);
+    background: rgba(255, 255, 255, 0.1);
     animation: pulse-ring 1.5s ease-out infinite;
   }
 
@@ -1483,24 +1497,26 @@
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: rgba(34, 197, 94, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #22c55e;
+    color: rgba(255, 255, 255, 0.5);
     position: relative;
     z-index: 1;
   }
 
   .connecting-state p {
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 14px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 13px;
+    text-transform: lowercase;
   }
 
   /* Participant Sidebar */
   .participant-sidebar {
-    width: 240px;
-    background: rgba(0, 0, 0, 0.3);
+    width: 220px;
+    background: rgba(255, 255, 255, 0.02);
     border-left: 1px solid rgba(255, 255, 255, 0.06);
     padding: 16px;
     overflow-y: auto;
@@ -1508,11 +1524,11 @@
 
   .participant-sidebar h4 {
     margin: 0 0 12px;
-    font-size: 12px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
   }
 
   .participant-list {
@@ -1521,7 +1537,7 @@
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
   }
 
   .participant-item {
@@ -1529,25 +1545,26 @@
     align-items: center;
     gap: 10px;
     padding: 8px;
-    border-radius: 8px;
+    border-radius: 6px;
     transition: all 0.15s;
   }
 
   .participant-item:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.04);
   }
 
   .participant-item.speaking {
-    background: rgba(34, 197, 94, 0.1);
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .participant-item .name {
     flex: 1;
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.8);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    text-transform: lowercase;
   }
 
   .status-icons {
@@ -1560,24 +1577,24 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 16px;
-    padding: 16px 20px;
-    background: rgba(0, 0, 0, 0.4);
+    gap: 12px;
+    padding: 14px 20px;
+    background: rgba(255, 255, 255, 0.02);
     border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .control-group {
     display: flex;
-    gap: 8px;
+    gap: 6px;
   }
 
   .control-btn {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
-    border: none;
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.7);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1586,9 +1603,9 @@
   }
 
   .control-btn:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
     color: #fff;
-    transform: scale(1.05);
   }
 
   .control-btn:disabled {
@@ -1597,26 +1614,30 @@
   }
 
   .control-btn.active {
-    background: rgba(34, 197, 94, 0.2);
-    color: #22c55e;
+    background: #fff;
+    border-color: #fff;
+    color: #050505;
   }
 
   .control-btn.danger {
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.6);
   }
 
   .control-btn.danger:hover:not(:disabled) {
-    background: rgba(239, 68, 68, 0.3);
-  }
-
-  .control-btn.disconnect {
-    background: #ef4444;
+    background: rgba(255, 255, 255, 0.12);
     color: #fff;
   }
 
+  .control-btn.disconnect {
+    background: #fff;
+    border-color: #fff;
+    color: #050505;
+  }
+
   .control-btn.disconnect:hover {
-    background: #dc2626;
+    background: rgba(255, 255, 255, 0.9);
   }
 
   /* Krisp Button */
@@ -1625,12 +1646,13 @@
   }
 
   .control-btn.krisp-btn.active {
-    background: rgba(34, 197, 94, 0.2);
-    color: #22c55e;
+    background: #fff;
+    border-color: #fff;
+    color: #050505;
   }
 
   .control-btn.krisp-btn.active:hover {
-    background: rgba(34, 197, 94, 0.3);
+    background: rgba(255, 255, 255, 0.9);
   }
 
   .krisp-badge {
@@ -1638,12 +1660,18 @@
     top: -4px;
     right: -4px;
     font-size: 8px;
-    font-weight: 700;
-    background: #22c55e;
+    font-weight: 600;
+    background: #050505;
     color: #fff;
     padding: 2px 4px;
     border-radius: 4px;
     line-height: 1;
+    text-transform: lowercase;
+  }
+
+  .control-btn.krisp-btn.active .krisp-badge {
+    background: #050505;
+    color: #fff;
   }
 
   /* Stage Layout */
@@ -1694,16 +1722,16 @@
     width: 100%;
     max-width: 1200px;
     aspect-ratio: 16 / 9;
-    background: rgba(0, 0, 0, 0.6);
-    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
     overflow: hidden;
-    border: 3px solid transparent;
+    border: 2px solid transparent;
     transition: all 0.3s ease;
   }
 
   .stage-video-container.speaking {
-    border-color: #22c55e;
-    box-shadow: 0 0 40px rgba(34, 197, 94, 0.4);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 40px rgba(255, 255, 255, 0.1);
   }
 
   .stage-video {
@@ -1721,7 +1749,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, rgba(26, 54, 93, 0.3) 0%, rgba(15, 15, 25, 0.6) 100%);
+    background: rgba(255, 255, 255, 0.02);
   }
 
   .stage-overlay {
@@ -1730,7 +1758,7 @@
     left: 0;
     right: 0;
     padding: 16px 20px;
-    background: linear-gradient(transparent, rgba(0, 0, 0, 0.9));
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
   }
 
   .stage-info {
@@ -1740,9 +1768,10 @@
   }
 
   .stage-name {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 500;
     color: #fff;
+    text-transform: lowercase;
   }
 
   .stage-badge {
@@ -1750,38 +1779,39 @@
     align-items: center;
     gap: 4px;
     padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 600;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: lowercase;
   }
 
   .stage-badge.screen {
-    background: rgba(59, 130, 246, 0.2);
-    color: #60a5fa;
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.8);
   }
 
   .stage-badge.muted {
-    background: rgba(239, 68, 68, 0.2);
-    color: #f87171;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
   }
 
   .stage-speaking-ring {
     position: absolute;
-    inset: -3px;
-    border-radius: 19px;
-    border: 3px solid #22c55e;
+    inset: -2px;
+    border-radius: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
     animation: stage-pulse 1.5s ease-in-out infinite;
     pointer-events: none;
   }
 
   @keyframes stage-pulse {
-    0%, 100% { opacity: 1; box-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
-    50% { opacity: 0.6; box-shadow: 0 0 40px rgba(34, 197, 94, 0.3); }
+    0%, 100% { opacity: 1; box-shadow: 0 0 20px rgba(255, 255, 255, 0.2); }
+    50% { opacity: 0.6; box-shadow: 0 0 40px rgba(255, 255, 255, 0.1); }
   }
 
   /* Speakers Section */
   .speakers-section {
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(255, 255, 255, 0.02);
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     flex-shrink: 0;
   }
@@ -1798,13 +1828,14 @@
     padding: 12px 20px;
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
     transition: all 0.15s ease;
+    font-family: inherit;
   }
 
   .speakers-header:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.02);
     color: #fff;
   }
 
@@ -1812,10 +1843,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
   }
 
   .collapse-icon {
@@ -1828,15 +1859,15 @@
 
   .speakers-grid {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     padding: 0 20px 16px;
     overflow-x: auto;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
   }
 
   .speakers-grid::-webkit-scrollbar {
-    height: 6px;
+    height: 5px;
   }
 
   .speakers-grid::-webkit-scrollbar-track {
@@ -1844,7 +1875,7 @@
   }
 
   .speakers-grid::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
     border-radius: 3px;
   }
 
@@ -1855,32 +1886,34 @@
     align-items: center;
     gap: 8px;
     padding: 12px;
-    min-width: 120px;
+    min-width: 110px;
     background: none;
-    border: 2px solid transparent;
-    border-radius: 12px;
+    border: 1px solid transparent;
+    border-radius: 10px;
     cursor: pointer;
     transition: all 0.2s ease;
+    font-family: inherit;
   }
 
   .speaker-tile:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.06);
   }
 
   .speaker-tile.focused {
-    background: rgba(59, 130, 246, 0.1);
-    border-color: rgba(59, 130, 246, 0.3);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
   }
 
   .speaker-tile.speaking {
-    background: rgba(34, 197, 94, 0.1);
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .speaker-avatar-container {
     position: relative;
-    width: 80px;
-    height: 80px;
-    border-radius: 12px;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
     overflow: hidden;
   }
 
@@ -1901,14 +1934,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 12px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
   }
 
   .speaker-ring {
     position: absolute;
     inset: -3px;
-    border-radius: 15px;
-    border: 3px solid #22c55e;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.5);
     animation: speaker-pulse 1s ease-in-out infinite;
     pointer-events: none;
   }
@@ -1919,35 +1953,36 @@
   }
 
   .speaker-name {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.8);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 90px;
+    max-width: 85px;
+    text-transform: lowercase;
   }
 
   .speaker-muted-icon {
     flex-shrink: 0;
-    color: #ef4444;
+    color: rgba(255, 255, 255, 0.4);
   }
 
   /* Stream watching styles */
   .speaker-tile.watching {
-    background: rgba(139, 92, 246, 0.15);
-    border-color: rgba(139, 92, 246, 0.5);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
   }
 
   .stream-indicator {
     position: absolute;
     top: 4px;
     right: 4px;
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     border-radius: 6px;
-    background: rgba(239, 68, 68, 0.9);
-    color: #fff;
+    background: rgba(255, 255, 255, 0.9);
+    color: #050505;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1955,7 +1990,7 @@
   }
 
   .stream-indicator.watching {
-    background: rgba(34, 197, 94, 0.9);
+    background: #fff;
     animation: none;
   }
 
@@ -1965,13 +2000,14 @@
   }
 
   .watch-label {
-    font-size: 10px;
-    color: rgba(139, 92, 246, 0.9);
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.5);
     font-weight: 500;
+    text-transform: lowercase;
   }
 
   .speaker-tile.watching .watch-label {
-    color: #22c55e;
+    color: #fff;
   }
 
   .speaker-info {
@@ -1984,9 +2020,9 @@
 
   /* Participant Sidebar - fixed positioning */
   .stage-layout .participant-sidebar {
-    width: 240px;
+    width: 220px;
     flex-shrink: 0;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(255, 255, 255, 0.02);
     border-left: 1px solid rgba(255, 255, 255, 0.06);
     overflow-y: auto;
   }
@@ -1994,22 +2030,22 @@
   /* Responsive adjustments */
   @media (max-width: 768px) {
     .speaker-tile {
-      min-width: 100px;
+      min-width: 90px;
       padding: 8px;
     }
 
     .speaker-avatar-container {
-      width: 64px;
-      height: 64px;
+      width: 56px;
+      height: 56px;
     }
 
     .speaker-name {
-      font-size: 12px;
-      max-width: 70px;
+      font-size: 11px;
+      max-width: 65px;
     }
 
     .stage-video-container {
-      border-radius: 12px;
+      border-radius: 10px;
     }
     
     .stage-layout.with-sidebar {
@@ -2018,7 +2054,7 @@
     
     .stage-layout .participant-sidebar {
       width: 100%;
-      max-height: 200px;
+      max-height: 180px;
       border-left: none;
       border-top: 1px solid rgba(255, 255, 255, 0.06);
     }

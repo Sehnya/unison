@@ -34,14 +34,10 @@
 
   function getGuildGradient(id: string): string {
     const gradients = [
-      'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-      'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-      'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-      'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-      'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-      'linear-gradient(135deg, #5ee7df 0%, #b490ca 100%)',
-      'linear-gradient(135deg, #d299c2 0%, #fef9d7 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)',
+      'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%)',
     ];
     const index = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % gradients.length;
     return gradients[index];
@@ -50,51 +46,53 @@
   function selectGuild(guildId: string) {
     dispatch('selectGuild', { guildId });
   }
+
+  // Get time-based greeting
+  function getGreeting(): string {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'good morning';
+    if (hour < 18) return 'good afternoon';
+    return 'good evening';
+  }
 </script>
 
 <div class="dashboard">
   <header class="dashboard-header">
     <div class="header-content">
-      <h1>Welcome Back</h1>
-      <p class="subtitle">Your communities are waiting for you</p>
+      <p class="greeting">{getGreeting()}</p>
+      <h1>welcome back</h1>
+      <p class="subtitle">your spaces are ready</p>
     </div>
-    <button class="create-btn" on:click={() => dispatch('createGuild')}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 5v14M5 12h14"/>
-      </svg>
-      Create Guild
-    </button>
   </header>
 
   <div class="section">
-    <h2 class="section-title">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-      </svg>
-      Your Guilds
-      <span class="count">{guilds.length}</span>
-    </h2>
+    <div class="section-header">
+      <h2 class="section-title">your spaces</h2>
+      <button class="create-btn" on:click={() => dispatch('createGuild')}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+        create
+      </button>
+    </div>
 
     {#if guilds.length === 0}
       <div class="empty-state">
         <div class="empty-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
             <circle cx="9" cy="7" r="4"/>
             <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
             <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
           </svg>
         </div>
-        <h3>No guilds yet</h3>
-        <p>Create your first guild or join an existing one to get started</p>
+        <h3>no spaces yet</h3>
+        <p>create your first space to get started</p>
         <button class="empty-create-btn" on:click={() => dispatch('createGuild')}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M5 12h14"/>
           </svg>
-          Create Your First Guild
+          create space
         </button>
       </div>
     {:else}
@@ -107,14 +105,6 @@
             class:selected={selectedGuildId === guild.id}
             on:click={() => selectGuild(guild.id)}
           >
-            <!-- Banner -->
-            <div 
-              class="card-banner" 
-              style={guild.banner ? `background-image: url(${guild.banner})` : getGuildGradient(guild.id)}
-            >
-              <div class="banner-overlay"></div>
-            </div>
-
             <!-- Icon -->
             <div class="card-icon-wrapper">
               {#if guild.icon}
@@ -128,30 +118,27 @@
 
             <!-- Content -->
             <div class="card-content">
-              <h3 class="guild-name">{guild.name}</h3>
+              <h3 class="guild-name">{guild.name.toLowerCase()}</h3>
               
               {#if guild.description}
-                <p class="guild-description">{guild.description}</p>
-              {:else}
-                <p class="guild-description no-desc">No description</p>
+                <p class="guild-description">{guild.description.toLowerCase()}</p>
               {/if}
 
               <div class="guild-stats">
                 <div class="stat">
-                  <span class="stat-icon online"></span>
-                  <span class="stat-value">{onlineCount}</span>
-                  <span class="stat-label">Online</span>
+                  <span class="status-indicator">
+                    <span class="status-dot"></span>
+                  </span>
+                  <span class="stat-text">{onlineCount} online</span>
                 </div>
                 <div class="stat">
-                  <span class="stat-icon members"></span>
-                  <span class="stat-value">{memberCount}</span>
-                  <span class="stat-label">Members</span>
+                  <span class="stat-text">{memberCount} members</span>
                 </div>
               </div>
             </div>
 
-            <!-- Hover indicator -->
-            <div class="card-hover-indicator">
+            <!-- Arrow -->
+            <div class="card-arrow">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M9 18l6-6-6-6"/>
               </svg>
@@ -168,80 +155,77 @@
     flex: 1;
     height: 100%;
     overflow-y: auto;
-    background: linear-gradient(180deg, rgba(15, 15, 25, 0.98) 0%, rgba(10, 10, 20, 1) 100%);
-    padding: 32px;
+    background: #050505;
+    padding: 48px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
 
   .dashboard-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 32px;
+    margin-bottom: 40px;
+  }
+
+  .greeting {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.35);
+    letter-spacing: 0.02em;
   }
 
   .header-content h1 {
     margin: 0;
-    font-size: 32px;
-    font-weight: 700;
+    font-size: 48px;
+    font-weight: 600;
     color: #fff;
-    background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.8) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    letter-spacing: -0.04em;
   }
 
   .subtitle {
-    margin: 8px 0 0;
-    font-size: 16px;
+    margin: 12px 0 0;
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  /* Section */
+  .section {
+    margin-bottom: 32px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .section-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
     color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 0.02em;
   }
 
   .create-btn {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 20px;
-    background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
-    border: none;
-    border-radius: 12px;
-    color: #fff;
-    font-size: 14px;
-    font-weight: 600;
+    padding: 10px 18px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(49, 130, 206, 0.3);
   }
 
   .create-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(49, 130, 206, 0.4);
-  }
-
-  .section {
-    margin-bottom: 32px;
-  }
-
-  .section-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 0 0 20px;
-    font-size: 18px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
-  }
-
-  .section-title svg {
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  .count {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 13px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.6);
+    background: #fff;
+    border-color: #fff;
+    color: #050505;
   }
 
   /* Empty State */
@@ -250,34 +234,35 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 60px 20px;
+    padding: 80px 20px;
     background: rgba(255, 255, 255, 0.02);
-    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 16px;
     text-align: center;
   }
 
   .empty-icon {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.05);
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.04);
     display: flex;
     align-items: center;
     justify-content: center;
     margin-bottom: 20px;
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.25);
   }
 
   .empty-state h3 {
     margin: 0 0 8px;
-    font-size: 20px;
-    color: #fff;
+    font-size: 18px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
   }
 
   .empty-state p {
-    margin: 0 0 24px;
-    color: rgba(255, 255, 255, 0.5);
+    margin: 0 0 28px;
+    color: rgba(255, 255, 255, 0.4);
     font-size: 14px;
   }
 
@@ -285,79 +270,63 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 14px 24px;
-    background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
+    padding: 12px 24px;
+    background: #fff;
     border: none;
-    border-radius: 12px;
-    color: #fff;
-    font-size: 14px;
+    border-radius: 10px;
+    color: #050505;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .empty-create-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(49, 130, 206, 0.4);
+    background: rgba(255, 255, 255, 0.9);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
   }
 
   /* Guilds Grid */
   .guilds-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .guild-card {
     position: relative;
-    background: rgba(255, 255, 255, 0.03);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 16px;
-    overflow: hidden;
+    border-radius: 14px;
     cursor: pointer;
-    transition: all 0.25s ease;
+    transition: all 0.2s ease;
     text-align: left;
   }
 
   .guild-card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(49, 130, 206, 0.3);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
   }
 
   .guild-card.selected {
-    border-color: #3182ce;
-    box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.3);
-  }
-
-  /* Card Banner */
-  .card-banner {
-    position: relative;
-    height: 80px;
-    background-size: cover;
-    background-position: center;
-  }
-
-  .banner-overlay {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to bottom, transparent 0%, rgba(15, 15, 25, 0.9) 100%);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.2);
   }
 
   /* Card Icon */
   .card-icon-wrapper {
-    position: absolute;
-    top: 50px;
-    left: 16px;
-    z-index: 10;
+    flex-shrink: 0;
   }
 
   .card-icon, .card-icon-placeholder {
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
-    border: 3px solid rgba(15, 15, 25, 0.95);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
   }
 
   .card-icon {
@@ -368,20 +337,22 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
-    font-weight: 700;
-    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   /* Card Content */
   .card-content {
-    padding: 36px 16px 16px;
+    flex: 1;
+    min-width: 0;
   }
 
   .guild-name {
-    margin: 0 0 8px;
-    font-size: 16px;
-    font-weight: 600;
+    margin: 0 0 4px;
+    font-size: 15px;
+    font-weight: 500;
     color: #fff;
     white-space: nowrap;
     overflow: hidden;
@@ -389,21 +360,12 @@
   }
 
   .guild-description {
-    margin: 0 0 16px;
+    margin: 0 0 8px;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.6);
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
+    color: rgba(255, 255, 255, 0.4);
+    white-space: nowrap;
     overflow: hidden;
-    min-height: 40px;
-  }
-
-  .guild-description.no-desc {
-    color: rgba(255, 255, 255, 0.3);
-    font-style: italic;
+    text-overflow: ellipsis;
   }
 
   /* Stats */
@@ -418,51 +380,65 @@
     gap: 6px;
   }
 
-  .stat-icon {
+  /* Pulsating status indicator like DaisyUI */
+  .status-indicator {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 10px;
+    height: 10px;
+  }
+
+  .status-dot {
+    position: absolute;
     width: 8px;
     height: 8px;
     border-radius: 50%;
-  }
-
-  .stat-icon.online {
     background: #22c55e;
-    box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
   }
 
-  .stat-icon.members {
-    background: rgba(255, 255, 255, 0.4);
-  }
-
-  .stat-value {
-    font-size: 13px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
-  }
-
-  .stat-label {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.4);
-  }
-
-  /* Hover Indicator */
-  .card-hover-indicator {
+  .status-dot::before {
+    content: '';
     position: absolute;
-    right: 16px;
-    top: 50%;
-    transform: translateY(-50%) translateX(10px);
-    opacity: 0;
-    color: rgba(255, 255, 255, 0.5);
+    inset: -2px;
+    border-radius: 50%;
+    background: #22c55e;
+    opacity: 0.4;
+    animation: pulse-ring 1.5s ease-out infinite;
+  }
+
+  @keyframes pulse-ring {
+    0% {
+      transform: scale(1);
+      opacity: 0.4;
+    }
+    100% {
+      transform: scale(1.8);
+      opacity: 0;
+    }
+  }
+
+  .stat-text {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  /* Arrow */
+  .card-arrow {
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.2);
     transition: all 0.2s ease;
   }
 
-  .guild-card:hover .card-hover-indicator {
-    opacity: 1;
-    transform: translateY(-50%) translateX(0);
+  .guild-card:hover .card-arrow {
+    color: rgba(255, 255, 255, 0.5);
+    transform: translateX(4px);
   }
 
   /* Scrollbar */
   .dashboard::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
   }
 
   .dashboard::-webkit-scrollbar-track {
@@ -470,11 +446,22 @@
   }
 
   .dashboard::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
   }
 
   .dashboard::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .dashboard {
+      padding: 24px;
+    }
+
+    .header-content h1 {
+      font-size: 36px;
+    }
   }
 </style>

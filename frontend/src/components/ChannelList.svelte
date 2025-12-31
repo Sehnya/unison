@@ -35,7 +35,6 @@
   let error: string | null = null;
   let generalExpanded = true;
   let voiceExpanded = true;
-  let viewMode: ViewMode = 'list';
   
   // Channel creation modal state
   let showCreateChannelModal = false;
@@ -57,11 +56,6 @@
 
   // Load view mode from localStorage on mount
   onMount(() => {
-    const savedViewMode = localStorage.getItem('channelListViewMode');
-    if (savedViewMode && ['list', 'box', 'icon'].includes(savedViewMode)) {
-      viewMode = savedViewMode as ViewMode;
-    }
-    
     // Refresh presence every 5 seconds to catch any missed updates
     presenceRefreshInterval = setInterval(() => {
       refreshVoicePresence();
@@ -263,12 +257,6 @@
     return presenceUsers;
   }
 
-  // Save view mode to localStorage when it changes
-  function setViewMode(mode: ViewMode) {
-    viewMode = mode;
-    localStorage.setItem('channelListViewMode', mode);
-  }
-
   // Load channels when guild changes
   $: if (selectedGuildId && authToken) {
     loadChannels();
@@ -446,271 +434,168 @@
 <aside class="channel-list" class:collapsed>
   <!-- Header -->
   <header class="header">
-    <div class="title-row">
-      <h1 class="title">
+    <div class="guild-info">
+      <h1 class="guild-name">
         {#if guilds.length > 0 && selectedGuildId}
-          {guilds.find(g => g.id === selectedGuildId)?.name || 'Channels'}
+          {(guilds.find(g => g.id === selectedGuildId)?.name || 'channels').toLowerCase()}
         {:else}
-          Channels
+          channels
         {/if}
       </h1>
-      <button class="edit-btn" aria-label="Edit">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13"/>
-          <path d="M18.5 2.50001C18.8978 2.10219 19.4374 1.87869 20 1.87869C20.5626 1.87869 21.1022 2.10219 21.5 2.50001C21.8978 2.89784 22.1213 3.4374 22.1213 4.00001C22.1213 4.56262 21.8978 5.10219 21.5 5.50001L12 15L8 16L9 12L18.5 2.50001Z"/>
-        </svg>
-      </button>
-    </div>
-    
-    <!-- View Mode Toggle -->
-    <div class="view-toggle">
-      <button 
-        class="view-btn" 
-        class:active={viewMode === 'list'} 
-        on:click={() => setViewMode('list')}
-        aria-label="List view"
-        title="List view"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="8" y1="6" x2="21" y2="6"/>
-          <line x1="8" y1="12" x2="21" y2="12"/>
-          <line x1="8" y1="18" x2="21" y2="18"/>
-          <line x1="3" y1="6" x2="3.01" y2="6"/>
-          <line x1="3" y1="12" x2="3.01" y2="12"/>
-          <line x1="3" y1="18" x2="3.01" y2="18"/>
-        </svg>
-      </button>
-      <button 
-        class="view-btn" 
-        class:active={viewMode === 'box'} 
-        on:click={() => setViewMode('box')}
-        aria-label="Box view"
-        title="Box view"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7"/>
-          <rect x="14" y="3" width="7" height="7"/>
-          <rect x="14" y="14" width="7" height="7"/>
-          <rect x="3" y="14" width="7" height="7"/>
-        </svg>
-      </button>
-      <button 
-        class="view-btn" 
-        class:active={viewMode === 'icon'} 
-        on:click={() => setViewMode('icon')}
-        aria-label="Icon view"
-        title="Icon view"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="5" cy="5" r="2"/>
-          <circle cx="12" cy="5" r="2"/>
-          <circle cx="19" cy="5" r="2"/>
-          <circle cx="5" cy="12" r="2"/>
-          <circle cx="12" cy="12" r="2"/>
-          <circle cx="19" cy="12" r="2"/>
-          <circle cx="5" cy="19" r="2"/>
-          <circle cx="12" cy="19" r="2"/>
-          <circle cx="19" cy="19" r="2"/>
-        </svg>
-      </button>
+      <span class="channel-count">{allChannels.length} channels</span>
     </div>
   </header>
 
   <!-- Search -->
-  <div class="search-container">
-    <input type="text" placeholder="Search channels..." class="search-input" />
-    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+  <div class="search-wrapper">
+    <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="11" cy="11" r="8"/>
       <path d="M21 21L16.65 16.65"/>
     </svg>
+    <input type="text" placeholder="search channels" class="search-input" />
   </div>
 
   <div class="content">
     {#if error}
-      <div class="error-message">{error}</div>
+      <div class="status-message error">{error.toLowerCase()}</div>
     {:else if loading}
-      <div class="loading-message">Loading channels...</div>
+      <div class="status-message">loading...</div>
     {:else if !selectedGuildId}
-      <div class="empty-state-message">Select a guild to view channels</div>
+      <div class="status-message">select a space to view channels</div>
     {:else if allChannels.length === 0}
-      <div class="empty-state-message">No channels in this guild</div>
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
+        <p>no channels yet</p>
+        <button class="create-first-btn" on:click={() => openCreateChannelModal('text')}>
+          create channel
+        </button>
+      </div>
     {:else}
-      <!-- LIST VIEW -->
-      {#if viewMode === 'list'}
-        <!-- Text Channels Section -->
-        <div class="section">
-          <button class="section-header" on:click={() => generalExpanded = !generalExpanded}>
-            <svg class="chevron" class:expanded={generalExpanded} width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M9 18L15 12L9 6"/>
+      <!-- Text Channels Section -->
+      <section class="channel-section">
+        <button class="section-header" on:click={() => generalExpanded = !generalExpanded}>
+          <svg class="chevron" class:expanded={generalExpanded} width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M9 18L15 12L9 6"/>
+          </svg>
+          <span class="section-label">text</span>
+          <span class="section-count">{textChannels.length}</span>
+          <button class="add-channel-btn" aria-label="Add text channel" on:click|stopPropagation={() => openCreateChannelModal('text')}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 5V19M5 12H19"/>
             </svg>
-            <span class="section-title">TEXT CHANNELS</span>
-            <button class="add-btn" aria-label="Add channel" on:click|stopPropagation={() => openCreateChannelModal('text')}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 5V19M5 12H19"/>
-              </svg>
-            </button>
           </button>
-          
-          {#if generalExpanded}
-            <ul class="channel-list-items">
-              {#each textChannels as channel}
-                <li>
-                  <button 
-                    class="channel-item"
-                    class:active={selectedChannelId === channel.id}
-                    on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: channel.type })}
-                  >
-                    <span class="channel-hash">#</span>
-                    <span class="channel-name">{channel.name}</span>
-                    {#if isAdmin}
-                      <button 
-                        class="delete-btn" 
-                        aria-label="Delete channel"
-                        title="Delete channel"
-                        on:click|stopPropagation={() => deleteChannel(channel.id, channel.name)}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                        </svg>
-                      </button>
-                    {/if}
-                  </button>
-                </li>
-              {/each}
-              {#if textChannels.length === 0}
-                <li class="empty-state">No text channels</li>
-              {/if}
-            </ul>
-          {/if}
-        </div>
-
-        <!-- Voice Channels Section -->
-        <div class="section">
-          <button class="section-header" on:click={() => voiceExpanded = !voiceExpanded}>
-            <svg class="chevron" class:expanded={voiceExpanded} width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M9 18L15 12L9 6"/>
-            </svg>
-            <span class="section-title">VOICE CHANNELS</span>
-            <button class="add-btn" aria-label="Add voice channel" on:click|stopPropagation={() => openCreateChannelModal('voice')}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 5V19M5 12H19"/>
-              </svg>
-            </button>
-          </button>
-          
-          {#if voiceExpanded}
-            <ul class="channel-list-items">
-              {#each voiceChannels as channel}
-                <li class="voice-channel-wrapper">
-                  <button 
-                    class="channel-item voice"
-                    class:active={selectedChannelId === channel.id}
-                    class:has-users={getVoiceUsers(channel.id, voiceUsersTrigger).length > 0}
-                    on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: channel.type })}
-                  >
-                    <svg class="voice-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
-                      <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
-                      <path d="M12 19V23M8 23H16"/>
-                    </svg>
-                    <span class="channel-name">{channel.name}</span>
-                    {#if getVoiceUsers(channel.id, voiceUsersTrigger).length > 0}
-                      <span class="user-count">{getVoiceUsers(channel.id, voiceUsersTrigger).length}</span>
-                    {/if}
-                    {#if isAdmin}
-                      <button 
-                        class="delete-btn" 
-                        aria-label="Delete channel"
-                        title="Delete channel"
-                        on:click|stopPropagation={() => deleteChannel(channel.id, channel.name)}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                        </svg>
-                      </button>
-                    {/if}
-                  </button>
-                  <!-- Users in voice channel -->
-                  {#if getVoiceUsers(channel.id, voiceUsersTrigger).length > 0}
-                    <ul class="voice-users">
-                      {#each getVoiceUsers(channel.id, voiceUsersTrigger) as user (user.id)}
-                        <li class="voice-user">
-                          <div class="voice-user-avatar">
-                            <Avatar 
-                              userId={user.id} 
-                              username={user.username} 
-                              src={user.avatar} 
-                              size={24} 
-                            />
-                            <div class="voice-connected-dot"></div>
-                          </div>
-                          <span class="voice-user-name">{user.username}</span>
-                        </li>
-                      {/each}
-                    </ul>
+        </button>
+        
+        {#if generalExpanded}
+          <ul class="channel-items">
+            {#each textChannels as channel}
+              <li>
+                <button 
+                  class="channel-btn"
+                  class:active={selectedChannelId === channel.id}
+                  on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: 'text' })}
+                >
+                  <span class="channel-icon">#</span>
+                  <span class="channel-name">{channel.name.toLowerCase()}</span>
+                  {#if isAdmin}
+                    <button 
+                      class="delete-btn" 
+                      aria-label="Delete channel"
+                      on:click|stopPropagation={() => deleteChannel(channel.id, channel.name)}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                      </svg>
+                    </button>
                   {/if}
-                </li>
-              {/each}
-              {#if voiceChannels.length === 0}
-                <li class="empty-state">No voice channels</li>
-              {/if}
-            </ul>
-          {/if}
-        </div>
+                </button>
+              </li>
+            {/each}
+            {#if textChannels.length === 0}
+              <li class="no-channels">no text channels</li>
+            {/if}
+          </ul>
+        {/if}
+      </section>
 
-      <!-- BOX VIEW -->
-      {:else if viewMode === 'box'}
-        <div class="box-grid">
-          {#each allChannels as channel}
-            <button 
-              class="box-item"
-              class:active={selectedChannelId === channel.id}
-              class:voice={isVoiceChannel(channel)}
-              on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: channel.type })}
-            >
-              <div class="box-icon">
-                {#if isVoiceChannel(channel)}
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <!-- Voice Channels Section -->
+      <section class="channel-section">
+        <button class="section-header" on:click={() => voiceExpanded = !voiceExpanded}>
+          <svg class="chevron" class:expanded={voiceExpanded} width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M9 18L15 12L9 6"/>
+          </svg>
+          <span class="section-label">voice</span>
+          <span class="section-count">{voiceChannels.length}</span>
+          <button class="add-channel-btn" aria-label="Add voice channel" on:click|stopPropagation={() => openCreateChannelModal('voice')}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 5V19M5 12H19"/>
+            </svg>
+          </button>
+        </button>
+        
+        {#if voiceExpanded}
+          <ul class="channel-items">
+            {#each voiceChannels as channel}
+              <li class="voice-item">
+                <button 
+                  class="channel-btn voice"
+                  class:active={selectedChannelId === channel.id}
+                  class:has-users={getVoiceUsers(channel.id, voiceUsersTrigger).length > 0}
+                  on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: 'voice' })}
+                >
+                  <svg class="channel-icon voice-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
                     <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
-                    <path d="M12 19V23M8 23H16"/>
                   </svg>
-                {:else}
-                  <span class="box-hash">#</span>
+                  <span class="channel-name">{channel.name.toLowerCase()}</span>
+                  {#if getVoiceUsers(channel.id, voiceUsersTrigger).length > 0}
+                    <span class="voice-count">{getVoiceUsers(channel.id, voiceUsersTrigger).length}</span>
+                  {/if}
+                  {#if isAdmin}
+                    <button 
+                      class="delete-btn" 
+                      aria-label="Delete channel"
+                      on:click|stopPropagation={() => deleteChannel(channel.id, channel.name)}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"/>
+                      </svg>
+                    </button>
+                  {/if}
+                </button>
+                <!-- Users in voice channel -->
+                {#if getVoiceUsers(channel.id, voiceUsersTrigger).length > 0}
+                  <ul class="voice-users">
+                    {#each getVoiceUsers(channel.id, voiceUsersTrigger) as user (user.id)}
+                      <li class="voice-user">
+                        <div class="user-avatar">
+                          <Avatar 
+                            userId={user.id} 
+                            username={user.username} 
+                            src={user.avatar} 
+                            size={20} 
+                          />
+                          <span class="online-dot"></span>
+                        </div>
+                        <span class="user-name">{user.username.toLowerCase()}</span>
+                      </li>
+                    {/each}
+                  </ul>
                 {/if}
-              </div>
-              <span class="box-name">{channel.name}</span>
-              <span class="box-type">{isVoiceChannel(channel) ? 'Voice' : 'Text'}</span>
-            </button>
-          {/each}
-        </div>
-
-      <!-- ICON VIEW -->
-      {:else if viewMode === 'icon'}
-        <div class="icon-grid">
-          {#each allChannels as channel}
-            <button 
-              class="icon-item"
-              class:active={selectedChannelId === channel.id}
-              class:voice={isVoiceChannel(channel)}
-              on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: channel.type })}
-              title={channel.name}
-            >
-              {#if isVoiceChannel(channel)}
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
-                  <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
-                </svg>
-              {:else}
-                <span class="icon-hash">#</span>
-              {/if}
-            </button>
-          {/each}
-        </div>
-      {/if}
+              </li>
+            {/each}
+            {#if voiceChannels.length === 0}
+              <li class="no-channels">no voice channels</li>
+            {/if}
+          </ul>
+        {/if}
+      </section>
     {/if}
   </div>
-
 </aside>
 
 <!-- Create Channel Modal -->
@@ -725,12 +610,14 @@
   .channel-list {
     display: flex;
     flex-direction: column;
-    width: 280px;
-    min-width: 280px;
+    width: 260px;
+    min-width: 260px;
     height: 100%;
-    background: rgba(15, 15, 25, 0.95);
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    background: #050505;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
     transition: width 0.2s ease, min-width 0.2s ease;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
 
   .channel-list.collapsed {
@@ -741,133 +628,146 @@
 
   /* Header */
   .header {
-    padding: 20px 16px 12px;
+    padding: 20px 16px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   }
 
-  .title-row {
+  .guild-info {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
+    flex-direction: column;
+    gap: 4px;
   }
 
-  .title {
-    font-size: 20px;
-    font-weight: 700;
+  .guild-name {
+    font-size: 16px;
+    font-weight: 600;
     color: #fff;
     margin: 0;
+    letter-spacing: -0.02em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .edit-btn {
-    width: 32px;
-    height: 32px;
-    border: none;
-    background: none;
-    color: rgba(255, 255, 255, 0.5);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    transition: all 0.15s ease;
-    flex-shrink: 0;
-  }
-
-  .edit-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
-  }
-
-  /* View Toggle */
-  .view-toggle {
-    display: flex;
-    gap: 4px;
-    background: rgba(255, 255, 255, 0.05);
-    padding: 4px;
-    border-radius: 8px;
-  }
-
-  .view-btn {
-    flex: 1;
-    padding: 8px;
-    border: none;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.4);
-    cursor: pointer;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
-  }
-
-  .view-btn:hover {
-    color: rgba(255, 255, 255, 0.7);
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  .view-btn.active {
-    background: rgba(26, 54, 93, 0.5);
-    color: #63b3ed;
+  .channel-count {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.35);
   }
 
   /* Search */
-  .search-container {
+  .search-wrapper {
     position: relative;
-    padding: 0 16px;
-    margin-bottom: 16px;
+    padding: 0 12px;
+    margin-bottom: 12px;
   }
 
   .search-input {
     width: 100%;
-    padding: 12px 40px 12px 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 24px;
+    padding: 10px 12px 10px 34px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
     color: #fff;
-    font-size: 14px;
+    font-size: 13px;
+    transition: all 0.2s ease;
   }
 
   .search-input::placeholder {
-    color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.25);
   }
 
   .search-input:focus {
     outline: none;
-    border-color: rgba(124, 58, 237, 0.5);
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .search-icon {
     position: absolute;
-    right: 28px;
+    left: 24px;
     top: 50%;
     transform: translateY(-50%);
-    color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.25);
+    pointer-events: none;
   }
 
   /* Content */
   .content {
     flex: 1;
     overflow-y: auto;
-    padding: 0 8px;
+    padding: 8px 8px 16px;
   }
 
-  .error-message, .loading-message, .empty-state-message {
-    padding: 16px;
+  .content::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+  }
+
+  .status-message {
+    padding: 24px 16px;
     text-align: center;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 14px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 13px;
   }
 
-  .error-message {
+  .status-message.error {
     color: #ef4444;
   }
 
-  /* Sections (List View) */
-  .section {
+  /* Empty State */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 40px 20px;
+    text-align: center;
+  }
+
+  .empty-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.2);
+  }
+
+  .empty-state p {
+    margin: 0;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .create-first-btn {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .create-first-btn:hover {
+    background: #fff;
+    color: #050505;
+    border-color: #fff;
+  }
+
+  /* Channel Section */
+  .channel-section {
     margin-bottom: 16px;
   }
 
@@ -876,87 +776,112 @@
     align-items: center;
     gap: 6px;
     width: 100%;
-    padding: 8px;
+    padding: 6px 8px;
     background: none;
     border: none;
     cursor: pointer;
     text-align: left;
+    border-radius: 6px;
+    transition: background 0.15s ease;
+  }
+
+  .section-header:hover {
+    background: rgba(255, 255, 255, 0.03);
   }
 
   .chevron {
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.3);
     transition: transform 0.2s ease;
+    flex-shrink: 0;
   }
 
   .chevron.expanded {
     transform: rotate(90deg);
   }
 
-  .section-title {
+  .section-label {
     flex: 1;
     font-size: 11px;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 0.3px;
   }
 
-  .add-btn {
-    width: 20px;
-    height: 20px;
+  .section-count {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.25);
+    padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 4px;
+  }
+
+  .add-channel-btn {
+    width: 18px;
+    height: 18px;
     border: none;
     background: none;
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.25);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 4px;
     transition: all 0.15s ease;
+    opacity: 0;
   }
 
-  .add-btn:hover {
+  .section-header:hover .add-channel-btn {
+    opacity: 1;
+  }
+
+  .add-channel-btn:hover {
     color: #fff;
     background: rgba(255, 255, 255, 0.1);
   }
 
-  /* Channel List (List View) */
-  .channel-list-items {
+  /* Channel Items */
+  .channel-items {
     list-style: none;
     padding: 0;
-    margin: 0;
+    margin: 4px 0 0;
   }
 
-  .channel-item {
+  .channel-btn {
     display: flex;
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 8px 12px;
+    padding: 8px 10px;
     background: none;
     border: none;
     border-radius: 6px;
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
     text-align: left;
     font-size: 14px;
     transition: all 0.15s ease;
   }
 
-  .channel-item:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.85);
+  .channel-btn:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.8);
   }
 
-  .channel-item.active {
+  .channel-btn.active {
     background: rgba(255, 255, 255, 0.08);
     color: #fff;
   }
 
-  .channel-hash {
-    color: rgba(255, 255, 255, 0.35);
+  .channel-icon {
+    color: rgba(255, 255, 255, 0.3);
     font-weight: 500;
-    font-size: 15px;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .channel-btn:hover .channel-icon,
+  .channel-btn.active .channel-icon {
+    color: rgba(255, 255, 255, 0.5);
   }
 
   .channel-name {
@@ -966,74 +891,39 @@
     text-overflow: ellipsis;
   }
 
-  .channel-item.voice {
-    color: rgba(255, 255, 255, 0.55);
-  }
-
-  .channel-item.voice.has-users {
-    color: #22c55e;
-    background: rgba(34, 197, 94, 0.08);
-  }
-
-  .channel-item.voice.has-users:hover {
-    background: rgba(34, 197, 94, 0.12);
-  }
-
-  .channel-item.document {
-    color: rgba(255, 255, 255, 0.55);
-  }
-
-  .channel-item.document:hover {
-    color: #3b82f6;
-  }
-
-  .channel-item.document.active {
-    color: #3b82f6;
-    background: rgba(59, 130, 246, 0.08);
-  }
-
-  .document-icon {
-    color: rgba(255, 255, 255, 0.4);
-    flex-shrink: 0;
-  }
-
-  .channel-item.document:hover .document-icon,
-  .channel-item.document.active .document-icon {
-    color: #3b82f6;
-  }
-
-  .voice-icon {
-    color: rgba(255, 255, 255, 0.4);
-    flex-shrink: 0;
-  }
-
-  .channel-item.voice.has-users .voice-icon {
-    color: #22c55e;
-  }
-
-  .user-count {
-    font-size: 11px;
-    background: rgba(34, 197, 94, 0.2);
-    color: #22c55e;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-weight: 600;
-    min-width: 18px;
-    text-align: center;
-  }
-
-  /* Voice channel wrapper for users list */
-  .voice-channel-wrapper {
+  /* Voice Channel Styles */
+  .voice-item {
     display: flex;
     flex-direction: column;
   }
 
-  /* Voice users list */
+  .channel-btn.voice .voice-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .channel-btn.voice.has-users {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .channel-btn.voice.has-users .voice-icon {
+    color: #22c55e;
+  }
+
+  .voice-count {
+    font-size: 10px;
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-weight: 600;
+  }
+
+  /* Voice Users */
   .voice-users {
     list-style: none;
     padding: 0;
-    margin: 2px 0 8px 0;
-    padding-left: 20px;
+    margin: 2px 0 6px 22px;
   }
 
   .voice-user {
@@ -1041,185 +931,53 @@
     align-items: center;
     gap: 8px;
     padding: 4px 8px;
-    margin-left: 8px;
     border-radius: 4px;
     transition: background 0.15s ease;
-    cursor: pointer;
   }
 
   .voice-user:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.04);
   }
 
-  .voice-user-avatar {
+  .user-avatar {
     position: relative;
     flex-shrink: 0;
   }
 
-  .voice-connected-dot {
+  .online-dot {
     position: absolute;
-    bottom: -2px;
-    right: -2px;
-    width: 10px;
-    height: 10px;
+    bottom: -1px;
+    right: -1px;
+    width: 8px;
+    height: 8px;
     background: #22c55e;
-    border: 2px solid rgba(15, 15, 25, 0.95);
+    border: 2px solid #050505;
     border-radius: 50%;
   }
 
-  .voice-user-name {
+  .user-name {
     flex: 1;
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.75);
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-weight: 500;
   }
 
-  .voice-user:hover .voice-user-name {
-    color: rgba(255, 255, 255, 0.9);
-  }
-
-  .empty-state {
-    padding: 8px 12px;
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 13px;
+  .no-channels {
+    padding: 8px 10px;
+    color: rgba(255, 255, 255, 0.25);
+    font-size: 12px;
     font-style: italic;
   }
 
-  /* Box View */
-  .box-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    padding: 8px;
-  }
-
-  .box-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 16px 12px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .box-item:hover {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.1);
-    transform: translateY(-2px);
-  }
-
-  .box-item.active {
-    background: rgba(26, 54, 93, 0.3);
-    border-color: rgba(49, 130, 206, 0.4);
-  }
-
-  .box-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.05);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: rgba(255, 255, 255, 0.6);
-  }
-
-  .box-item.voice .box-icon {
-    background: rgba(34, 197, 94, 0.1);
-    color: #22c55e;
-  }
-
-  .box-item.document .box-icon,
-  .box-icon.document {
-    background: rgba(59, 130, 246, 0.1);
-    color: #3b82f6;
-  }
-
-  .box-hash {
-    font-size: 22px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  .box-name {
-    font-size: 12px;
-    font-weight: 500;
-    color: #fff;
-    text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-  }
-
-  .box-type {
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.4);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  /* Icon View */
-  .icon-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    padding: 12px;
-  }
-
-  .icon-item {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  .icon-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.15);
-    transform: scale(1.05);
-  }
-
-  .icon-item.active {
-    background: rgba(26, 54, 93, 0.4);
-    border-color: rgba(49, 130, 206, 0.5);
-    color: #63b3ed;
-  }
-
-  .icon-item.voice {
-    color: #22c55e;
-  }
-
-  .icon-item.document {
-    color: #3b82f6;
-  }
-
-  .icon-hash {
-    font-size: 18px;
-    font-weight: 600;
-  }
-
-  /* Delete button (admin only) */
+  /* Delete Button */
   .delete-btn {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     border: none;
     background: none;
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.2);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1231,7 +989,7 @@
     margin-left: auto;
   }
 
-  .channel-item:hover .delete-btn {
+  .channel-btn:hover .delete-btn {
     opacity: 1;
   }
 
