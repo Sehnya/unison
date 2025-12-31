@@ -201,10 +201,16 @@
   function getVoiceUsers(channelId: string): VoiceUser[] {
     const presenceUsers = voicePresence.get(channelId) || [];
     
+    console.log('🔍 getVoiceUsers called for channel:', channelId);
+    console.log('🔍 activeVoiceChannelId:', activeVoiceChannelId);
+    console.log('🔍 currentUser:', currentUser?.username);
+    console.log('🔍 presenceUsers:', presenceUsers);
+    
     // If current user is in this voice channel, make sure they're in the list
     if (activeVoiceChannelId === channelId && currentUser) {
       const currentUserInList = presenceUsers.find(u => u.id === currentUser.id);
       if (!currentUserInList) {
+        console.log('🔍 Adding current user to voice users list');
         return [
           {
             id: currentUser.id,
