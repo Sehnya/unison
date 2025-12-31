@@ -5,6 +5,7 @@
   import { getAblyClient } from '../lib/ably';
   import CreateChannelModal from './CreateChannelModal.svelte';
   import Avatar from './Avatar.svelte';
+  import ContextMenu from './ContextMenu.svelte';
 
   export let authToken: string | null = null;
   export let selectedGuildId: string | null = null;
@@ -18,6 +19,7 @@
     selectChannel: { channelId: string; channelType?: 'text' | 'voice' };
     selectGuild: { guildId: string };
     channelCreated: { channel: Channel };
+    openChannelSettings: { channel: Channel };
   }>();
 
   type ViewMode = 'list' | 'box' | 'icon';
@@ -40,6 +42,9 @@
   let showCreateChannelModal = false;
   let createChannelType: 'text' | 'voice' = 'text';
   
+  // Context menu state
+  let contextMenu: { x: number; y: number; channel: Channel } | null = null;
+  
   // Ably channel subscription for real-time updates
   let ablyChannel: any = null;
   
@@ -53,6 +58,35 @@
   $: if (activeVoiceChannelId !== undefined) {
     voiceUsersTrigger++;
   }
+
+  // Check if current user can edit channel (guild owner)
+  function canEditChannel(): boolean {
+    if (!currentUser || !selectedGuildId) return false;
+    const guild = guilds.find(g => g.id === selectedGuildId);
+    return guild?.owner_id === currentUser.id;
+  }
+
+  function handleChannelContextMenu(e: MouseEvent, channel: Channel) {
+    e.preventDefault();
+    if (canEditChannel()) {
+      contextMenu = { x: e.clientX, y: e.clientY, channel };
+    }
+  }
+
+  function handleContextMenuSelect(e: CustomEvent<{ action: string }>) {
+    if (e.detail.action === 'settings' && contextMenu?.channel) {
+      dispatch('openChannelSettings', { channel: contextMenu.channel });
+    }
+    contextMenu = null;
+  }
+
+  const channelMenuItems = [
+    { 
+      label: 'channel settings', 
+      action: 'settings',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
+    }
+  ];
 
   // Load view mode from localStorage on mount
   onMount(() => {
@@ -498,6 +532,7 @@
                   class="channel-btn"
                   class:active={selectedChannelId === channel.id}
                   on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: 'text' })}
+                  on:contextmenu={(e) => handleChannelContextMenu(e, channel)}
                 >
                   <span class="channel-icon">#</span>
                   <span class="channel-name">{channel.name.toLowerCase()}</span>
@@ -546,6 +581,7 @@
                   class:active={selectedChannelId === channel.id}
                   class:has-users={getVoiceUsers(channel.id, voiceUsersTrigger).length > 0}
                   on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: 'voice' })}
+                  on:contextmenu={(e) => handleChannelContextMenu(e, channel)}
                 >
                   <svg class="channel-icon voice-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
@@ -605,6 +641,17 @@
   on:close={() => showCreateChannelModal = false}
   on:create={handleCreateChannel}
 />
+
+<!-- Context Menu -->
+{#if contextMenu}
+  <ContextMenu 
+    x={contextMenu.x} 
+    y={contextMenu.y} 
+    items={channelMenuItems}
+    on:select={handleContextMenuSelect}
+    on:close={() => contextMenu = null}
+  />
+{/if}
 
 <style>
   .channel-list {

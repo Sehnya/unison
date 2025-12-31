@@ -17,7 +17,9 @@
   import BetaWelcomeModal from './components/BetaWelcomeModal.svelte';
   import ProfileSetupModal from './components/ProfileSetupModal.svelte';
   import MiniPlayer from './components/MiniPlayer.svelte';
-  import type { User, Guild } from './types';
+  import GuildSettingsModal from './components/GuildSettingsModal.svelte';
+  import ChannelSettingsModal from './components/ChannelSettingsModal.svelte';
+  import type { User, Guild, Channel } from './types';
   import { authStorage } from './utils/storage';
   import { hasPlaylist } from './lib/musicStore';
   import { parseRoute, navigateToGuild, navigateToChannel, navigateToDashboard, navigateToMyspace, navigateToSettings, navigateToHome } from './utils/router';
@@ -48,6 +50,11 @@
   let showProfileSetup = false;
   let viewedUser: User | null = null; // User being viewed (when clicking on someone's name in chat)
   
+  // Guild and Channel settings modals
+  let showGuildSettingsModal = false;
+  let guildToEdit: Guild | null = null;
+  let showChannelSettingsModal = false;
+  let channelToEdit: Channel | null = null;
   // Voice call state - separate from selected channel so call persists during navigation
   let activeVoiceCallChannelId: string | null = null;
   let activeVoiceCallChannelName: string | null = null;
@@ -515,6 +522,7 @@
         on:selectGuild={handleSelectGuild}
         on:openProfile={() => { showUserProfile = true; viewedUser = null; showSettings = false; selectedDMId = null; selectedDMUser = null; navigateToMyspace(); }}
         on:createGuild={handleCreateGuild}
+        on:openGuildSettings={(e) => { guildToEdit = e.detail.guild; showGuildSettingsModal = true; }}
       />
       {#if selectedGuildId}
         <ChannelList 
@@ -527,6 +535,7 @@
           activeVoiceChannelId={activeVoiceCallChannelId}
           on:selectChannel={handleSelectChannel}
           on:selectGuild={(e) => handleSelectGuildFromChannelList(e.detail.guildId)}
+          on:openChannelSettings={(e) => { channelToEdit = e.detail.channel; showChannelSettingsModal = true; }}
         />
         <button 
           class="collapse-toggle" 
@@ -632,6 +641,30 @@
           on:completed={handleProfileSetupCompleted}
         />
       {/if}
+
+      <!-- Guild Settings Modal -->
+      <GuildSettingsModal 
+        isOpen={showGuildSettingsModal}
+        guild={guildToEdit}
+        authToken={authToken || ''}
+        on:close={() => { showGuildSettingsModal = false; guildToEdit = null; }}
+        on:update={(e) => {
+          const updatedGuild = e.detail.guild;
+          guilds = guilds.map(g => g.id === updatedGuild.id ? updatedGuild : g);
+        }}
+      />
+
+      <!-- Channel Settings Modal -->
+      <ChannelSettingsModal 
+        isOpen={showChannelSettingsModal}
+        channel={channelToEdit}
+        authToken={authToken || ''}
+        on:close={() => { showChannelSettingsModal = false; channelToEdit = null; }}
+        on:update={(e) => {
+          // Channel updated - could refresh channel list if needed
+          console.log('Channel updated:', e.detail.channel);
+        }}
+      />
       
       <!-- Hidden VoiceRoom that persists when navigating away -->
       {#if hasActiveVoiceCall && !isViewingVoiceCall}

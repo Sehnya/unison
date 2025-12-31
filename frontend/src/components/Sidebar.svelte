@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import type { User, Guild } from '../types';
   import Avatar from './Avatar.svelte';
+  import ContextMenu from './ContextMenu.svelte';
 
   export let currentUser: User | null = null;
   export let selectedSection: string = 'main';
@@ -13,7 +14,11 @@
     selectGuild: { guildId: string };
     openProfile: void;
     createGuild: void;
+    openGuildSettings: { guild: Guild };
   }>();
+
+  // Context menu state
+  let contextMenu: { x: number; y: number; guild: Guild } | null = null;
 
   // Generate guild avatar from name
   function getGuildInitials(name: string): string {
@@ -42,6 +47,29 @@
   function selectGuild(guildId: string) {
     dispatch('selectGuild', { guildId });
   }
+
+  function handleGuildContextMenu(e: MouseEvent, guild: Guild) {
+    e.preventDefault();
+    // Only show settings if user is owner
+    if (guild.owner_id === currentUser?.id) {
+      contextMenu = { x: e.clientX, y: e.clientY, guild };
+    }
+  }
+
+  function handleContextMenuSelect(e: CustomEvent<{ action: string }>) {
+    if (e.detail.action === 'settings' && contextMenu?.guild) {
+      dispatch('openGuildSettings', { guild: contextMenu.guild });
+    }
+    contextMenu = null;
+  }
+
+  const guildMenuItems = [
+    { 
+      label: 'guild settings', 
+      action: 'settings',
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
+    }
+  ];
 </script>
 
 <aside class="sidebar">
@@ -106,6 +134,7 @@
           class="guild-btn"
           class:active={selectedGuildId === guild.id}
           on:click={() => selectGuild(guild.id)}
+          on:contextmenu={(e) => handleGuildContextMenu(e, guild)}
           aria-label={guild.name}
           title={guild.name}
         >
@@ -128,6 +157,17 @@
     </svg>
   </button>
 </aside>
+
+<!-- Context Menu -->
+{#if contextMenu}
+  <ContextMenu 
+    x={contextMenu.x} 
+    y={contextMenu.y} 
+    items={guildMenuItems}
+    on:select={handleContextMenuSelect}
+    on:close={() => contextMenu = null}
+  />
+{/if}
 
 <style>
   .sidebar {
