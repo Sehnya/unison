@@ -60,19 +60,14 @@
   // Enter Ably presence when connected
   async function enterAblyPresence() {
     const client = getAblyClient();
-    if (!client || !currentUser) {
-      console.log('🎤 Cannot enter presence - client:', !!client, 'user:', !!currentUser);
-      return;
-    }
+    if (!client || !currentUser) return;
     
-    console.log('🎤 Entering Ably presence for channel:', channelId, 'as', currentUser.username);
     ablyPresenceChannel = client.channels.get(`voice:${channelId}`);
     try {
       await ablyPresenceChannel.presence.enter({
         username: currentUser.username,
         avatar: currentUser.avatar || null,
       });
-      console.log('✓ Entered Ably presence successfully');
     } catch (err) {
       console.warn('Failed to enter Ably presence:', err);
     }
@@ -82,9 +77,7 @@
   async function leaveAblyPresence() {
     if (!ablyPresenceChannel) return;
     try {
-      console.log('🎤 Leaving Ably presence for channel:', channelId);
       await ablyPresenceChannel.presence.leave();
-      console.log('✓ Left Ably presence successfully');
     } catch (err) {
       console.warn('Failed to leave Ably presence:', err);
     }

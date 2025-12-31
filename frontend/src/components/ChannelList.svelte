@@ -146,37 +146,29 @@
   // Subscribe to voice channel presence for all voice channels
   function subscribeToVoicePresence() {
     const client = getAblyClient();
-    if (!client) {
-      console.log('⚠️ Ably client not available for voice presence');
-      return;
-    }
-    
-    console.log('🎤 Subscribing to voice presence for', voiceChannels.length, 'channels');
+    if (!client) return;
     
     voiceChannels.forEach((channel) => {
       if (voicePresenceChannels.has(channel.id)) return; // Already subscribed
       
-      console.log('🎤 Setting up presence for channel:', channel.name, channel.id);
       const presenceChannel = client.channels.get(`voice:${channel.id}`);
       voicePresenceChannels.set(channel.id, presenceChannel);
       
       // Get initial presence (including self)
       presenceChannel.presence.get({ waitForSync: true }).then((members: any[]) => {
-        console.log('🎤 Got presence for', channel.name, ':', members.length, 'members', members);
         const users: VoiceUser[] = members.map((m) => ({
           id: m.clientId,
           username: m.data?.username || `User ${m.clientId.slice(0, 6)}`,
           avatar: m.data?.avatar || null,
         }));
         voicePresence.set(channel.id, users);
-        voicePresence = new Map(voicePresence); // Trigger reactivity
-      }).catch((err: unknown) => {
-        console.log('🎤 Presence get error for', channel.name, ':', err);
+        voicePresence = new Map(voicePresence);
+      }).catch(() => {
+        // Channel might not exist yet
       });
       
-      // Subscribe to presence changes
-      presenceChannel.presence.subscribe('enter', (member: any) => {
-        console.log('🎤 User entered', channel.name, ':', member.clientId, member.data);
+      // Handle user entering voice channel
+      const handleEnter = (member: any) => {
         const users = voicePresence.get(channel.id) || [];
         if (!users.find(u => u.id === member.clientId)) {
           users.push({
@@ -184,49 +176,23 @@
             username: member.data?.username || `User ${member.clientId.slice(0, 6)}`,
             avatar: member.data?.avatar || null,
           });
-          voicePresence.set(channel.id, users);
+          voicePresence.set(channel.id, [...users]);
           voicePresence = new Map(voicePresence);
         }
-      });
+      };
       
-      presenceChannel.presence.subscribe('leave', (member: any) => {
-        console.log('🎤 User left', channel.name, ':', member.clientId);
+      // Handle user leaving voice channel
+      const handleLeave = (member: any) => {
         const users = voicePresence.get(channel.id) || [];
         const filtered = users.filter(u => u.id !== member.clientId);
         voicePresence.set(channel.id, filtered);
         voicePresence = new Map(voicePresence);
-      });
+      };
       
-      // Also subscribe to 'present' for when we enter ourselves
-      presenceChannel.presence.subscribe('present', (member: any) => {
-        console.log('🎤 User present (self)', channel.name, ':', member.clientId, member.data);
-        const users = voicePresence.get(channel.id) || [];
-        if (!users.find(u => u.id === member.clientId)) {
-          users.push({
-            id: member.clientId,
-            username: member.data?.username || `User ${member.clientId.slice(0, 6)}`,
-            avatar: member.data?.avatar || null,
-          });
-          voicePresence.set(channel.id, users);
-          voicePresence = new Map(voicePresence);
-        }
-      });
-      
-      // Subscribe to 'update' for presence data changes
-      presenceChannel.presence.subscribe('update', (member: any) => {
-        console.log('🎤 User updated', channel.name, ':', member.clientId, member.data);
-        const users = voicePresence.get(channel.id) || [];
-        const idx = users.findIndex(u => u.id === member.clientId);
-        if (idx >= 0) {
-          users[idx] = {
-            id: member.clientId,
-            username: member.data?.username || users[idx].username,
-            avatar: member.data?.avatar || users[idx].avatar,
-          };
-          voicePresence.set(channel.id, [...users]);
-          voicePresence = new Map(voicePresence);
-        }
-      });
+      // Subscribe to all presence events
+      presenceChannel.presence.subscribe('enter', handleEnter);
+      presenceChannel.presence.subscribe('present', handleEnter);
+      presenceChannel.presence.subscribe('leave', handleLeave);
     });
   }
   
