@@ -48,6 +48,12 @@
   let voicePresence: Map<string, VoiceUser[]> = new Map();
   let voicePresenceChannels: Map<string, any> = new Map();
   let presenceRefreshInterval: ReturnType<typeof setInterval> | null = null;
+  
+  // Reactive trigger for voice users - increments when activeVoiceChannelId changes
+  let voiceUsersTrigger = 0;
+  $: if (activeVoiceChannelId !== undefined) {
+    voiceUsersTrigger++;
+  }
 
   // Load view mode from localStorage on mount
   onMount(() => {
@@ -198,19 +204,14 @@
   }
   
   // Get users in a voice channel (including current user if they're connected)
-  function getVoiceUsers(channelId: string): VoiceUser[] {
+  // The voiceUsersTrigger dependency ensures reactivity when activeVoiceChannelId changes
+  function getVoiceUsers(channelId: string, _trigger?: number): VoiceUser[] {
     const presenceUsers = voicePresence.get(channelId) || [];
-    
-    console.log('🔍 getVoiceUsers called for channel:', channelId);
-    console.log('🔍 activeVoiceChannelId:', activeVoiceChannelId);
-    console.log('🔍 currentUser:', currentUser?.username);
-    console.log('🔍 presenceUsers:', presenceUsers);
     
     // If current user is in this voice channel, make sure they're in the list
     if (activeVoiceChannelId === channelId && currentUser) {
       const currentUserInList = presenceUsers.find(u => u.id === currentUser.id);
       if (!currentUserInList) {
-        console.log('🔍 Adding current user to voice users list');
         return [
           {
             id: currentUser.id,
@@ -506,7 +507,7 @@
                   <button 
                     class="channel-item voice"
                     class:active={selectedChannelId === channel.id}
-                    class:has-users={getVoiceUsers(channel.id).length > 0}
+                    class:has-users={getVoiceUsers(channel.id, voiceUsersTrigger).length > 0}
                     on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: channel.type })}
                   >
                     <svg class="voice-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -515,14 +516,14 @@
                       <path d="M12 19V23M8 23H16"/>
                     </svg>
                     <span class="channel-name">{channel.name}</span>
-                    {#if getVoiceUsers(channel.id).length > 0}
-                      <span class="user-count">{getVoiceUsers(channel.id).length}</span>
+                    {#if getVoiceUsers(channel.id, voiceUsersTrigger).length > 0}
+                      <span class="user-count">{getVoiceUsers(channel.id, voiceUsersTrigger).length}</span>
                     {/if}
                   </button>
                   <!-- Users in voice channel -->
-                  {#if getVoiceUsers(channel.id).length > 0}
+                  {#if getVoiceUsers(channel.id, voiceUsersTrigger).length > 0}
                     <ul class="voice-users">
-                      {#each getVoiceUsers(channel.id) as user (user.id)}
+                      {#each getVoiceUsers(channel.id, voiceUsersTrigger) as user (user.id)}
                         <li class="voice-user">
                           <div class="voice-user-avatar">
                             <Avatar 
