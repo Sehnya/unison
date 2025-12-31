@@ -41,3 +41,6 @@ docker-compose.override.yml
 *.tmp
 *.temp
 .cache/
+
+# Tauri
+frontend/src-tauri/target/
