@@ -263,6 +263,11 @@
   // Social media embed types
   type EmbedType = 'youtube' | 'instagram' | 'twitter' | null;
 
+  // Instagram uses official embed iframe - no metadata fetching needed
+  // The iframe handles video playback natively
+
+  // Check if content contains a social media link
+
   // Check if content contains a social media link
   function getSocialEmbed(content: string): { type: EmbedType; embedId: string; originalUrl: string } | null {
     // YouTube patterns
@@ -1308,11 +1313,11 @@
                     {:else if embed.type === 'instagram'}
                       <div class="instagram-embed">
                         <iframe
-                          src="https://www.instagram.com/p/{embed.embedId}/embed/captioned/"
+                          src="https://www.instagram.com/p/{embed.embedId}/embed/"
                           title="Instagram post"
                           frameborder="0"
                           scrolling="no"
-                          allowtransparency={true}
+                          allowfullscreen
                         ></iframe>
                       </div>
                     {:else if embed.type === 'twitter'}
@@ -2500,14 +2505,13 @@
     max-width: 400px;
     border-radius: 12px;
     overflow: hidden;
-    background: #000;
+    background: #fff;
   }
 
   .instagram-embed iframe {
     width: 100%;
-    min-height: 480px;
+    min-height: 500px;
     border: none;
-    background: #000;
   }
 
   /* Twitter/X Embed */

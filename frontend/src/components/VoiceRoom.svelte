@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { Room, RoomEvent, RemoteParticipant, LocalParticipant, TrackPublication, Track, ConnectionQuality, VideoPresets } from 'livekit-client';
+  import { KrispNoiseFilter } from '@livekit/krisp-noise-filter';
   import type { User } from '../types';
   import { apiUrl } from '../lib/api';
   import { getAblyClient } from '../lib/ably';
@@ -24,6 +25,10 @@
   let isScreenSharing = false;
   let outputVolume = 100;
   let inputVolume = 100;
+  
+  // Krisp noise cancellation
+  let isKrispEnabled = true;
+  let krispFilter: ReturnType<typeof KrispNoiseFilter> | null = null;
   
   // UI state
   let showSettings = false;
@@ -224,10 +229,58 @@
     try {
       await room.localParticipant.setMicrophoneEnabled(true);
       isMuted = false;
+      
+      // Apply Krisp noise cancellation to the audio track
+      if (isKrispEnabled) {
+        await applyKrispFilter();
+      }
+      
       updateParticipantDisplays();
     } catch (err) {
       console.error('Failed to enable microphone:', err);
       error = 'Failed to enable microphone. Please check permissions.';
+    }
+  }
+
+  // Apply Krisp noise filter to local audio track
+  async function applyKrispFilter() {
+    if (!room) return;
+    
+    try {
+      const audioTrack = room.localParticipant.audioTrackPublications.values().next().value?.track;
+      if (audioTrack) {
+        krispFilter = KrispNoiseFilter();
+        await audioTrack.setProcessor(krispFilter as any);
+        console.log('✓ Krisp noise cancellation enabled');
+      }
+    } catch (err) {
+      console.warn('Failed to enable Krisp noise cancellation:', err);
+      // Continue without Krisp - not a critical error
+    }
+  }
+
+  // Toggle Krisp noise cancellation
+  async function toggleKrisp() {
+    if (!room) return;
+    
+    isKrispEnabled = !isKrispEnabled;
+    
+    try {
+      const audioTrack = room.localParticipant.audioTrackPublications.values().next().value?.track;
+      if (!audioTrack) return;
+      
+      if (isKrispEnabled) {
+        krispFilter = KrispNoiseFilter();
+        await audioTrack.setProcessor(krispFilter as any);
+        console.log('✓ Krisp noise cancellation enabled');
+      } else {
+        await audioTrack.setProcessor(undefined as any);
+        krispFilter = null;
+        console.log('✗ Krisp noise cancellation disabled');
+      }
+    } catch (err) {
+      console.error('Failed to toggle Krisp:', err);
+      isKrispEnabled = !isKrispEnabled; // Revert on failure
     }
   }
 
@@ -400,6 +453,30 @@
           <span class="volume-value">{outputVolume}%</span>
         </div>
       </div>
+      
+      <!-- Krisp Noise Cancellation Toggle -->
+      <div class="settings-section">
+        <div class="krisp-toggle">
+          <span class="settings-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z"/>
+              <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10"/>
+              <path d="M12 19V23M8 23H16"/>
+            </svg>
+            Krisp Noise Cancellation
+          </span>
+          <button 
+            class="toggle-btn" 
+            class:active={isKrispEnabled}
+            on:click={toggleKrisp}
+            disabled={!isConnected}
+            title={isKrispEnabled ? 'Disable noise cancellation' : 'Enable noise cancellation'}
+          >
+            <span class="toggle-slider"></span>
+          </button>
+        </div>
+        <span class="settings-hint">AI-powered noise removal for crystal-clear audio</span>
+      </div>
     </div>
   {/if}
 
@@ -564,6 +641,22 @@
     </div>
 
     <div class="control-group">
+      <!-- Krisp Noise Cancellation -->
+      <button 
+        class="control-btn krisp-btn" 
+        class:active={isKrispEnabled}
+        on:click={toggleKrisp} 
+        title={isKrispEnabled ? 'Disable Krisp noise cancellation' : 'Enable Krisp noise cancellation'}
+        disabled={!isConnected}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+        </svg>
+        {#if isKrispEnabled}
+          <span class="krisp-badge">ON</span>
+        {/if}
+      </button>
+      
       <!-- Video -->
       <button 
         class="control-btn" 
@@ -781,6 +874,63 @@
     color: rgba(255, 255, 255, 0.5);
     min-width: 36px;
     text-align: right;
+  }
+
+  /* Krisp Toggle */
+  .krisp-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+  }
+
+  .toggle-btn {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 2px;
+  }
+
+  .toggle-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .toggle-btn.active {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  }
+
+  .toggle-slider {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  .toggle-btn.active .toggle-slider {
+    transform: translateX(20px);
+  }
+
+  .settings-hint {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 4px;
+  }
+
+  .settings-section + .settings-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   /* Error Banner */
@@ -1092,5 +1242,32 @@
 
   .control-btn.disconnect:hover {
     background: #dc2626;
+  }
+
+  /* Krisp Button */
+  .control-btn.krisp-btn {
+    position: relative;
+  }
+
+  .control-btn.krisp-btn.active {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+  }
+
+  .control-btn.krisp-btn.active:hover {
+    background: rgba(34, 197, 94, 0.3);
+  }
+
+  .krisp-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    font-size: 8px;
+    font-weight: 700;
+    background: #22c55e;
+    color: #fff;
+    padding: 2px 4px;
+    border-radius: 4px;
+    line-height: 1;
   }
 </style>

@@ -22,6 +22,7 @@
     "format:check": "prettier --check \"**/*.{ts,json,md}\""
   },
   "devDependencies": {
+    "@types/ioredis": "^4.28.10",
     "@types/node": "^20.10.0",
     "@types/supertest": "^6.0.3",
     "@types/ws": "^8.18.1",
@@ -40,5 +41,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "ioredis": "^5.8.2"
   }
 }

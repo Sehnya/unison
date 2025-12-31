@@ -13,6 +13,7 @@ import { ChannelService } from '@discord-clone/channel';
 import { MessagingService } from '@discord-clone/messaging';
 import { PermissionsService } from '@discord-clone/permissions';
 import { LiveKitService } from './services/livekit.js';
+import { createRedisCache } from '@discord-clone/cache';
 
 // Load .env file from project root
 const cwd = process.cwd();
@@ -42,6 +43,14 @@ async function main() {
     console.error('✗ DATABASE_URL is not set!');
     console.error('Make sure .env file exists in the project root with DATABASE_URL');
     process.exit(1);
+  }
+
+  // Initialize Redis cache (optional - will work without it)
+  const redisCache = createRedisCache();
+  if (process.env.REDIS_URL) {
+    console.log('✓ Redis cache initialized');
+  } else {
+    console.warn('⚠️  REDIS_URL not set - running without cache');
   }
 
   // Create database pool directly with connection string
@@ -121,12 +130,14 @@ async function main() {
   // Graceful shutdown
   process.on('SIGTERM', async () => {
     console.log('SIGTERM received, shutting down gracefully...');
+    await redisCache.close();
     await pool.end();
     process.exit(0);
   });
 
   process.on('SIGINT', async () => {
     console.log('SIGINT received, shutting down gracefully...');
+    await redisCache.close();
     await pool.end();
     process.exit(0);
   });

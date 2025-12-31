@@ -46,8 +46,9 @@
   let viewedUser: User | null = null; // User being viewed (when clicking on someone's name in chat)
 
   $: isAuthenticated = authToken !== null;
-  $: showBetaModal = isAuthenticated && currentUser && !currentUser.terms_accepted_at;
-  $: showProfileSetup = isAuthenticated && currentUser && currentUser.terms_accepted_at && (currentUser.bio === undefined || currentUser.bio === null) && !showBetaModal;
+  $: showBetaModal = !!(isAuthenticated && currentUser && !currentUser.terms_accepted_at);
+  // Profile setup is now optional - users can set it up later via settings
+  $: showProfileSetup = false;
 
   function handleAuthenticated(event: CustomEvent<{ token: string; user?: User }>) {
     authToken = event.detail.token;

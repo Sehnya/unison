@@ -42,9 +42,8 @@ export function rowToUser(row: UserRow): User {
   if (row.avatar) {
     user.avatar = row.avatar;
   }
-  if (row.bio) {
-    (user as User & { bio?: string }).bio = row.bio;
-  }
+  // Always include bio (even if empty string or null) so frontend knows it's been set
+  (user as User & { bio?: string | null }).bio = row.bio ?? '';
   if (row.background_image) {
     (user as User & { background_image?: string }).background_image = row.background_image;
   }
