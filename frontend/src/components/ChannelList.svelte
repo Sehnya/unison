@@ -12,6 +12,7 @@
   export let guilds: Guild[] = [];
   export let collapsed: boolean = false;
   export let currentUser: User | null = null;
+  export let activeVoiceChannelId: string | null = null;
 
   const dispatch = createEventDispatcher<{
     selectChannel: { channelId: string; channelType?: 'text' | 'voice' };
@@ -196,9 +197,26 @@
     });
   }
   
-  // Get users in a voice channel
+  // Get users in a voice channel (including current user if they're connected)
   function getVoiceUsers(channelId: string): VoiceUser[] {
-    return voicePresence.get(channelId) || [];
+    const presenceUsers = voicePresence.get(channelId) || [];
+    
+    // If current user is in this voice channel, make sure they're in the list
+    if (activeVoiceChannelId === channelId && currentUser) {
+      const currentUserInList = presenceUsers.find(u => u.id === currentUser.id);
+      if (!currentUserInList) {
+        return [
+          {
+            id: currentUser.id,
+            username: currentUser.username,
+            avatar: currentUser.avatar || null,
+          },
+          ...presenceUsers
+        ];
+      }
+    }
+    
+    return presenceUsers;
   }
 
   // Save view mode to localStorage when it changes

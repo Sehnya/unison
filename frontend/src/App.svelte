@@ -70,8 +70,10 @@
   }
 
   async function handleSelectChannel(event: CustomEvent<{ channelId: string; channelType?: 'text' | 'voice' }>) {
+    console.log('📢 handleSelectChannel:', event.detail);
     selectedChannelId = event.detail.channelId;
     selectedChannelType = event.detail.channelType || null;
+    console.log('📢 selectedChannelType set to:', selectedChannelType);
     showUserProfile = false;
     selectedDMId = null;
     selectedDMUser = null;
@@ -439,6 +441,7 @@
           {guilds}
           {currentUser}
           collapsed={channelListCollapsed}
+          activeVoiceChannelId={selectedChannelType === 'voice' ? selectedChannelId : null}
           on:selectChannel={handleSelectChannel}
           on:selectGuild={(e) => handleSelectGuildFromChannelList(e.detail.guildId)}
         />
