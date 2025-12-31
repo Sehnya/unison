@@ -430,10 +430,30 @@
             frameRate: currentPreset.frameRate,
           },
         });
+        
+        // Only update local participant's video track
+        const lp = room.localParticipant;
+        const videoPub = Array.from(lp.videoTrackPublications.values()).find((p: any) => p.source === Track.Source.Camera);
+        const newVideoTrack = (videoPub as any)?.track;
+        
+        participantDisplays = participantDisplays.map(p => {
+          if (p.id === lp.identity) {
+            return { ...p, videoTrack: newVideoTrack, isVideoEnabled: true };
+          }
+          return p;
+        });
       } else {
         await room.localParticipant.setCameraEnabled(false);
+        
+        // Only update local participant
+        const lp = room.localParticipant;
+        participantDisplays = participantDisplays.map(p => {
+          if (p.id === lp.identity) {
+            return { ...p, videoTrack: undefined, isVideoEnabled: false };
+          }
+          return p;
+        });
       }
-      updateParticipantDisplays();
     } catch (err) {
       console.error('Failed to toggle video:', err);
       isVideoEnabled = !isVideoEnabled;
@@ -449,6 +469,8 @@
     if (room && isVideoEnabled) {
       try {
         const currentPreset = resolutionPresets[selectedResolution];
+        
+        // Disable and re-enable camera with new resolution
         await room.localParticipant.setCameraEnabled(false);
         await room.localParticipant.setCameraEnabled(true, {
           resolution: {
@@ -457,7 +479,21 @@
             frameRate: currentPreset.frameRate,
           },
         });
-        updateParticipantDisplays();
+        
+        // Only update the local participant's video track, not all participants
+        const lp = room.localParticipant;
+        const videoPub = Array.from(lp.videoTrackPublications.values()).find((p: any) => p.source === Track.Source.Camera);
+        const newVideoTrack = (videoPub as any)?.track;
+        
+        // Update only the local participant in the displays array
+        participantDisplays = participantDisplays.map(p => {
+          if (p.id === lp.identity) {
+            return { ...p, videoTrack: newVideoTrack };
+          }
+          return p;
+        });
+        
+        console.log(`✓ Video resolution changed to ${newResolution}`);
       } catch (err) {
         console.error('Failed to change resolution:', err);
       }
@@ -469,7 +505,25 @@
     try {
       isScreenSharing = !isScreenSharing;
       await room.localParticipant.setScreenShareEnabled(isScreenSharing);
-      updateParticipantDisplays();
+      
+      // Only update local participant's screen share track
+      const lp = room.localParticipant;
+      const screenPub = Array.from(lp.videoTrackPublications.values()).find((p: any) => p.source === Track.Source.ScreenShare);
+      const screenTrack = (screenPub as any)?.track;
+      
+      participantDisplays = participantDisplays.map(p => {
+        if (p.id === lp.identity) {
+          // If screen sharing, use screen track; otherwise use camera track
+          const videoPub = Array.from(lp.videoTrackPublications.values()).find((pub: any) => pub.source === Track.Source.Camera);
+          const videoTrack = (videoPub as any)?.track;
+          return { 
+            ...p, 
+            videoTrack: screenTrack || videoTrack, 
+            isScreenSharing 
+          };
+        }
+        return p;
+      });
     } catch (err) {
       console.error('Failed to toggle screen share:', err);
       isScreenSharing = !isScreenSharing;
