@@ -89,8 +89,14 @@
     }
   });
 
-  // Re-render when props change
-  $: if (mounted && channelId) {
+  // Re-render when channelId changes (but not on every prop change to prevent loops)
+  let lastChannelId: string | null = null;
+  $: if (mounted && channelId && channelId !== lastChannelId) {
+    console.log('[CollaborativeEditor] Channel ID changed, re-rendering:', {
+      oldChannelId: lastChannelId,
+      newChannelId: channelId,
+    });
+    lastChannelId = channelId;
     renderEditor();
   }
 </script>

@@ -130,14 +130,37 @@ const EditorWithProvider: React.FC<{
     };
   }, [provider, ydoc]);
 
+  // Stabilize currentUser to prevent unnecessary re-renders
+  const stableCurrentUser = useMemo(() => currentUser, [currentUser.name, currentUser.color]);
+
   // Build extensions array - conditionally include CollaborationCursor
+  // Use ref to track if we've already built extensions to prevent loops
+  const extensionsRef = useRef<any[] | null>(null);
+  const lastSyncStateRef = useRef<{ isSynced: boolean; providerStatus: string | undefined } | null>(null);
+
   const extensions = useMemo(() => {
+    const currentSyncState = {
+      isSynced,
+      providerStatus: provider?.status,
+    };
+
+    // Only rebuild if sync state actually changed
+    if (
+      extensionsRef.current &&
+      lastSyncStateRef.current &&
+      lastSyncStateRef.current.isSynced === currentSyncState.isSynced &&
+      lastSyncStateRef.current.providerStatus === currentSyncState.providerStatus
+    ) {
+      console.log('[EditorWithProvider] Extensions unchanged, reusing previous array');
+      return extensionsRef.current;
+    }
+
     console.log('[EditorWithProvider] Building extensions array:', {
       isSynced,
       hasProvider: !!provider,
       providerStatus: provider?.status,
       hasYdoc: !!ydoc,
-      userName: currentUser.name,
+      userName: stableCurrentUser.name,
     });
 
     try {
@@ -171,7 +194,7 @@ const EditorWithProvider: React.FC<{
           baseExtensions.push(
             CollaborationCursor.configure({
               provider,
-              user: currentUser,
+              user: stableCurrentUser,
             })
           );
           console.log('[EditorWithProvider] CollaborationCursor extension added successfully');
@@ -201,6 +224,10 @@ const EditorWithProvider: React.FC<{
         ),
       });
 
+      // Cache the extensions and sync state
+      extensionsRef.current = baseExtensions;
+      lastSyncStateRef.current = currentSyncState;
+
       return baseExtensions;
     } catch (error) {
       console.error('[EditorWithProvider] Error building extensions:', {
@@ -210,9 +237,11 @@ const EditorWithProvider: React.FC<{
       });
       throw error;
     }
-  }, [ydoc, isSynced, provider, currentUser]);
+  }, [ydoc, isSynced, provider?.status, stableCurrentUser]);
 
-  // Only create editor when synced - use key to force recreation when extensions change
+  // Only create editor when synced - use stable key based on sync state only
+  // Don't include extensions in dependencies to prevent recreation loops
+  const editorKey = isSynced ? 'synced' : 'not-synced';
   const editor = useEditor({
     extensions,
     editorProps: {
@@ -241,7 +270,7 @@ const EditorWithProvider: React.FC<{
         hasEditor: !!editor,
       });
     },
-  }, [isSynced ? 'synced' : 'not-synced', extensions]);
+  }, [editorKey]); // Only depend on sync state, not extensions array
 
   // Get online users
   const users = useMemo(() => {
@@ -558,6 +587,7 @@ const TiptapCollabEditor: React.FC<TiptapCollabEditorProps> = ({
 
       return () => {
         console.log('[TiptapCollabEditor] Cleaning up provider:', { channelId, documentName });
+        initializingRef.current = false;
         clearTimeout(timeout);
         try {
           newProvider.destroy();
@@ -569,6 +599,7 @@ const TiptapCollabEditor: React.FC<TiptapCollabEditorProps> = ({
       };
     } catch (error) {
       errorOccurred = true;
+      initializingRef.current = false;
       console.error('[TiptapCollabEditor] Failed to create provider:', {
         error,
         message: error instanceof Error ? error.message : String(error),
@@ -580,7 +611,7 @@ const TiptapCollabEditor: React.FC<TiptapCollabEditorProps> = ({
       });
       setStatus('disconnected');
     }
-  }, [channelId, appId, isReady]);
+  }, [channelId, appId]); // Remove isReady from dependencies to prevent loops
 
   if (!isReady || !provider || !ydocRef.current) {
     const debugInfo = {
