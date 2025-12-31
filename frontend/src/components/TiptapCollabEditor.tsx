@@ -241,6 +241,9 @@ const EditorWithProvider: React.FC<{
 
   // Only create editor when we have extensions (even if not synced yet)
   // The editor will work without CollaborationCursor initially, then add it when synced
+  // Ensure we have at least basic extensions before creating editor
+  const canCreateEditor = extensions.length > 0 && ydoc;
+  
   const editor = useEditor({
     extensions,
     editorProps: {
@@ -254,6 +257,7 @@ const EditorWithProvider: React.FC<{
         extensionsCount: editor.extensionManager.extensions.length,
         extensionNames: editor.extensionManager.extensions.map(ext => ext.name),
         isSynced,
+        canCreateEditor,
       });
     },
     onUpdate: () => {
@@ -268,9 +272,13 @@ const EditorWithProvider: React.FC<{
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         hasEditor: !!editor,
+        extensionsLength: extensions.length,
+        hasYdoc: !!ydoc,
       });
     },
-  }, [isSynced ? 'synced' : 'not-synced']); // Only depend on sync state to control recreation
+    // Only create if we have valid extensions
+    enabled: canCreateEditor,
+  }, [isSynced ? 'synced' : 'not-synced', canCreateEditor]); // Depend on sync state and ability to create
 
   // Get online users
   const users = useMemo(() => {
@@ -301,24 +309,25 @@ const EditorWithProvider: React.FC<{
   );
 
 
-  // Show loading state only if editor hasn't been created yet
-  // Once editor exists, show it even if not fully synced (it will work)
-  if (!editor) {
+  // Show loading state if editor hasn't been created yet or if we can't create it
+  if (!editor || !canCreateEditor) {
     const debugInfo = {
       isSynced,
       hasEditor: !!editor,
+      canCreateEditor,
       hasProvider: !!provider,
       providerStatus: provider?.status,
       providerIsSynced: provider?.isSynced,
       hasYdoc: !!ydoc,
       extensionsLength: extensions.length,
+      ydocExists: !!ydoc,
     };
     console.log('[EditorWithProvider] Waiting for editor to be created:', debugInfo);
     
     return (
       <div className="collab-editor loading">
         <div className="spinner" />
-        <p>Initializing editor...</p>
+        <p>{!canCreateEditor ? 'Preparing editor...' : 'Initializing editor...'}</p>
         <p className="status-hint">{status}</p>
         {process.env.NODE_ENV === 'development' && (
           <details style={{ marginTop: '10px', fontSize: '12px', color: '#888' }}>
