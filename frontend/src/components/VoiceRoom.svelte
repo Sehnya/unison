@@ -112,8 +112,25 @@
       room = new Room({
         adaptiveStream: true,
         dynacast: true,
+        audioCaptureDefaults: {
+          autoGainControl: true,
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 48000,
+          channelCount: 2,
+        },
+        audioOutput: {
+          deviceId: 'default',
+        },
         videoCaptureDefaults: {
           resolution: VideoPresets.h720.resolution,
+        },
+        publishDefaults: {
+          audioPreset: {
+            maxBitrate: 128_000, // 128 kbps for high quality audio
+          },
+          dtx: true, // Discontinuous transmission - saves bandwidth when not speaking
+          red: true, // Redundant encoding for packet loss resilience
         },
       });
 
