@@ -53,20 +53,44 @@ const EditorWithProvider: React.FC<{
 
   // Wait for document to sync before creating editor
   useEffect(() => {
-    if (!provider || !ydoc) return;
+    if (!provider || !ydoc) {
+      console.warn('[EditorWithProvider] Missing provider or ydoc:', {
+        hasProvider: !!provider,
+        hasYdoc: !!ydoc,
+        providerStatus: provider?.status,
+        providerIsSynced: provider?.isSynced,
+      });
+      return;
+    }
+
+    console.log('[EditorWithProvider] Setting up sync listeners:', {
+      providerStatus: provider.status,
+      isSynced: provider.isSynced,
+      hasYdoc: !!ydoc,
+    });
 
     const handleSync = (isSyncedValue: boolean) => {
-      console.log('[EditorWithProvider] Document synced:', isSyncedValue);
-      if (isSyncedValue) {
+      console.log('[EditorWithProvider] Document sync event:', {
+        isSynced: isSyncedValue,
+        providerStatus: provider.status,
+        providerIsSynced: provider.isSynced,
+      });
+      if (isSyncedValue && provider.status === 'connected') {
+        console.log('[EditorWithProvider] Document is synced, enabling editor');
         setIsSynced(true);
       }
     };
 
     const handleConnect = () => {
-      console.log('[EditorWithProvider] Provider connected');
+      console.log('[EditorWithProvider] Provider connected, checking sync status');
       // Wait a bit for initial sync
       setTimeout(() => {
-        if (provider.isSynced) {
+        const isActuallySynced = provider.isSynced;
+        console.log('[EditorWithProvider] Post-connect sync check:', {
+          isSynced: isActuallySynced,
+          providerStatus: provider.status,
+        });
+        if (isActuallySynced && provider.status === 'connected') {
           setIsSynced(true);
         }
       }, 200);
@@ -74,7 +98,10 @@ const EditorWithProvider: React.FC<{
 
     // Check if already synced
     if (provider.isSynced && provider.status === 'connected') {
+      console.log('[EditorWithProvider] Already synced, enabling editor immediately');
       setIsSynced(true);
+    } else {
+      console.log('[EditorWithProvider] Not yet synced, waiting for sync event');
     }
 
     provider.on('synced', handleSync);
@@ -83,11 +110,20 @@ const EditorWithProvider: React.FC<{
     // Fallback: set synced after a delay if provider is connected
     const timeout = setTimeout(() => {
       if (provider.status === 'connected') {
+        console.warn('[EditorWithProvider] Fallback timeout: forcing sync state', {
+          providerStatus: provider.status,
+          providerIsSynced: provider.isSynced,
+        });
         setIsSynced(true);
+      } else {
+        console.warn('[EditorWithProvider] Fallback timeout: provider not connected', {
+          providerStatus: provider.status,
+        });
       }
-    }, 1000);
+    }, 1500);
 
     return () => {
+      console.log('[EditorWithProvider] Cleaning up sync listeners');
       clearTimeout(timeout);
       provider.off('synced', handleSync);
       provider.off('connect', handleConnect);
@@ -96,37 +132,82 @@ const EditorWithProvider: React.FC<{
 
   // Build extensions array - conditionally include CollaborationCursor
   const extensions = useMemo(() => {
-    const baseExtensions = [
-      StarterKit,
-      Highlight,
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      CharacterCount.configure({ limit: 50000 }),
-      Placeholder.configure({ placeholder: 'Start writing your document...' }),
-      Underline,
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Link.configure({ openOnClick: false }),
-      Image,
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableCell,
-      TableHeader,
-      Collaboration.configure({ document: ydoc }),
-    ];
+    console.log('[EditorWithProvider] Building extensions array:', {
+      isSynced,
+      hasProvider: !!provider,
+      providerStatus: provider?.status,
+      hasYdoc: !!ydoc,
+      userName: currentUser.name,
+    });
 
-    // Only add CollaborationCursor if provider is ready and synced
-    if (isSynced && provider && provider.status === 'connected') {
-      baseExtensions.push(
-        CollaborationCursor.configure({
-          provider,
-          user: currentUser,
-        })
-      );
+    try {
+      const baseExtensions = [
+        StarterKit,
+        Highlight,
+        TaskList,
+        TaskItem.configure({ nested: true }),
+        CharacterCount.configure({ limit: 50000 }),
+        Placeholder.configure({ placeholder: 'Start writing your document...' }),
+        Underline,
+        TextAlign.configure({ types: ['heading', 'paragraph'] }),
+        Link.configure({ openOnClick: false }),
+        Image,
+        Table.configure({ resizable: true }),
+        TableRow,
+        TableCell,
+        TableHeader,
+        Collaboration.configure({ document: ydoc }),
+      ];
+
+      // Only add CollaborationCursor if provider is ready and synced
+      if (isSynced && provider && provider.status === 'connected') {
+        console.log('[EditorWithProvider] Adding CollaborationCursor extension');
+        try {
+          baseExtensions.push(
+            CollaborationCursor.configure({
+              provider,
+              user: currentUser,
+            })
+          );
+          console.log('[EditorWithProvider] CollaborationCursor extension added successfully');
+        } catch (error) {
+          console.error('[EditorWithProvider] Failed to configure CollaborationCursor:', {
+            error,
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            providerStatus: provider.status,
+            isSynced,
+          });
+          // Continue without cursor extension rather than failing completely
+        }
+      } else {
+        console.log('[EditorWithProvider] Skipping CollaborationCursor:', {
+          isSynced,
+          hasProvider: !!provider,
+          providerStatus: provider?.status,
+        });
+      }
+
+      console.log('[EditorWithProvider] Extensions array built:', {
+        totalExtensions: baseExtensions.length,
+        hasCollaborationCursor: baseExtensions.some(ext => 
+          ext.name === 'collaborationCursor' || 
+          (ext as any).constructor?.name === 'CollaborationCursor'
+        ),
+      });
+
+      return baseExtensions;
+    } catch (error) {
+      console.error('[EditorWithProvider] Error building extensions:', {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
     }
-
-    return baseExtensions;
   }, [ydoc, isSynced, provider, currentUser]);
 
+  // Only create editor when synced - use key to force recreation when extensions change
   const editor = useEditor({
     extensions,
     editorProps: {
@@ -134,9 +215,28 @@ const EditorWithProvider: React.FC<{
         class: 'prose prose-invert max-w-none focus:outline-none',
       },
     },
-    // Only create editor if synced
-    enabled: isSynced && provider?.status === 'connected',
-  }, [isSynced, provider]);
+    onCreate: ({ editor }) => {
+      console.log('[EditorWithProvider] Editor created successfully:', {
+        hasEditor: !!editor,
+        extensionsCount: editor.extensionManager.extensions.length,
+        extensionNames: editor.extensionManager.extensions.map(ext => ext.name),
+      });
+    },
+    onUpdate: () => {
+      // Silent update logging - only log if there's an issue
+    },
+    onDestroy: () => {
+      console.log('[EditorWithProvider] Editor destroyed');
+    },
+    onError: ({ editor, error }) => {
+      console.error('[EditorWithProvider] Editor error:', {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        hasEditor: !!editor,
+      });
+    },
+  }, [isSynced ? 'synced' : 'not-synced', extensions]);
 
   // Get online users
   const users = useMemo(() => {
@@ -168,11 +268,29 @@ const EditorWithProvider: React.FC<{
 
 
   if (!isSynced || !editor) {
+    const debugInfo = {
+      isSynced,
+      hasEditor: !!editor,
+      hasProvider: !!provider,
+      providerStatus: provider?.status,
+      providerIsSynced: provider?.isSynced,
+      hasYdoc: !!ydoc,
+    };
+    console.log('[EditorWithProvider] Waiting for editor to be ready:', debugInfo);
+    
     return (
       <div className="collab-editor loading">
         <div className="spinner" />
         <p>Syncing document...</p>
         <p className="status-hint">{status}</p>
+        {process.env.NODE_ENV === 'development' && (
+          <details style={{ marginTop: '10px', fontSize: '12px', color: '#888' }}>
+            <summary>Debug Info</summary>
+            <pre style={{ textAlign: 'left', marginTop: '5px' }}>
+              {JSON.stringify(debugInfo, null, 2)}
+            </pre>
+          </details>
+        )}
       </div>
     );
   }
@@ -337,58 +455,154 @@ const TiptapCollabEditor: React.FC<TiptapCollabEditorProps> = ({
 
   useEffect(() => {
     const ydoc = ydocRef.current!;
-    console.log('[TiptapCollabEditor] Creating provider for:', `document-${channelId}`);
+    const documentName = `document-${channelId}`;
+    const wsUrl = `wss://${appId}.collab.tiptap.cloud`;
     
-    const newProvider = new HocuspocusProvider({
-      url: `wss://${appId}.collab.tiptap.cloud`,
-      name: `document-${channelId}`,
-      document: ydoc,
+    console.log('[TiptapCollabEditor] Initializing provider:', {
+      channelId,
+      documentName,
+      wsUrl,
+      appId,
+      hasYdoc: !!ydoc,
     });
+    
+    let errorOccurred = false;
+    
+    try {
+      const newProvider = new HocuspocusProvider({
+        url: wsUrl,
+        name: documentName,
+        document: ydoc,
+      });
 
-    const handleStatus = (event: { status: string }) => {
-      console.log('[TiptapCollabEditor] Status:', event.status);
-      setStatus(event.status as 'connecting' | 'connected' | 'disconnected');
-    };
+      const handleStatus = (event: { status: string }) => {
+        console.log('[TiptapCollabEditor] Provider status changed:', {
+          status: event.status,
+          channelId,
+          documentName,
+        });
+        setStatus(event.status as 'connecting' | 'connected' | 'disconnected');
+      };
 
-    const handleConnect = () => {
-      console.log('[TiptapCollabEditor] Connected!');
-      setProvider(newProvider);
-      setIsReady(true);
-    };
-
-    const handleSync = (isSynced: boolean) => {
-      console.log('[TiptapCollabEditor] Synced:', isSynced);
-      if (isSynced) {
+      const handleConnect = () => {
+        console.log('[TiptapCollabEditor] Provider connected:', {
+          channelId,
+          documentName,
+          isSynced: newProvider.isSynced,
+        });
         setProvider(newProvider);
         setIsReady(true);
-      }
-    };
+      };
 
-    newProvider.on('status', handleStatus);
-    newProvider.on('connect', handleConnect);
-    newProvider.on('synced', handleSync);
+      const handleSync = (isSynced: boolean) => {
+        console.log('[TiptapCollabEditor] Document sync status:', {
+          isSynced,
+          channelId,
+          documentName,
+          providerStatus: newProvider.status,
+        });
+        if (isSynced) {
+          setProvider(newProvider);
+          setIsReady(true);
+        }
+      };
 
-    // Fallback timeout
-    const timeout = setTimeout(() => {
-      console.log('[TiptapCollabEditor] Timeout - forcing ready');
-      setProvider(newProvider);
-      setIsReady(true);
-    }, 2000);
+      const handleDisconnect = (event: any) => {
+        console.warn('[TiptapCollabEditor] Provider disconnected:', {
+          channelId,
+          documentName,
+          reason: event?.reason,
+          event,
+        });
+        setStatus('disconnected');
+      };
 
-    return () => {
-      clearTimeout(timeout);
-      newProvider.destroy();
-      setProvider(null);
-      setIsReady(false);
-    };
-  }, [channelId, appId]);
+      const handleError = (event: any) => {
+        errorOccurred = true;
+        console.error('[TiptapCollabEditor] Provider error:', {
+          channelId,
+          documentName,
+          error: event,
+          message: event?.message,
+          stack: event?.stack,
+        });
+        setStatus('disconnected');
+      };
+
+      newProvider.on('status', handleStatus);
+      newProvider.on('connect', handleConnect);
+      newProvider.on('synced', handleSync);
+      newProvider.on('disconnect', handleDisconnect);
+      newProvider.on('connectionError', handleError);
+      newProvider.on('connectionLost', handleError);
+
+      // Fallback timeout with detailed logging
+      const timeout = setTimeout(() => {
+        if (!isReady && !errorOccurred) {
+          console.warn('[TiptapCollabEditor] Timeout reached - forcing ready state:', {
+            channelId,
+            documentName,
+            providerStatus: newProvider.status,
+            isSynced: newProvider.isSynced,
+            hasProvider: !!newProvider,
+          });
+          setProvider(newProvider);
+          setIsReady(true);
+        }
+      }, 2000);
+
+      return () => {
+        console.log('[TiptapCollabEditor] Cleaning up provider:', { channelId, documentName });
+        clearTimeout(timeout);
+        try {
+          newProvider.destroy();
+        } catch (e) {
+          console.error('[TiptapCollabEditor] Error destroying provider:', e);
+        }
+        setProvider(null);
+        setIsReady(false);
+      };
+    } catch (error) {
+      errorOccurred = true;
+      console.error('[TiptapCollabEditor] Failed to create provider:', {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        channelId,
+        documentName,
+        wsUrl,
+        appId,
+      });
+      setStatus('disconnected');
+    }
+  }, [channelId, appId, isReady]);
 
   if (!isReady || !provider || !ydocRef.current) {
+    const debugInfo = {
+      isReady,
+      hasProvider: !!provider,
+      hasYdoc: !!ydocRef.current,
+      status,
+      channelId,
+      appId,
+      wsUrl: `wss://${appId}.collab.tiptap.cloud`,
+      documentName: `document-${channelId}`,
+    };
+    console.log('[TiptapCollabEditor] Waiting for provider to be ready:', debugInfo);
+    
     return (
       <div className="collab-editor loading">
         <div className="spinner" />
         <p>Connecting to document...</p>
         <p className="status-hint">{status}</p>
+        {process.env.NODE_ENV === 'development' && (
+          <details style={{ marginTop: '10px', fontSize: '12px', color: '#888' }}>
+            <summary>Debug Info</summary>
+            <pre style={{ textAlign: 'left', marginTop: '5px' }}>
+              {JSON.stringify(debugInfo, null, 2)}
+            </pre>
+          </details>
+        )}
       </div>
     );
   }

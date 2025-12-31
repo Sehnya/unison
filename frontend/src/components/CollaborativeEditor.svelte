@@ -20,13 +20,27 @@
   const appId = import.meta.env.VITE_TIPTAP_APP_ID || 'e97rj4qm';
 
   function renderEditor() {
-    if (!container || !mounted) return;
+    if (!container || !mounted) {
+      console.warn('[CollaborativeEditor] Cannot render: container=', !!container, 'mounted=', mounted);
+      return;
+    }
     
     try {
+      console.log('[CollaborativeEditor] Rendering editor:', {
+        channelId,
+        channelName,
+        userName: currentUser?.username || 'Anonymous',
+        appId,
+        hasContainer: !!container,
+        hasRoot: !!root,
+      });
+
       if (!root) {
+        console.log('[CollaborativeEditor] Creating React root');
         root = ReactDOM.createRoot(container);
       }
       
+      console.log('[CollaborativeEditor] Rendering TiptapCollabEditor component');
       root.render(
         React.createElement(TiptapCollabEditor, {
           channelId,
@@ -36,15 +50,30 @@
         })
       );
       error = null;
+      console.log('[CollaborativeEditor] Editor rendered successfully');
     } catch (e) {
-      console.error('Failed to render TiptapCollabEditor:', e);
-      error = e instanceof Error ? e.message : 'Failed to render editor';
+      const errorDetails = {
+        message: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined,
+        name: e instanceof Error ? e.name : typeof e,
+        channelId,
+        channelName,
+        appId,
+      };
+      console.error('[CollaborativeEditor] Failed to render TiptapCollabEditor:', errorDetails);
+      error = `Failed to render editor: ${errorDetails.message}`;
     }
   }
 
   onMount(async () => {
+    console.log('[CollaborativeEditor] Component mounting:', {
+      channelId,
+      channelName,
+      appId: import.meta.env.VITE_TIPTAP_APP_ID || 'e97rj4qm',
+    });
     mounted = true;
     await tick(); // Wait for DOM to be ready
+    console.log('[CollaborativeEditor] DOM ready, rendering editor');
     renderEditor();
   });
 
