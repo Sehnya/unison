@@ -55,6 +55,7 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Create .env file
+        working-directory: frontend
         run: |
           echo "VITE_ABLY_API_KEY=${{ secrets.VITE_ABLY_API_KEY }}" > .env
           echo "VITE_API_URL=https://www.inunison.dev" >> .env
