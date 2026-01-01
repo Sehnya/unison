@@ -1,38 +1,91 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
-  import type { User } from '../types';
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+  import type { User, DMConversation, DMMessage } from '../types';
+  import { apiUrl } from '../lib/api';
   import Avatar from './Avatar.svelte';
+  import EmojiPicker from './EmojiPicker.svelte';
+  import { getAblyClient, subscribeToChannel, unsubscribeFromChannel } from '../lib/ably';
 
-  export let dmUser: { id: string; name: string; avatar: string; status?: string };
+  export let conversation: DMConversation;
   export let currentUser: User | null = null;
+  export let authToken: string = '';
 
   const dispatch = createEventDispatcher<{
     close: void;
     viewProfile: { userId: string };
   }>();
 
-  interface Message {
-    id: string;
-    content: string;
-    senderId: string;
-    timestamp: Date;
-    isOwn: boolean;
-  }
-
-  let messages: Message[] = [];
+  let messages: DMMessage[] = [];
   let newMessage = '';
   let messagesContainer: HTMLElement;
+  let loading = true;
+  let sending = false;
+  let showEmojiPicker = false;
+  let ablyChannel: ReturnType<typeof subscribeToChannel> = null;
 
-  // Load mock messages
-  onMount(() => {
-    messages = [
-      { id: '1', content: 'Hey! How are you?', senderId: dmUser.id, timestamp: new Date(Date.now() - 3600000), isOwn: false },
-      { id: '2', content: "I'm good, thanks! Working on the new project.", senderId: 'me', timestamp: new Date(Date.now() - 3500000), isOwn: true },
-      { id: '3', content: 'Nice! Need any help with it?', senderId: dmUser.id, timestamp: new Date(Date.now() - 3400000), isOwn: false },
-      { id: '4', content: "That would be great! Let's sync up later today.", senderId: 'me', timestamp: new Date(Date.now() - 3300000), isOwn: true },
-    ];
-    scrollToBottom();
+  onMount(async () => {
+    await loadMessages();
+    subscribeToRealtime();
+    markAsRead();
   });
+
+  onDestroy(() => {
+    if (ablyChannel) {
+      unsubscribeFromChannel(`dm:${conversation.id}`);
+    }
+  });
+
+  async function loadMessages() {
+    loading = true;
+    try {
+      const response = await fetch(apiUrl(`/api/friends/dm/${conversation.id}/messages?limit=50`), {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        messages = (data || []).sort((a: DMMessage, b: DMMessage) => 
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+        scrollToBottom();
+      }
+    } catch (err) {
+      console.error('Failed to load messages:', err);
+    } finally {
+      loading = false;
+    }
+  }
+
+  function subscribeToRealtime() {
+    const channelName = `dm:${conversation.id}`;
+    ablyChannel = subscribeToChannel(channelName, (message) => {
+      if (message.authorId !== currentUser?.id) {
+        const dmMessage: DMMessage = {
+          id: message.id,
+          conversation_id: conversation.id,
+          author_id: message.authorId,
+          content: message.content,
+          created_at: new Date(message.timestamp).toISOString(),
+          edited_at: null,
+        };
+        if (!messages.find(m => m.id === dmMessage.id)) {
+          messages = [...messages, dmMessage];
+          scrollToBottom();
+          markAsRead();
+        }
+      }
+    });
+  }
+
+  async function markAsRead() {
+    try {
+      await fetch(apiUrl(`/api/friends/dm/${conversation.id}/read`), {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+    } catch (err) {
+      console.error('Failed to mark as read:', err);
+    }
+  }
 
   function scrollToBottom() {
     setTimeout(() => {
@@ -42,20 +95,67 @@
     }, 0);
   }
 
-  function sendMessage() {
-    if (!newMessage.trim()) return;
+  async function sendMessage() {
+    if (!newMessage.trim() || sending) return;
 
-    const message: Message = {
-      id: `msg-${Date.now()}`,
-      content: newMessage.trim(),
-      senderId: 'me',
-      timestamp: new Date(),
-      isOwn: true,
-    };
-
-    messages = [...messages, message];
+    const content = newMessage.trim();
     newMessage = '';
+    sending = true;
+
+    // Optimistic update
+    const tempMessage: DMMessage = {
+      id: `temp-${Date.now()}`,
+      conversation_id: conversation.id,
+      author_id: currentUser?.id || '',
+      content,
+      created_at: new Date().toISOString(),
+      edited_at: null,
+    };
+    messages = [...messages, tempMessage];
     scrollToBottom();
+
+    try {
+      const response = await fetch(apiUrl(`/api/friends/dm/${conversation.id}/messages`), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content }),
+      });
+
+      if (response.ok) {
+        const savedMessage = await response.json();
+        messages = messages.map(m => 
+          m.id === tempMessage.id ? savedMessage : m
+        );
+
+        // Publish to Ably
+        const ablyClient = getAblyClient();
+        if (ablyClient) {
+          const channel = ablyClient.channels.get(`dm:${conversation.id}`);
+          await channel.publish('message', {
+            id: savedMessage.id,
+            authorId: currentUser?.id,
+            authorName: currentUser?.username,
+            content: savedMessage.content,
+            timestamp: new Date(savedMessage.created_at).getTime(),
+            conversationId: conversation.id,
+          });
+        }
+      } else {
+        messages = messages.filter(m => m.id !== tempMessage.id);
+        newMessage = content;
+        const error = await response.json();
+        alert(error.error?.message || 'Failed to send message');
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      messages = messages.filter(m => m.id !== tempMessage.id);
+      newMessage = content;
+    } finally {
+      sending = false;
+    }
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -65,11 +165,18 @@
     }
   }
 
-  function formatTime(date: Date): string {
+  function handleEmojiSelect(event: CustomEvent<{ emoji: string }>) {
+    newMessage += event.detail.emoji;
+    showEmojiPicker = false;
+  }
+
+  function formatTime(dateStr: string): string {
+    const date = new Date(dateStr);
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   }
 
-  function formatDate(date: Date): string {
+  function formatDate(dateStr: string): string {
+    const date = new Date(dateStr);
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -79,7 +186,18 @@
     } else if (date.toDateString() === yesterday.toDateString()) {
       return 'Yesterday';
     }
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function shouldShowDate(index: number): boolean {
+    if (index === 0) return true;
+    const current = new Date(messages[index].created_at).toDateString();
+    const previous = new Date(messages[index - 1].created_at).toDateString();
+    return current !== previous;
+  }
+
+  function isOwnMessage(message: DMMessage): boolean {
+    return message.author_id === currentUser?.id;
   }
 </script>
 
@@ -91,31 +209,23 @@
         <path d="M19 12H5M12 19l-7-7 7-7"/>
       </svg>
     </button>
-    <button class="user-info" on:click={() => dispatch('viewProfile', { userId: dmUser.id })}>
-      <div class="avatar-wrapper">
-        <img src={dmUser.avatar} alt={dmUser.name} class="avatar" />
-        <span class="status-dot {dmUser.status || 'online'}"></span>
-      </div>
+    <button class="user-info" on:click={() => dispatch('viewProfile', { userId: conversation.other_user_id })}>
+      <Avatar 
+        src={conversation.other_avatar}
+        username={conversation.other_username}
+        userId={conversation.other_user_id}
+        size={40}
+      />
       <div class="user-details">
-        <span class="username">{dmUser.name}</span>
-        <span class="status-text">{dmUser.status === 'online' ? 'Online' : dmUser.status === 'idle' ? 'Idle' : dmUser.status === 'dnd' ? 'Do Not Disturb' : 'Offline'}</span>
+        <span class="username">{conversation.other_username}</span>
+        <span class="status-text">Direct Message</span>
       </div>
     </button>
     <div class="header-actions">
-      <button class="action-btn" aria-label="Voice call">
+      <button class="action-btn" on:click={() => dispatch('viewProfile', { userId: conversation.other_user_id })} aria-label="View profile">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
-        </svg>
-      </button>
-      <button class="action-btn" aria-label="Video call">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polygon points="23 7 16 12 23 17 23 7"/>
-          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-        </svg>
-      </button>
-      <button class="action-btn" aria-label="More options">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
         </svg>
       </button>
     </div>
@@ -123,66 +233,65 @@
 
   <!-- Messages -->
   <div class="messages-container" bind:this={messagesContainer}>
-    <div class="dm-start">
-      <img src={dmUser.avatar} alt={dmUser.name} class="dm-start-avatar" />
-      <h3>{dmUser.name}</h3>
-      <p>This is the beginning of your direct message history with <strong>{dmUser.name}</strong>.</p>
-    </div>
-
-    {#each messages as message, i}
-      {#if i === 0 || formatDate(messages[i-1].timestamp) !== formatDate(message.timestamp)}
-        <div class="date-divider">
-          <span>{formatDate(message.timestamp)}</span>
-        </div>
-      {/if}
-      
-      <div class="message" class:own={message.isOwn}>
-        {#if !message.isOwn}
-          <div class="message-avatar">
-            <Avatar 
-              src={dmUser.avatar}
-              username={dmUser.name}
-              userId={dmUser.id}
-              size={36}
-            />
-          </div>
-        {/if}
-        <div class="message-content">
-          <div class="message-bubble">
-            <p>{message.content}</p>
-          </div>
-          <span class="message-time">{formatTime(message.timestamp)}</span>
-        </div>
-        {#if message.isOwn}
-          <div class="message-avatar">
-            <Avatar 
-              src={currentUser?.avatar}
-              username={currentUser?.username || ''}
-              userId={currentUser?.id || ''}
-              size={36}
-            />
-          </div>
-        {/if}
+    {#if loading}
+      <div class="loading">
+        <div class="spinner"></div>
+        <span>Loading messages...</span>
       </div>
-    {/each}
+    {:else}
+      <div class="dm-start">
+        <Avatar 
+          src={conversation.other_avatar}
+          username={conversation.other_username}
+          userId={conversation.other_user_id}
+          size={80}
+        />
+        <h3>{conversation.other_username}</h3>
+        <p>This is the beginning of your direct message history with <strong>{conversation.other_username}</strong>.</p>
+      </div>
+
+      {#each messages as message, i}
+        {#if shouldShowDate(i)}
+          <div class="date-divider">
+            <span>{formatDate(message.created_at)}</span>
+          </div>
+        {/if}
+        
+        <div class="message" class:own={isOwnMessage(message)}>
+          {#if !isOwnMessage(message)}
+            <div class="message-avatar">
+              <Avatar 
+                src={conversation.other_avatar}
+                username={conversation.other_username}
+                userId={conversation.other_user_id}
+                size={36}
+              />
+            </div>
+          {/if}
+          <div class="message-content">
+            <div class="message-bubble">
+              <p>{message.content}</p>
+            </div>
+            <span class="message-time">{formatTime(message.created_at)}</span>
+          </div>
+          {#if isOwnMessage(message)}
+            <div class="message-avatar">
+              <Avatar 
+                src={currentUser?.avatar}
+                username={currentUser?.username || ''}
+                userId={currentUser?.id || ''}
+                size={36}
+              />
+            </div>
+          {/if}
+        </div>
+      {/each}
+    {/if}
   </div>
 
   <!-- Input -->
   <div class="input-area">
-    <button class="attach-btn" aria-label="Attach file">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
-      </svg>
-    </button>
-    <div class="input-wrapper">
-      <input
-        type="text"
-        bind:value={newMessage}
-        on:keydown={handleKeydown}
-        placeholder="Message {dmUser.name}"
-      />
-    </div>
-    <button class="emoji-btn" aria-label="Add emoji">
+    <button class="emoji-btn" on:click={() => showEmojiPicker = !showEmojiPicker} aria-label="Add emoji">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="10"/>
         <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
@@ -190,7 +299,21 @@
         <line x1="15" y1="9" x2="15.01" y2="9"/>
       </svg>
     </button>
-    <button class="send-btn" on:click={sendMessage} disabled={!newMessage.trim()}>
+    {#if showEmojiPicker}
+      <div class="emoji-picker-container">
+        <EmojiPicker on:select={handleEmojiSelect} on:close={() => showEmojiPicker = false} />
+      </div>
+    {/if}
+    <div class="input-wrapper">
+      <input
+        type="text"
+        bind:value={newMessage}
+        on:keydown={handleKeydown}
+        placeholder="Message {conversation.other_username}"
+        disabled={sending}
+      />
+    </div>
+    <button class="send-btn" on:click={sendMessage} disabled={!newMessage.trim() || sending}>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="22" y1="2" x2="11" y2="13"/>
         <polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -199,24 +322,24 @@
   </div>
 </div>
 
-
 <style>
   .dm-chat {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: #1a1a2e;
+    background: #050505;
     height: 100%;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
 
-  /* Header */
   .dm-header {
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
-    background: rgba(15, 15, 25, 0.95);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(10, 10, 15, 0.95);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .back-btn {
@@ -224,7 +347,7 @@
     height: 36px;
     border-radius: 10px;
     border: none;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.04);
     color: rgba(255, 255, 255, 0.6);
     cursor: pointer;
     display: flex;
@@ -234,7 +357,7 @@
   }
 
   .back-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
     color: #fff;
   }
 
@@ -251,36 +374,8 @@
   }
 
   .user-info:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.04);
   }
-
-  .avatar-wrapper {
-    position: relative;
-    width: 40px;
-    height: 40px;
-  }
-
-  .avatar {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-
-  .status-dot {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    border: 2px solid #1a1a2e;
-  }
-
-  .status-dot.online { background: #22c55e; }
-  .status-dot.idle { background: #eab308; }
-  .status-dot.dnd { background: #ef4444; }
-  .status-dot.offline { background: #6b7280; }
 
   .user-details {
     display: flex;
@@ -296,7 +391,7 @@
 
   .status-text {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
   }
 
   .header-actions {
@@ -311,7 +406,7 @@
     border-radius: 10px;
     border: none;
     background: transparent;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -320,18 +415,40 @@
   }
 
   .action-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
     color: #fff;
   }
 
-  /* Messages */
   .messages-container {
     flex: 1;
     overflow-y: auto;
     padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 8px;
+  }
+
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   .dm-start {
@@ -343,24 +460,16 @@
     margin-bottom: 20px;
   }
 
-  .dm-start-avatar {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    object-fit: cover;
-    margin-bottom: 16px;
-  }
-
   .dm-start h3 {
     font-size: 24px;
     font-weight: 700;
     color: #fff;
-    margin: 0 0 8px 0;
+    margin: 16px 0 8px 0;
   }
 
   .dm-start p {
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
     margin: 0;
   }
 
@@ -374,11 +483,11 @@
   .date-divider span {
     font-size: 11px;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.3);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     padding: 4px 12px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.04);
     border-radius: 10px;
   }
 
@@ -395,10 +504,6 @@
   }
 
   .message-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    object-fit: cover;
     flex-shrink: 0;
   }
 
@@ -415,11 +520,11 @@
   .message-bubble {
     padding: 12px 16px;
     border-radius: 18px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .message.own .message-bubble {
-    background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+    background: rgba(255, 255, 255, 0.12);
   }
 
   .message-bubble p {
@@ -427,31 +532,32 @@
     font-size: 14px;
     color: #fff;
     line-height: 1.5;
+    word-break: break-word;
   }
 
   .message-time {
     font-size: 10px;
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.3);
     padding: 0 4px;
   }
 
-  /* Input */
   .input-area {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 16px;
-    background: rgba(15, 15, 25, 0.95);
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(10, 10, 15, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    position: relative;
   }
 
-  .attach-btn, .emoji-btn {
+  .emoji-btn {
     width: 40px;
     height: 40px;
     border-radius: 10px;
     border: none;
     background: transparent;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -459,9 +565,16 @@
     transition: all 0.15s ease;
   }
 
-  .attach-btn:hover, .emoji-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+  .emoji-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
     color: #fff;
+  }
+
+  .emoji-picker-container {
+    position: absolute;
+    bottom: 70px;
+    left: 16px;
+    z-index: 100;
   }
 
   .input-wrapper {
@@ -471,8 +584,8 @@
   .input-wrapper input {
     width: 100%;
     padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
     color: #fff;
     font-size: 14px;
@@ -481,11 +594,15 @@
   }
 
   .input-wrapper input:focus {
-    border-color: rgba(49, 130, 206, 0.5);
+    border-color: rgba(255, 255, 255, 0.2);
   }
 
   .input-wrapper input::placeholder {
     color: rgba(255, 255, 255, 0.3);
+  }
+
+  .input-wrapper input:disabled {
+    opacity: 0.5;
   }
 
   .send-btn {
@@ -493,8 +610,8 @@
     height: 44px;
     border-radius: 12px;
     border: none;
-    background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
-    color: #fff;
+    background: #fff;
+    color: #050505;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -504,15 +621,14 @@
 
   .send-btn:hover:not(:disabled) {
     transform: scale(1.05);
-    box-shadow: 0 4px 15px rgba(26, 54, 93, 0.4);
+    box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
   }
 
   .send-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.3;
     cursor: not-allowed;
   }
 
-  /* Scrollbar */
   .messages-container::-webkit-scrollbar {
     width: 6px;
   }
@@ -522,7 +638,7 @@
   }
 
   .messages-container::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 3px;
   }
 </style>

@@ -12,6 +12,8 @@
   import UserProfile from './components/UserProfile.svelte';
   import SettingsPanel from './components/SettingsPanel.svelte';
   import DirectMessageChat from './components/DirectMessageChat.svelte';
+  import InboxPanel from './components/InboxPanel.svelte';
+  import ComposeMessageModal from './components/ComposeMessageModal.svelte';
   import CreateGuildModal from './components/CreateGuildModal.svelte';
   import HomeDashboard from './components/HomeDashboard.svelte';
   import BetaWelcomeModal from './components/BetaWelcomeModal.svelte';
@@ -19,7 +21,7 @@
   import MiniPlayer from './components/MiniPlayer.svelte';
   import GuildSettingsModal from './components/GuildSettingsModal.svelte';
   import ChannelSettingsModal from './components/ChannelSettingsModal.svelte';
-  import type { User, Guild, Channel } from './types';
+  import type { User, Guild, Channel, DMConversation } from './types';
   import { authStorage } from './utils/storage';
   import { hasPlaylist } from './lib/musicStore';
   import { parseRoute, navigateToGuild, navigateToChannel, navigateToDashboard, navigateToMyspace, navigateToSettings, navigateToHome } from './utils/router';
@@ -27,6 +29,7 @@
   import { initAblyWithUser, closeAbly } from './lib/ably';
 
   $: hasMusicPlaying = $hasPlaylist;
+
 
   let authToken: string | null = null;
   let showRegister: boolean = false;
@@ -43,12 +46,16 @@
   let showUserProfile = false;
   let showSettings = false;
   let selectedSection = 'main';
-  let selectedDMId: string | null = null;
-  let selectedDMUser: { id: string; name: string; avatar: string; status?: string } | null = null;
   let showCreateGuildModal = false;
   let showBetaModal = false;
   let showProfileSetup = false;
   let viewedUser: User | null = null; // User being viewed (when clicking on someone's name in chat)
+  
+  // Inbox/DM state
+  let showInbox = false;
+  let showComposeModal = false;
+  let selectedConversation: DMConversation | null = null;
+  let unreadDMCount = 0;
   
   // Guild and Channel settings modals
   let showGuildSettingsModal = false;
@@ -135,8 +142,8 @@
     selectedChannelId = event.detail.channelId;
     selectedChannelType = event.detail.channelType || null;
     showUserProfile = false;
-    selectedDMId = null;
-    selectedDMUser = null;
+    showInbox = false;
+    selectedConversation = null;
     
     // Fetch channel details to get name and confirm type
     if (authToken && selectedChannelId) {
@@ -172,15 +179,61 @@
     }
   }
 
-  function closeDM() {
-    selectedDMId = null;
-    selectedDMUser = null;
+  function handleOpenInbox() {
+    showInbox = !showInbox; // Toggle inbox
+    if (showInbox) {
+      showUserProfile = false;
+      showSettings = false;
+      selectedConversation = null;
+      selectedSection = 'inbox';
+    } else {
+      selectedSection = 'main';
+    }
+  }
+
+  function handleOpenConversation(event: CustomEvent<{ conversation: DMConversation }>) {
+    selectedConversation = event.detail.conversation;
+    showInbox = false;
+    showComposeModal = false;
+    selectedSection = 'main';
+  }
+
+  function handleCloseConversation() {
+    selectedConversation = null;
+    showInbox = true;
+  }
+
+  function handleComposeMessage() {
+    showComposeModal = true;
+  }
+
+  function handleStartConversation(event: CustomEvent<{ conversation: DMConversation }>) {
+    selectedConversation = event.detail.conversation;
+    showComposeModal = false;
+    showInbox = false;
+    selectedSection = 'main';
+  }
+
+  async function loadUnreadDMCount() {
+    if (!authToken) return;
+    try {
+      const response = await fetch(apiUrl('/api/friends/dm'), {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+      if (response.ok) {
+        const conversations = await response.json();
+        unreadDMCount = conversations.reduce((sum: number, c: DMConversation) => sum + (c.unread_count || 0), 0);
+      }
+    } catch (err) {
+      console.error('Failed to load unread count:', err);
+    }
   }
 
   function handleSelectSection(event: CustomEvent<{ section: string }>) {
     selectedSection = event.detail.section;
     if (event.detail.section === 'settings') {
       showSettings = !showSettings;
+      showInbox = false;
       navigateToSettings();
     } else if (event.detail.section === 'main') {
       // Navigate to home dashboard
@@ -188,12 +241,13 @@
       selectedChannelId = null;
       showSettings = false;
       showUserProfile = false;
-      selectedDMId = null;
-      selectedDMUser = null;
+      showInbox = false;
+      selectedConversation = null;
       navigateToDashboard();
     } else if (event.detail.section === 'myspace') {
       showSettings = false;
       showUserProfile = true;
+      showInbox = false;
       navigateToMyspace();
     } else {
       showSettings = false;
@@ -203,10 +257,10 @@
   function handleSelectGuild(event: CustomEvent<{ guildId: string }>) {
     selectedGuildId = event.detail.guildId;
     selectedChannelId = null;
+    showInbox = false;
+    selectedConversation = null;
     showUserProfile = false;
     viewedUser = null;
-    selectedDMId = null;
-    selectedDMUser = null;
     
     // Update URL
     if (selectedGuildId) {
@@ -223,8 +277,8 @@
       showUserProfile = true;
       navigateToMyspace();
       showSettings = false;
-      selectedDMId = null;
-      selectedDMUser = null;
+      showInbox = false;
+      selectedConversation = null;
       return;
     }
 
@@ -271,8 +325,8 @@
     }
     
     showSettings = false;
-    selectedDMId = null;
-    selectedDMUser = null;
+    showInbox = false;
+    selectedConversation = null;
   }
 
   function handleUpdateUser(event: CustomEvent<{ user: Partial<User> }>) {
@@ -303,8 +357,8 @@
     selectedChannelName = null;
     showSettings = false;
     showUserProfile = false;
-    selectedDMId = null;
-    selectedDMUser = null;
+    showInbox = false;
+    selectedConversation = null;
     viewedUser = null;
     
     // Disconnect from voice if active
@@ -407,6 +461,9 @@
         authToken = null;
         authStorage.remove();
       }
+
+      // Load unread DM count
+      await loadUnreadDMCount();
     } catch (error) {
       console.error('Failed to load user data:', error);
     } finally {
@@ -519,13 +576,23 @@
         {selectedSection}
         {guilds}
         {selectedGuildId}
+        {unreadDMCount}
         on:selectSection={handleSelectSection}
         on:selectGuild={handleSelectGuild}
-        on:openProfile={() => { showUserProfile = true; viewedUser = null; showSettings = false; selectedDMId = null; selectedDMUser = null; navigateToMyspace(); }}
+        on:openProfile={() => { showUserProfile = true; viewedUser = null; showSettings = false; showInbox = false; selectedConversation = null; navigateToMyspace(); }}
         on:createGuild={handleCreateGuild}
         on:openGuildSettings={(e) => { guildToEdit = e.detail.guild; showGuildSettingsModal = true; }}
+        on:openInbox={handleOpenInbox}
       />
-      {#if selectedGuildId}
+      {#if selectedConversation}
+        <DirectMessageChat 
+          conversation={selectedConversation}
+          {currentUser}
+          authToken={authToken || ''}
+          on:close={handleCloseConversation}
+          on:viewProfile={(e) => handleViewUserProfile(new CustomEvent('viewProfile', { detail: { userId: e.detail.userId, username: selectedConversation?.other_username || '', avatar: selectedConversation?.other_avatar || undefined } }))}
+        />
+      {:else if selectedGuildId}
         <ChannelList 
           {authToken}
           {selectedGuildId}
@@ -550,18 +617,24 @@
           </svg>
         </button>
       {/if}
+
+      <!-- Inbox Panel Overlay -->
+      {#if showInbox}
+        <InboxPanel 
+          {currentUser}
+          authToken={authToken || ''}
+          on:close={() => { showInbox = false; selectedSection = 'main'; }}
+          on:openConversation={handleOpenConversation}
+          on:viewProfile={handleViewUserProfile}
+          on:composeMessage={handleComposeMessage}
+        />
+      {/if}
       {#if showUserProfile}
         <UserProfile 
           user={viewedUser || currentUser}
           authToken={authToken || ''}
           currentUserId={currentUser?.id || ''}
           on:close={() => { showUserProfile = false; viewedUser = null; }}
-        />
-      {:else if selectedDMId && selectedDMUser}
-        <DirectMessageChat 
-          dmUser={selectedDMUser}
-          {currentUser}
-          on:close={closeDM}
         />
       {:else if selectedChannelId}
         {#if selectedChannelType === 'voice' && isViewingVoiceCall}
@@ -625,6 +698,14 @@
         isOpen={showCreateGuildModal}
         on:close={() => showCreateGuildModal = false}
         on:create={submitCreateGuild}
+      />
+
+      <!-- Compose Message Modal -->
+      <ComposeMessageModal 
+        isOpen={showComposeModal}
+        authToken={authToken || ''}
+        on:close={() => showComposeModal = false}
+        on:startConversation={handleStartConversation}
       />
 
       <!-- Beta Welcome Modal (First Login Only) -->

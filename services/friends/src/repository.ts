@@ -128,7 +128,7 @@ export class FriendsRepository {
        RETURNING *`,
       [id, userId, friendId]
     );
-    return result.rows[0];
+    return result.rows[0]!;
   }
 
   /**
@@ -479,7 +479,7 @@ export class FriendsRepository {
       [conversationId]
     );
     
-    return result.rows[0];
+    return result.rows[0]!;
   }
 
   /**

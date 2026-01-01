@@ -38,6 +38,9 @@ npm run build -w @discord-clone/messaging
 echo "Building @discord-clone/permissions..."
 npm run build -w @discord-clone/permissions
 
+echo "Building @discord-clone/friends..."
+npm run build -w @discord-clone/friends
+
 echo "Building @discord-clone/gateway..."
 npm run build -w @discord-clone/gateway
 

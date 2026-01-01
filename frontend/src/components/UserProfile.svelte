@@ -52,6 +52,10 @@
   let miniWidgets: MiniWidget[] = [];
   let isEditMode = false;
 
+  // Friend request state
+  let friendRequestStatus: 'none' | 'pending' | 'friends' | 'loading' | 'sent' = 'none';
+  let friendRequestError = '';
+
   // Quote card content (keyed by card id)
   let quoteContents: Record<string, string> = {};
 
@@ -133,13 +137,92 @@
     loadProfileData();
   }
 
+  // Check friendship status when viewing another user's profile
+  $: if (!isOwnProfile && user?.id && authToken) {
+    checkFriendshipStatus();
+  }
+
+  async function checkFriendshipStatus() {
+    if (!user?.id || !authToken || isOwnProfile) return;
+    
+    friendRequestStatus = 'loading';
+    try {
+      // Check if already friends
+      const friendsResponse = await fetch(apiUrl('/api/friends'), {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+      
+      if (friendsResponse.ok) {
+        const friends = await friendsResponse.json();
+        const isFriend = friends.some((f: { friend_id: string; user_id: string }) => 
+          f.friend_id === user?.id || f.user_id === user?.id
+        );
+        
+        if (isFriend) {
+          friendRequestStatus = 'friends';
+          return;
+        }
+      }
+
+      // Check for pending outgoing requests
+      const outgoingResponse = await fetch(apiUrl('/api/friends/requests/outgoing'), {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+      
+      if (outgoingResponse.ok) {
+        const outgoing = await outgoingResponse.json();
+        const hasPending = outgoing.some((r: { friend_id: string }) => r.friend_id === user?.id);
+        
+        if (hasPending) {
+          friendRequestStatus = 'pending';
+          return;
+        }
+      }
+
+      friendRequestStatus = 'none';
+    } catch (err) {
+      console.error('Failed to check friendship status:', err);
+      friendRequestStatus = 'none';
+    }
+  }
+
+  async function sendFriendRequest() {
+    if (!user?.id || !authToken) return;
+    
+    friendRequestStatus = 'loading';
+    friendRequestError = '';
+    
+    try {
+      const response = await fetch(apiUrl('/api/friends/requests'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ friend_id: user.id }),
+      });
+
+      if (response.ok) {
+        friendRequestStatus = 'sent';
+      } else {
+        const data = await response.json();
+        friendRequestError = data.error?.message || 'Failed to send request';
+        friendRequestStatus = 'none';
+      }
+    } catch (err) {
+      console.error('Failed to send friend request:', err);
+      friendRequestError = 'Failed to send request';
+      friendRequestStatus = 'none';
+    }
+  }
+
   function getQuoteContent(cardId: string): string {
     return quoteContents[cardId] || `<h1>BE<br>KIND<br>AND<br>BRIGHT</h1><p><strong>Lorem ipsum</strong> dolor sit amet.</p>`;
   }
 
-  function handleQuoteUpdate(cardId: string, e: CustomEvent<{ html: string }>) {
-    quoteContents[cardId] = e.detail.html;
-    updateQuoteCard(cardId, e.detail.html);
+  function handleQuoteUpdate(cardId: string, html: string) {
+    quoteContents[cardId] = html;
+    updateQuoteCard(cardId, html);
   }
 
   function canAddCardType(type: CardType): boolean {
@@ -567,6 +650,41 @@
         {:else}
           <button class="edit-space-btn" on:click={toggleEditMode}>edit my space</button>
         {/if}
+      {:else}
+        <!-- Add Friend button for other users' profiles -->
+        {#if friendRequestStatus === 'loading'}
+          <button class="friend-btn loading" disabled>
+            <span class="spinner-small"></span>
+          </button>
+        {:else if friendRequestStatus === 'friends'}
+          <button class="friend-btn friends" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 6L9 17l-5-5"/>
+            </svg>
+            friends
+          </button>
+        {:else if friendRequestStatus === 'pending' || friendRequestStatus === 'sent'}
+          <button class="friend-btn pending" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
+            request sent
+          </button>
+        {:else}
+          <button class="friend-btn add" on:click={sendFriendRequest}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+              <circle cx="8.5" cy="7" r="4"/>
+              <line x1="20" y1="8" x2="20" y2="14"/>
+              <line x1="23" y1="11" x2="17" y2="11"/>
+            </svg>
+            add friend
+          </button>
+        {/if}
+        {#if friendRequestError}
+          <span class="friend-error">{friendRequestError}</span>
+        {/if}
       {/if}
       <div class="header-avatar">
         <Avatar 
@@ -618,7 +736,7 @@
 
           {#if card.type === 'quote'}
             <div class="quote-content">
-              <div class="quote-text" contenteditable={isEditMode} on:blur={(e) => handleQuoteUpdate(card.id, { detail: { content: e.currentTarget.innerHTML } })}>
+              <div class="quote-text" contenteditable={isEditMode} on:blur={(e) => handleQuoteUpdate(card.id, e.currentTarget.innerHTML)}>
                 {@html getQuoteContent(card.id) || '<p>Write your creative quote...</p>'}
               </div>
             </div>
@@ -636,7 +754,7 @@
             <GitHubProjectsCard editable={isEditMode} cardId={card.id} />
 
           {:else if card.type === 'friends'}
-            <FriendsCard editable={isEditMode} />
+            <FriendsCard editable={isEditMode} {authToken} userId={effectiveUserId} />
           {/if}
         </div>
       </div>
@@ -964,6 +1082,66 @@
     display: flex;
     align-items: center;
     gap: 12px;
+  }
+
+  .friend-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+  }
+
+  .friend-btn.add {
+    background: #fff;
+    color: #050505;
+  }
+
+  .friend-btn.add:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
+  }
+
+  .friend-btn.friends {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+    cursor: default;
+  }
+
+  .friend-btn.pending {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.5);
+    cursor: default;
+  }
+
+  .friend-btn.loading {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.5);
+    min-width: 100px;
+    justify-content: center;
+  }
+
+  .friend-btn:disabled {
+    cursor: default;
+  }
+
+  .spinner-small {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .friend-error {
+    font-size: 11px;
+    color: #f87171;
   }
 
   .edit-space-btn, .save-btn, .cancel-btn {

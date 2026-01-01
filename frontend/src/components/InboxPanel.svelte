@@ -10,7 +10,8 @@
   const dispatch = createEventDispatcher<{
     close: void;
     openConversation: { conversation: DMConversation };
-    viewProfile: { userId: string };
+    viewProfile: { userId: string; username: string; avatar?: string };
+    composeMessage: void;
   }>();
 
   type Tab = 'conversations' | 'friends' | 'requests' | 'blocked';
@@ -25,7 +26,7 @@
   let searchResults: { id: string; username: string; avatar: string | null }[] = [];
   let searching = false;
   let loading = false;
-  let error = '';
+  let loadError = '';
 
   onMount(() => {
     loadData();
@@ -33,7 +34,7 @@
 
   async function loadData() {
     loading = true;
-    error = '';
+    loadError = '';
     try {
       await Promise.all([
         loadConversations(),
@@ -42,7 +43,7 @@
         loadBlocked(),
       ]);
     } catch (err) {
-      error = 'Failed to load data';
+      loadError = 'Failed to load data';
       console.error(err);
     } finally {
       loading = false;
@@ -225,14 +226,25 @@
   $: totalRequests = incomingRequests.length;
 </script>
 
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<div class="inbox-backdrop" on:click={() => dispatch('close')}></div>
 <div class="inbox-panel">
   <div class="header">
     <h2>messages</h2>
-    <button class="close-btn" on:click={() => dispatch('close')}>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M18 6L6 18M6 6l12 12"/>
-      </svg>
-    </button>
+    <div class="header-actions">
+      <button class="compose-btn" on:click={() => dispatch('composeMessage')} title="New message">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 20h9"/>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+        </svg>
+      </button>
+      <button class="close-btn" on:click={() => dispatch('close')}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
   </div>
 
   <!-- Search -->
@@ -379,13 +391,30 @@
 </div>
 
 <style>
+  .inbox-backdrop {
+    position: fixed;
+    top: 0;
+    left: 72px;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 199;
+  }
+
   .inbox-panel {
+    position: fixed;
+    top: 0;
+    left: 72px; /* After sidebar */
+    width: 380px;
+    height: 100%;
     display: flex;
     flex-direction: column;
-    height: 100%;
     background: #050505;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
+    z-index: 200;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
   }
 
   .header {
@@ -403,12 +432,41 @@
     color: #fff;
   }
 
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .compose-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: #fff;
+    color: #050505;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .compose-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
+  }
+
   .close-btn {
+    width: 32px;
+    height: 32px;
     background: none;
     border: none;
     color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
-    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 6px;
     transition: all 0.2s;
   }
@@ -439,7 +497,7 @@
 
   .search-section input:focus {
     outline: none;
-    border-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
   }
 
   .search-results {
@@ -447,7 +505,7 @@
     top: 100%;
     left: 24px;
     right: 24px;
-    background: #111;
+    background: #0a0a0a;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     max-height: 200px;
@@ -512,27 +570,47 @@
   }
 
   .tabs button:hover {
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.8);
     background: rgba(255, 255, 255, 0.04);
   }
 
   .tabs button.active {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.08);
+    color: #050505;
+    background: #fff;
+    font-weight: 600;
   }
 
   .tabs .badge {
-    background: #ff4757;
-    color: #fff;
+    background: #fff;
+    color: #050505;
     font-size: 10px;
     padding: 2px 6px;
     border-radius: 10px;
+    font-weight: 600;
+  }
+
+  .tabs button.active .badge {
+    background: #050505;
+    color: #fff;
   }
 
   .content {
     flex: 1;
     overflow-y: auto;
     padding: 16px 24px;
+  }
+
+  .content::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
   }
 
   .loading, .empty {
@@ -594,8 +672,8 @@
   }
 
   .unread {
-    background: #ff4757;
-    color: #fff;
+    background: #fff;
+    color: #050505;
     font-size: 10px;
     font-weight: 600;
     padding: 2px 6px;
@@ -695,6 +773,10 @@
   .accept-btn {
     background: #fff;
     color: #050505;
+  }
+
+  .accept-btn:hover {
+    box-shadow: 0 2px 8px rgba(255, 255, 255, 0.2);
   }
 
   .decline-btn {

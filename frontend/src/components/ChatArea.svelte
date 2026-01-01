@@ -275,18 +275,16 @@
           : msg
       );
 
-      // Publish to Ably
+      // Publish to Ably - send notification only, clients will fetch from API
       const ablyChannel = getAblyClient()?.channels.get(`channel:${channelId}`);
       if (ablyChannel) {
         await ablyChannel.publish('message', {
           id: savedMessage.id,
           authorId: savedMessage.author_id || visitorId,
           authorName: savedMessage.author_name || userName,
-          authorAvatar: savedMessage.author_avatar || currentUser?.avatar,
-          authorFont: savedMessage.author_font || currentUser?.username_font,
-          content: savedMessage.content || content,
           timestamp: new Date(savedMessage.created_at || Date.now()).getTime(),
           channelId,
+          large: true, // Flag to indicate clients should fetch from API
         });
       }
     } catch (error) {

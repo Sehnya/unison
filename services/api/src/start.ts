@@ -12,6 +12,7 @@ import { GuildService } from '@discord-clone/guild';
 import { ChannelService } from '@discord-clone/channel';
 import { MessagingService } from '@discord-clone/messaging';
 import { PermissionsService } from '@discord-clone/permissions';
+import { FriendsService } from '@discord-clone/friends';
 import { LiveKitService } from './services/livekit.js';
 import { createRedisCache } from '@discord-clone/cache';
 
@@ -76,6 +77,7 @@ async function main() {
   const authService = new AuthService(pool, { workerId });
   const guildService = new GuildService(pool, { workerId });
   const channelService = new ChannelService(pool, { workerId });
+  const friendsService = new FriendsService(pool, { workerId });
   const messagingService = new MessagingService(pool, {
     workerId,
     permissionChecker: {
@@ -119,6 +121,7 @@ async function main() {
     messagingService,
     permissionsService,
     livekitService,
+    friendsService,
     pool,
     validateToken,
   });

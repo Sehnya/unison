@@ -1,14 +1,20 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
+  import { apiUrl } from '../lib/api';
+  import Avatar from './Avatar.svelte';
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   export let editable: boolean = false;
+  export let authToken: string = '';
+  export let userId: string = ''; // The user whose profile we're viewing (empty = current user)
 
   interface Friend {
     id: string;
-    name: string;
-    avatar: string;
-    status: 'online' | 'idle' | 'dnd' | 'offline';
+    user_id: string;
+    friend_id: string;
+    friend_username: string;
+    friend_avatar: string | null;
+    friend_bio: string | null;
+    status: 'accepted';
   }
 
   const dispatch = createEventDispatcher<{
@@ -16,83 +22,54 @@
     viewAllFriends: void;
   }>();
 
-  // Mock friends data
-  let friends: Friend[] = [
-    { id: '1', name: 'Alex', avatar: 'https://i.pravatar.cc/100?img=1', status: 'online' },
-    { id: '2', name: 'Sarah', avatar: 'https://i.pravatar.cc/100?img=2', status: 'online' },
-    { id: '3', name: 'Mike', avatar: 'https://i.pravatar.cc/100?img=3', status: 'idle' },
-    { id: '4', name: 'Emma', avatar: 'https://i.pravatar.cc/100?img=4', status: 'dnd' },
-    { id: '5', name: 'John', avatar: 'https://i.pravatar.cc/100?img=5', status: 'online' },
-    { id: '6', name: 'Lisa', avatar: 'https://i.pravatar.cc/100?img=6', status: 'offline' },
-    { id: '7', name: 'David', avatar: 'https://i.pravatar.cc/100?img=7', status: 'online' },
-    { id: '8', name: 'Amy', avatar: 'https://i.pravatar.cc/100?img=8', status: 'idle' },
-    { id: '9', name: 'Chris', avatar: 'https://i.pravatar.cc/100?img=9', status: 'online' },
-    { id: '10', name: 'Kate', avatar: 'https://i.pravatar.cc/100?img=10', status: 'offline' },
-  ];
+  let friends: Friend[] = [];
+  let loading = true;
+
+  onMount(() => {
+    loadFriends();
+  });
+
+  async function loadFriends() {
+    if (!authToken) {
+      loading = false;
+      return;
+    }
+
+    try {
+      // For now, we only load the current user's friends
+      // In the future, we could add an endpoint to get another user's friends
+      const response = await fetch(apiUrl('/api/friends'), {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+      
+      if (response.ok) {
+        friends = await response.json();
+      }
+    } catch (err) {
+      console.error('Failed to load friends:', err);
+    } finally {
+      loading = false;
+    }
+  }
 
   $: displayedFriends = friends.slice(0, 4);
   $: remainingCount = Math.max(0, friends.length - 4);
-  $: onlineCount = friends.filter(f => f.status === 'online').length;
-
-  function getStatusColor(status: Friend['status']): string {
-    switch (status) {
-      case 'online': return '#22c55e';
-      case 'idle': return '#eab308';
-      case 'dnd': return '#ef4444';
-      default: return '#6b7280';
-    }
-  }
+  $: friendCount = friends.length;
 </script>
 
 <div class="friends-card">
   <div class="card-header">
-    <span class="online-count">{onlineCount} online</span>
+    <span class="friend-count">{friendCount} friend{friendCount !== 1 ? 's' : ''}</span>
     <button class="view-all-btn" on:click={() => dispatch('viewAllFriends')}>
       View All
     </button>
   </div>
 
-  <div class="friends-display">
-    <div class="avatars-row">
-      {#each displayedFriends as friend, i}
-        <button 
-          class="friend-avatar"
-          style="z-index: {4 - i};"
-          on:click={() => dispatch('viewFriend', { friendId: friend.id })}
-          title={friend.name}
-        >
-          <img src={friend.avatar} alt={friend.name} />
-          <span class="status-dot" style="background: {getStatusColor(friend.status)}"></span>
-        </button>
-      {/each}
-      
-      {#if remainingCount > 0}
-        <button class="remaining-count" on:click={() => dispatch('viewAllFriends')}>
-          +{remainingCount}
-        </button>
-      {/if}
+  {#if loading}
+    <div class="loading-state">
+      <span>Loading friends...</span>
     </div>
-
-    <div class="friends-list">
-      {#each displayedFriends as friend}
-        <button 
-          class="friend-item"
-          on:click={() => dispatch('viewFriend', { friendId: friend.id })}
-        >
-          <div class="friend-avatar-small">
-            <img src={friend.avatar} alt={friend.name} />
-            <span class="status-indicator" style="background: {getStatusColor(friend.status)}"></span>
-          </div>
-          <div class="friend-info">
-            <span class="friend-name">{friend.name}</span>
-            <span class="friend-status">{friend.status === 'dnd' ? 'Do Not Disturb' : friend.status}</span>
-          </div>
-        </button>
-      {/each}
-    </div>
-  </div>
-
-  {#if friends.length === 0}
+  {:else if friends.length === 0}
     <div class="empty-state">
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
@@ -100,6 +77,56 @@
         <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
       </svg>
       <span>No friends yet</span>
+    </div>
+  {:else}
+    <div class="friends-display">
+      <div class="avatars-row">
+        {#each displayedFriends as friend, i}
+          <button 
+            class="friend-avatar"
+            style="z-index: {4 - i};"
+            on:click={() => dispatch('viewFriend', { friendId: friend.friend_id })}
+            title={friend.friend_username}
+          >
+            <Avatar 
+              src={friend.friend_avatar}
+              username={friend.friend_username}
+              userId={friend.friend_id}
+              size={48}
+            />
+          </button>
+        {/each}
+        
+        {#if remainingCount > 0}
+          <button class="remaining-count" on:click={() => dispatch('viewAllFriends')}>
+            +{remainingCount}
+          </button>
+        {/if}
+      </div>
+
+      <div class="friends-list">
+        {#each displayedFriends as friend}
+          <button 
+            class="friend-item"
+            on:click={() => dispatch('viewFriend', { friendId: friend.friend_id })}
+          >
+            <div class="friend-avatar-small">
+              <Avatar 
+                src={friend.friend_avatar}
+                username={friend.friend_username}
+                userId={friend.friend_id}
+                size={36}
+              />
+            </div>
+            <div class="friend-info">
+              <span class="friend-name">{friend.friend_username}</span>
+              {#if friend.friend_bio}
+                <span class="friend-bio">{friend.friend_bio}</span>
+              {/if}
+            </div>
+          </button>
+        {/each}
+      </div>
     </div>
   {/if}
 </div>
@@ -119,20 +146,20 @@
     margin-bottom: 16px;
   }
 
-  .online-count {
+  .friend-count {
     font-size: 11px;
-    color: #22c55e;
-    background: rgba(34, 197, 94, 0.15);
+    color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.08);
     padding: 3px 8px;
     border-radius: 10px;
   }
 
   .view-all-btn {
     padding: 6px 12px;
-    background: rgba(49, 130, 206, 0.15);
+    background: rgba(255, 255, 255, 0.08);
     border: none;
     border-radius: 8px;
-    color: #63b3ed;
+    color: rgba(255, 255, 255, 0.7);
     font-size: 11px;
     font-weight: 500;
     cursor: pointer;
@@ -140,7 +167,8 @@
   }
 
   .view-all-btn:hover {
-    background: rgba(49, 130, 206, 0.25);
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
   }
 
   .friends-display {
@@ -148,6 +176,15 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+  }
+
+  .loading-state {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 12px;
   }
 
   /* Stacked Avatars Row */
@@ -168,6 +205,7 @@
     position: relative;
     margin-left: -12px;
     transition: all 0.2s ease;
+    overflow: hidden;
   }
 
   .friend-avatar:first-child {
@@ -179,29 +217,12 @@
     z-index: 10 !important;
   }
 
-  .friend-avatar img {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-
-  .status-dot {
-    position: absolute;
-    bottom: 2px;
-    right: 2px;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    border: 2px solid rgba(40, 40, 40, 0.9);
-  }
-
   .remaining-count {
     width: 48px;
     height: 48px;
     border-radius: 50%;
     border: 3px solid rgba(40, 40, 40, 0.9);
-    background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+    background: rgba(255, 255, 255, 0.1);
     color: #fff;
     font-size: 14px;
     font-weight: 600;
@@ -215,7 +236,7 @@
 
   .remaining-count:hover {
     transform: scale(1.15) translateY(-4px);
-    box-shadow: 0 4px 15px rgba(26, 54, 93, 0.4);
+    background: rgba(255, 255, 255, 0.2);
   }
 
   /* Friends List */
@@ -247,23 +268,8 @@
     width: 36px;
     height: 36px;
     flex-shrink: 0;
-  }
-
-  .friend-avatar-small img {
-    width: 100%;
-    height: 100%;
     border-radius: 50%;
-    object-fit: cover;
-  }
-
-  .status-indicator {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 2px solid rgba(40, 40, 40, 0.9);
+    overflow: hidden;
   }
 
   .friend-info {
@@ -282,10 +288,12 @@
     text-overflow: ellipsis;
   }
 
-  .friend-status {
+  .friend-bio {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.5);
-    text-transform: capitalize;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .empty-state {
