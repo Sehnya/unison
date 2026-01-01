@@ -822,15 +822,52 @@
 
       // Subscribe to new channel for real-time messages
       const channelName = `channel:${channelId}`;
-      ablyChannel = subscribeToChannel(channelName, (message) => {
+      ablyChannel = subscribeToChannel(channelName, async (message) => {
+        console.log('📨 Ably message received:', { id: message.id, authorId: message.authorId, channelId: message.channelId });
         // Only add if message is for this channel and not from current user
         if (message.channelId === channelId && message.authorId !== visitorId) {
           // Check if message already exists (avoid duplicates)
           if (!messages.find(m => m.id === message.id)) {
-            // If message is marked as large, skip it - it will be fetched via API polling
-            // Large messages are not published through Ably to avoid size limit errors
+            // If message is marked as large, fetch it from API
             if ((message as any).large) {
-              console.log('Large message notification received, will be fetched via API');
+              console.log('Large message notification received, fetching from API...');
+              try {
+                const response = await fetch(apiUrl(`/api/channels/${channelId}/messages?limit=1&after=${message.id}`), {
+                  headers: { 'Authorization': `Bearer ${authToken}` },
+                });
+                if (response.ok) {
+                  const data = await response.json();
+                  // The message we want should be the one with the matching ID
+                  // Since we're fetching after, we need to get the specific message
+                  const fetchedMessages = Array.isArray(data) ? data : data.messages || [];
+                  // Actually fetch the specific message by ID
+                  const msgResponse = await fetch(apiUrl(`/api/channels/${channelId}/messages?limit=50`), {
+                    headers: { 'Authorization': `Bearer ${authToken}` },
+                  });
+                  if (msgResponse.ok) {
+                    const allData = await msgResponse.json();
+                    const allMessages = Array.isArray(allData) ? allData : allData.messages || [];
+                    const fullMessage = allMessages.find((m: any) => m.id === message.id);
+                    if (fullMessage && !messages.find(m => m.id === fullMessage.id)) {
+                      const chatMessage: ChatMessage = {
+                        id: fullMessage.id,
+                        authorId: fullMessage.author_id,
+                        authorName: fullMessage.author_name || 'Unknown',
+                        authorAvatar: fullMessage.author_avatar,
+                        authorFont: fullMessage.author_font,
+                        content: fullMessage.content,
+                        timestamp: new Date(fullMessage.created_at).getTime(),
+                        channelId,
+                      };
+                      if (chatMessage.authorFont) loadGoogleFont(chatMessage.authorFont);
+                      playPingSound();
+                      messages = [...messages, chatMessage];
+                    }
+                  }
+                }
+              } catch (err) {
+                console.error('Failed to fetch large message:', err);
+              }
               return;
             }
             // Load the author's font if they have one
@@ -1230,6 +1267,7 @@
           });
         } else {
           // Message is small enough - publish full content
+          console.log('📤 Publishing message to Ably:', { id: messagePayload.id, channelId: messagePayload.channelId });
           await ablyChannel.publish('message', messagePayload);
         }
       }
