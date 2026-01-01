@@ -5,6 +5,15 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "shell:allow-open"
+    "shell:allow-open",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://www.inunison.dev/*" },
+        { "url": "https://*.ably.io/*" },
+        { "url": "https://*.ably-realtime.com/*" },
+        { "url": "wss://*.ably-realtime.com/*" }
+      ]
+    }
   ]
 }
