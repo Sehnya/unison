@@ -13,6 +13,7 @@
   const dispatch = createEventDispatcher<{
     close: void;
     viewProfile: { userId: string };
+    messageReceived: void;
   }>();
 
   let messages: DMMessage[] = [];
@@ -21,9 +22,20 @@
   let loading = true;
   let sending = false;
   let showEmojiPicker = false;
+  let showGifPicker = false;
+  let gifSearchQuery = '';
+  let gifResults: any[] = [];
+  let searchingGifs = false;
   let ablyChannel: ReturnType<typeof subscribeToChannel> = null;
+  
+  // Notification sound
+  let notificationSound: HTMLAudioElement | null = null;
 
   onMount(async () => {
+    // Initialize notification sound
+    notificationSound = new Audio('/sounds/ping.wav');
+    notificationSound.volume = 0.5;
+    
     await loadMessages();
     subscribeToRealtime();
     markAsRead();
@@ -70,10 +82,27 @@
         if (!messages.find(m => m.id === dmMessage.id)) {
           messages = [...messages, dmMessage];
           scrollToBottom();
+          
+          // Play notification sound
+          playNotificationSound();
+          
+          // Mark as read immediately since user is viewing
           markAsRead();
+          
+          // Notify parent
+          dispatch('messageReceived');
         }
       }
     });
+  }
+
+  function playNotificationSound() {
+    if (notificationSound) {
+      notificationSound.currentTime = 0;
+      notificationSound.play().catch(() => {
+        // Ignore autoplay errors
+      });
+    }
   }
 
   async function markAsRead() {
@@ -170,6 +199,109 @@
     showEmojiPicker = false;
   }
 
+  // GIF search using Giphy API
+  let gifDebounceTimer: ReturnType<typeof setTimeout>;
+  
+  async function searchGifs() {
+    if (gifSearchQuery.length < 2) {
+      gifResults = [];
+      return;
+    }
+    
+    clearTimeout(gifDebounceTimer);
+    gifDebounceTimer = setTimeout(async () => {
+      searchingGifs = true;
+      try {
+        // Using Giphy's public beta key for demo
+        const response = await fetch(
+          `https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=${encodeURIComponent(gifSearchQuery)}&limit=20&rating=pg-13`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          gifResults = data.data || [];
+        }
+      } catch (err) {
+        console.error('Failed to search GIFs:', err);
+      } finally {
+        searchingGifs = false;
+      }
+    }, 300);
+  }
+
+  async function selectGif(gif: any) {
+    const gifUrl = gif.images?.fixed_height?.url || gif.images?.original?.url;
+    if (!gifUrl) return;
+
+    showGifPicker = false;
+    gifSearchQuery = '';
+    gifResults = [];
+    sending = true;
+
+    // Optimistic update
+    const tempMessage: DMMessage = {
+      id: `temp-${Date.now()}`,
+      conversation_id: conversation.id,
+      author_id: currentUser?.id || '',
+      content: gifUrl,
+      created_at: new Date().toISOString(),
+      edited_at: null,
+    };
+    messages = [...messages, tempMessage];
+    scrollToBottom();
+
+    try {
+      const response = await fetch(apiUrl(`/api/friends/dm/${conversation.id}/messages`), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content: gifUrl }),
+      });
+
+      if (response.ok) {
+        const savedMessage = await response.json();
+        messages = messages.map(m => 
+          m.id === tempMessage.id ? savedMessage : m
+        );
+
+        // Publish to Ably
+        const ablyClient = getAblyClient();
+        if (ablyClient) {
+          const channel = ablyClient.channels.get(`dm:${conversation.id}`);
+          await channel.publish('message', {
+            id: savedMessage.id,
+            authorId: currentUser?.id,
+            authorName: currentUser?.username,
+            content: savedMessage.content,
+            timestamp: new Date(savedMessage.created_at).getTime(),
+            conversationId: conversation.id,
+            large: true,
+          });
+        }
+      } else {
+        messages = messages.filter(m => m.id !== tempMessage.id);
+      }
+    } catch (err) {
+      console.error('Failed to send GIF:', err);
+      messages = messages.filter(m => m.id !== tempMessage.id);
+    } finally {
+      sending = false;
+    }
+  }
+
+  function isImageContent(content: string): boolean {
+    return content.startsWith('http') && (
+      content.includes('.gif') || 
+      content.includes('.png') || 
+      content.includes('.jpg') || 
+      content.includes('.jpeg') ||
+      content.includes('.webp') ||
+      content.includes('giphy.com') ||
+      content.includes('tenor.com')
+    );
+  }
+
   function formatTime(dateStr: string): string {
     const date = new Date(dateStr);
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -201,7 +333,7 @@
   }
 </script>
 
-<div class="dm-chat">
+<div class="dm-chat-fullscreen">
   <!-- Header -->
   <header class="dm-header">
     <button class="back-btn" on:click={() => dispatch('close')}>
@@ -269,8 +401,12 @@
             </div>
           {/if}
           <div class="message-content">
-            <div class="message-bubble">
-              <p>{message.content}</p>
+            <div class="message-bubble" class:image-bubble={isImageContent(message.content)}>
+              {#if isImageContent(message.content)}
+                <img src={message.content} alt="Shared image" class="message-image" loading="lazy" />
+              {:else}
+                <p>{message.content}</p>
+              {/if}
             </div>
             <span class="message-time">{formatTime(message.created_at)}</span>
           </div>
@@ -291,7 +427,10 @@
 
   <!-- Input -->
   <div class="input-area">
-    <button class="emoji-btn" on:click={() => showEmojiPicker = !showEmojiPicker} aria-label="Add emoji">
+    <button class="input-btn" on:click={() => { showGifPicker = !showGifPicker; showEmojiPicker = false; }} aria-label="Send GIF" title="GIF">
+      <span class="gif-label">GIF</span>
+    </button>
+    <button class="input-btn" on:click={() => { showEmojiPicker = !showEmojiPicker; showGifPicker = false; }} aria-label="Add emoji">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="10"/>
         <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
@@ -299,11 +438,47 @@
         <line x1="15" y1="9" x2="15.01" y2="9"/>
       </svg>
     </button>
+    
     {#if showEmojiPicker}
-      <div class="emoji-picker-container">
+      <div class="picker-container emoji-picker-pos">
         <EmojiPicker on:select={handleEmojiSelect} on:close={() => showEmojiPicker = false} />
       </div>
     {/if}
+    
+    {#if showGifPicker}
+      <div class="picker-container gif-picker-pos">
+        <div class="gif-picker">
+          <div class="gif-search">
+            <input
+              type="text"
+              bind:value={gifSearchQuery}
+              on:input={searchGifs}
+              placeholder="Search GIFs..."
+              autofocus
+            />
+          </div>
+          <div class="gif-results">
+            {#if searchingGifs}
+              <div class="gif-loading">Searching...</div>
+            {:else if gifResults.length === 0 && gifSearchQuery.length >= 2}
+              <div class="gif-empty">No GIFs found</div>
+            {:else if gifResults.length === 0}
+              <div class="gif-hint">Type to search for GIFs</div>
+            {:else}
+              {#each gifResults as gif}
+                <button class="gif-item" on:click={() => selectGif(gif)}>
+                  <img src={gif.images?.fixed_height_small?.url || gif.images?.fixed_height?.url} alt={gif.title} loading="lazy" />
+                </button>
+              {/each}
+            {/if}
+          </div>
+          <div class="gif-footer">
+            <img src="/giphy-logo-1.svg" alt="Powered by GIPHY" class="giphy-logo" />
+          </div>
+        </div>
+      </div>
+    {/if}
+    
     <div class="input-wrapper">
       <input
         type="text"
@@ -322,13 +497,15 @@
   </div>
 </div>
 
+
 <style>
-  .dm-chat {
+  .dm-chat-fullscreen {
     flex: 1;
     display: flex;
     flex-direction: column;
     background: #050505;
     height: 100%;
+    width: 100%;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
@@ -337,14 +514,14 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px 16px;
+    padding: 16px 24px;
     background: rgba(10, 10, 15, 0.95);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .back-btn {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: 10px;
     border: none;
     background: rgba(255, 255, 255, 0.04);
@@ -368,7 +545,7 @@
     background: none;
     border: none;
     cursor: pointer;
-    padding: 6px 12px;
+    padding: 8px 16px;
     border-radius: 10px;
     transition: background 0.15s ease;
   }
@@ -384,7 +561,7 @@
   }
 
   .username {
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     color: #fff;
   }
@@ -401,8 +578,8 @@
   }
 
   .action-btn {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: 10px;
     border: none;
     background: transparent;
@@ -422,7 +599,7 @@
   .messages-container {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    padding: 24px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -434,13 +611,13 @@
     align-items: center;
     justify-content: center;
     gap: 12px;
-    padding: 40px;
+    padding: 60px;
     color: rgba(255, 255, 255, 0.4);
   }
 
   .spinner {
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     border: 2px solid rgba(255, 255, 255, 0.1);
     border-top-color: #fff;
     border-radius: 50%;
@@ -456,28 +633,29 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    padding: 40px 20px;
+    padding: 60px 20px;
     margin-bottom: 20px;
   }
 
   .dm-start h3 {
-    font-size: 24px;
+    font-size: 28px;
     font-weight: 700;
     color: #fff;
-    margin: 16px 0 8px 0;
+    margin: 20px 0 12px 0;
   }
 
   .dm-start p {
-    font-size: 14px;
+    font-size: 15px;
     color: rgba(255, 255, 255, 0.4);
     margin: 0;
+    max-width: 400px;
   }
 
   .date-divider {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 16px 0;
+    margin: 24px 0;
   }
 
   .date-divider span {
@@ -486,16 +664,16 @@
     color: rgba(255, 255, 255, 0.3);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    padding: 4px 12px;
+    padding: 6px 14px;
     background: rgba(255, 255, 255, 0.04);
-    border-radius: 10px;
+    border-radius: 12px;
   }
 
   .message {
     display: flex;
     align-items: flex-end;
-    gap: 10px;
-    max-width: 70%;
+    gap: 12px;
+    max-width: 65%;
   }
 
   .message.own {
@@ -518,8 +696,8 @@
   }
 
   .message-bubble {
-    padding: 12px 16px;
-    border-radius: 18px;
+    padding: 14px 18px;
+    border-radius: 20px;
     background: rgba(255, 255, 255, 0.06);
   }
 
@@ -527,37 +705,49 @@
     background: rgba(255, 255, 255, 0.12);
   }
 
+  .message-bubble.image-bubble {
+    padding: 4px;
+    background: transparent;
+  }
+
   .message-bubble p {
     margin: 0;
-    font-size: 14px;
+    font-size: 15px;
     color: #fff;
     line-height: 1.5;
     word-break: break-word;
   }
 
+  .message-image {
+    max-width: 300px;
+    max-height: 300px;
+    border-radius: 16px;
+    display: block;
+  }
+
   .message-time {
     font-size: 10px;
     color: rgba(255, 255, 255, 0.3);
-    padding: 0 4px;
+    padding: 0 6px;
   }
 
   .input-area {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 16px;
+    gap: 12px;
+    padding: 16px 24px;
     background: rgba(10, 10, 15, 0.95);
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     position: relative;
   }
 
-  .emoji-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+  .input-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
     border: none;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -565,16 +755,122 @@
     transition: all 0.15s ease;
   }
 
-  .emoji-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
+  .input-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
     color: #fff;
   }
 
-  .emoji-picker-container {
+  .gif-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .picker-container {
     position: absolute;
-    bottom: 70px;
-    left: 16px;
+    bottom: 80px;
     z-index: 100;
+  }
+
+  .emoji-picker-pos {
+    left: 70px;
+  }
+
+  .gif-picker-pos {
+    left: 24px;
+  }
+
+  .gif-picker {
+    width: 340px;
+    background: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .gif-search {
+    padding: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .gif-search input {
+    width: 100%;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    outline: none;
+  }
+
+  .gif-search input:focus {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .gif-search input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  .gif-results {
+    height: 280px;
+    overflow-y: auto;
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    align-content: start;
+  }
+
+  .gif-results::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .gif-results::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+  }
+
+  .gif-loading, .gif-empty, .gif-hint {
+    grid-column: span 2;
+    text-align: center;
+    padding: 40px 20px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 13px;
+  }
+
+  .gif-item {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.15s ease;
+  }
+
+  .gif-item:hover {
+    transform: scale(1.05);
+  }
+
+  .gif-item img {
+    width: 100%;
+    height: 100px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .gif-footer {
+    padding: 8px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .giphy-logo {
+    height: 16px;
+    opacity: 0.5;
   }
 
   .input-wrapper {
@@ -583,12 +879,12 @@
 
   .input-wrapper input {
     width: 100%;
-    padding: 12px 16px;
+    padding: 14px 18px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
+    border-radius: 14px;
     color: #fff;
-    font-size: 14px;
+    font-size: 15px;
     outline: none;
     transition: border-color 0.15s ease;
   }
@@ -606,9 +902,9 @@
   }
 
   .send-btn {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
     border: none;
     background: #fff;
     color: #050505;

@@ -195,12 +195,17 @@
     selectedConversation = event.detail.conversation;
     showInbox = false;
     showComposeModal = false;
-    selectedSection = 'main';
+    selectedGuildId = null; // Clear guild selection to show full-screen DM
+    selectedChannelId = null;
+    selectedSection = 'dm';
   }
 
   function handleCloseConversation() {
     selectedConversation = null;
     showInbox = true;
+    selectedSection = 'main';
+    // Reload unread count when closing conversation
+    loadUnreadDMCount();
   }
 
   function handleComposeMessage() {
@@ -211,7 +216,14 @@
     selectedConversation = event.detail.conversation;
     showComposeModal = false;
     showInbox = false;
-    selectedSection = 'main';
+    selectedGuildId = null; // Clear guild selection to show full-screen DM
+    selectedChannelId = null;
+    selectedSection = 'dm';
+  }
+
+  function handleDMMessageReceived() {
+    // Reload unread count when a message is received
+    loadUnreadDMCount();
   }
 
   async function loadUnreadDMCount() {
@@ -591,6 +603,7 @@
           authToken={authToken || ''}
           on:close={handleCloseConversation}
           on:viewProfile={(e) => handleViewUserProfile(new CustomEvent('viewProfile', { detail: { userId: e.detail.userId, username: selectedConversation?.other_username || '', avatar: selectedConversation?.other_avatar || undefined } }))}
+          on:messageReceived={handleDMMessageReceived}
         />
       {:else if selectedGuildId}
         <ChannelList 
