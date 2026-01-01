@@ -18,12 +18,14 @@ import {
   createRoleRoutes,
   createEmojiRoutes,
   createReactionRoutes,
+  createFriendsRoutes,
   type AuthServiceInterface,
   type GuildServiceInterface,
   type ChannelServiceInterface,
   type MessagingServiceInterface,
   type PermissionsServiceInterface,
   type EmojiServiceInterface,
+  type FriendsServiceInterface,
 } from './routes/index.js';
 import { createLiveKitRoutes } from './routes/livekit.js';
 import type { LiveKitService } from './services/livekit.js';
@@ -40,6 +42,7 @@ export interface ApiServerConfig {
   permissionsService: PermissionsServiceInterface;
   livekitService: LiveKitService;
   emojiService?: EmojiServiceInterface;
+  friendsService?: FriendsServiceInterface;
   pool?: Pool;
   validateToken: TokenValidator;
 }
@@ -196,6 +199,16 @@ export function createApiServer(config: ApiServerConfig): Express {
     validateToken: config.validateToken,
   });
   app.use('/api/livekit', livekitRoutes);
+
+  // Friends routes (includes friend requests, DMs, blocking)
+  if (config.friendsService) {
+    const friendsRoutes = createFriendsRoutes({
+      friendsService: config.friendsService,
+      validateToken: config.validateToken,
+    });
+    app.use('/api/friends', friendsRoutes);
+    app.use('/friends', friendsRoutes);
+  }
 
   // 404 handler
   app.use((_req: Request, _res: Response, next: NextFunction) => {

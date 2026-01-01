@@ -16,7 +16,7 @@
   }>();
 
   type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline';
-  type SettingsTab = 'profile' | 'account' | 'appearance';
+  type SettingsTab = 'profile' | 'account' | 'appearance' | 'privacy';
 
   let activeTab: SettingsTab = 'profile';
   let username = user?.username || '';
@@ -29,6 +29,11 @@
   let fileInput: HTMLInputElement;
   let saveMessage = '';
   let saving = false;
+  
+  // DM Privacy setting
+  type DMPrivacy = 'open' | 'friends' | 'closed';
+  let dmPrivacy: DMPrivacy = 'friends';
+  let loadingPrivacy = false;
   
   // Font selection
   let selectedFont = (user as any)?.username_font || 'Inter';
@@ -70,7 +75,49 @@
   
   onMount(() => {
     loadGoogleFont(selectedFont);
+    loadDMPrivacy();
   });
+  
+  async function loadDMPrivacy() {
+    if (!authToken) return;
+    loadingPrivacy = true;
+    try {
+      const response = await fetch(apiUrl('/api/friends/privacy'), {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        dmPrivacy = data.privacy || 'friends';
+      }
+    } catch (err) {
+      console.error('Failed to load DM privacy:', err);
+    } finally {
+      loadingPrivacy = false;
+    }
+  }
+  
+  async function saveDMPrivacy(privacy: DMPrivacy) {
+    if (!authToken) return;
+    dmPrivacy = privacy;
+    try {
+      const response = await fetch(apiUrl('/api/friends/privacy'), {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ privacy }),
+      });
+      if (response.ok) {
+        saveMessage = 'privacy setting saved';
+        setTimeout(() => saveMessage = '', 3000);
+      }
+    } catch (err) {
+      console.error('Failed to save DM privacy:', err);
+      saveMessage = 'failed to save privacy setting';
+      setTimeout(() => saveMessage = '', 3000);
+    }
+  }
   
   function handleFontChange(fontName: string) {
     selectedFont = fontName;
@@ -248,6 +295,17 @@
         </svg>
         appearance
       </button>
+      <button 
+        class="tab" 
+        class:active={activeTab === 'privacy'}
+        on:click={() => activeTab = 'privacy'}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        privacy
+      </button>
     </nav>
 
     <!-- Content -->
@@ -417,6 +475,73 @@
               <div class="theme-preview light"></div>
               <span>light</span>
               <span class="coming-soon">soon</span>
+            </button>
+          </div>
+        </section>
+      {:else if activeTab === 'privacy'}
+        <!-- DM Privacy Section -->
+        <section class="section">
+          <div class="section-label">direct messages</div>
+          <p class="section-desc">control who can send you direct messages</p>
+          <div class="privacy-options">
+            <button 
+              class="privacy-option"
+              class:active={dmPrivacy === 'open'}
+              on:click={() => saveDMPrivacy('open')}
+            >
+              <div class="privacy-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M8 12l2 2 4-4"/>
+                </svg>
+              </div>
+              <div class="privacy-info">
+                <span class="privacy-title">open</span>
+                <span class="privacy-desc">anyone can message you</span>
+              </div>
+              {#if dmPrivacy === 'open'}
+                <span class="check">✓</span>
+              {/if}
+            </button>
+            <button 
+              class="privacy-option"
+              class:active={dmPrivacy === 'friends'}
+              on:click={() => saveDMPrivacy('friends')}
+            >
+              <div class="privacy-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+              </div>
+              <div class="privacy-info">
+                <span class="privacy-title">friends only</span>
+                <span class="privacy-desc">only friends can message you</span>
+              </div>
+              {#if dmPrivacy === 'friends'}
+                <span class="check">✓</span>
+              {/if}
+            </button>
+            <button 
+              class="privacy-option"
+              class:active={dmPrivacy === 'closed'}
+              on:click={() => saveDMPrivacy('closed')}
+            >
+              <div class="privacy-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M4.93 4.93l14.14 14.14"/>
+                </svg>
+              </div>
+              <div class="privacy-info">
+                <span class="privacy-title">closed</span>
+                <span class="privacy-desc">no one can message you</span>
+              </div>
+              {#if dmPrivacy === 'closed'}
+                <span class="check">✓</span>
+              {/if}
             </button>
           </div>
         </section>
@@ -1035,5 +1160,81 @@
   .panel-content::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.08);
     border-radius: 3px;
+  }
+
+  /* Privacy Options */
+  .section-desc {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+
+  .privacy-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .privacy-option {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+  }
+
+  .privacy-option:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .privacy-option.active {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .privacy-icon {
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .privacy-option.active .privacy-icon {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+
+  .privacy-info {
+    flex: 1;
+  }
+
+  .privacy-title {
+    display: block;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 2px;
+  }
+
+  .privacy-desc {
+    display: block;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 12px;
+  }
+
+  .privacy-option .check {
+    color: #4ade80;
+    font-size: 16px;
+    font-weight: 600;
   }
 </style>

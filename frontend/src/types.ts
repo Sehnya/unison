@@ -94,3 +94,53 @@ export interface DirectMessage {
   last_message?: Message;
   unread_count?: number;
 }
+
+/**
+ * DM Privacy setting
+ */
+export type DMPrivacy = 'open' | 'friends' | 'closed';
+
+/**
+ * Friend request status
+ */
+export type FriendStatus = 'pending' | 'accepted' | 'declined' | 'blocked';
+
+/**
+ * Friend with user info
+ */
+export interface Friend {
+  id: string;
+  user_id: string;
+  friend_id: string;
+  status: FriendStatus;
+  created_at: string;
+  updated_at: string;
+  friend_username: string;
+  friend_avatar: string | null;
+  friend_bio: string | null;
+}
+
+/**
+ * DM Conversation with participant info
+ */
+export interface DMConversation {
+  id: string;
+  other_user_id: string;
+  other_username: string;
+  other_avatar: string | null;
+  last_message_content: string | null;
+  last_message_at: string | null;
+  unread_count: number;
+}
+
+/**
+ * Direct Message
+ */
+export interface DMMessage {
+  id: string;
+  conversation_id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+  edited_at: string | null;
+}

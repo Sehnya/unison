@@ -11,3 +11,4 @@ export { createMessageRoutes, type MessageRoutesConfig, type MessagingServiceInt
 export { createRoleRoutes, type RoleRoutesConfig, type PermissionsServiceInterface } from './roles.js';
 export { createEmojiRoutes, type EmojiRoutesConfig, type EmojiServiceInterface, type GuildEmoji } from './emojis.js';
 export { createReactionRoutes, type ReactionRoutesConfig, type MessageReaction } from './reactions.js';
+export { createFriendsRoutes, type FriendsRoutesConfig, type FriendsServiceInterface } from './friends.js';
