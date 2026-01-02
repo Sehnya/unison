@@ -155,6 +155,94 @@
       toggleScreenShare();
     }
   }
+  
+  // Debug function to check audio state - call from console: voiceRoomRef.debugAudio()
+  export function debugAudio() {
+    console.log('=== VOICE ROOM AUDIO DEBUG ===');
+    
+    // 1. Check local audio publications
+    if (room) {
+      const localAudioPubs = Array.from(room.localParticipant.audioTrackPublications.values());
+      console.log('📤 Local audio publications:', localAudioPubs.length);
+      localAudioPubs.forEach((pub: any, i) => {
+        const mediaTrack = pub.track?.mediaStreamTrack;
+        console.log(`  📤 Publication ${i}:`, {
+          trackSid: pub.trackSid,
+          source: pub.source,
+          isMuted: pub.isMuted,
+          hasTrack: !!pub.track,
+          mediaTrackEnabled: mediaTrack?.enabled,
+          mediaTrackMuted: mediaTrack?.muted,
+          mediaTrackReadyState: mediaTrack?.readyState,
+        });
+      });
+      
+      // 2. Check remote participants and their audio
+      console.log('📥 Remote participants:', room.remoteParticipants.size);
+      room.remoteParticipants.forEach((participant: any) => {
+        const audioPubs = Array.from(participant.audioTrackPublications.values());
+        console.log(`  👤 ${participant.identity}: ${audioPubs.length} audio track(s)`);
+        audioPubs.forEach((pub: any, i) => {
+          console.log(`    📥 Audio ${i}:`, {
+            source: pub.source,
+            isMuted: pub.isMuted,
+            isSubscribed: pub.isSubscribed,
+            hasTrack: !!pub.track,
+          });
+        });
+      });
+    } else {
+      console.log('❌ Room not connected');
+    }
+    
+    // 3. Check audio elements in DOM
+    const audioElements = document.querySelectorAll('audio');
+    console.log('🔊 Audio elements in DOM:', audioElements.length);
+    audioElements.forEach((el, i) => {
+      const audio = el as HTMLAudioElement;
+      console.log(`  🔊 Audio element ${i}:`, {
+        participantId: audio.dataset.participantId,
+        isScreenShare: audio.dataset.isScreenShare,
+        muted: audio.muted,
+        volume: audio.volume,
+        paused: audio.paused,
+        currentTime: audio.currentTime,
+        srcObject: audio.srcObject ? 'set' : 'empty',
+        readyState: audio.readyState,
+      });
+    });
+    
+    // 4. Check screen share audio elements
+    console.log('🎬 Screen share audio elements:', streamAudioElements.size);
+    streamAudioElements.forEach((el, participantId) => {
+      console.log(`  🎬 ${participantId}:`, {
+        muted: el.muted,
+        volume: el.volume,
+        paused: el.paused,
+        currentTime: el.currentTime,
+      });
+    });
+    
+    // 5. Local state
+    console.log('🎤 Local state:', {
+      isMuted,
+      isDeafened,
+      isConnected,
+      outputVolume,
+    });
+    
+    console.log('=== END AUDIO DEBUG ===');
+    
+    return {
+      roomConnected: !!room,
+      localAudioPubs: room ? Array.from(room.localParticipant.audioTrackPublications.values()).length : 0,
+      remoteParticipants: room ? room.remoteParticipants.size : 0,
+      audioElements: audioElements.length,
+      isMuted,
+      isDeafened,
+      outputVolume,
+    };
+  }
 
   // Participant display data
   interface ParticipantDisplay {
@@ -387,9 +475,28 @@
     });
     
     room.on(RoomEvent.TrackSubscribed, (track: Track, publication: TrackPublication, participant: RemoteParticipant | LocalParticipant) => {
+      console.log(`📥 Track subscribed from ${participant.identity}:`, {
+        kind: track.kind,
+        source: (publication as any).source,
+        isMuted: (publication as any).isMuted,
+        trackSid: (publication as any).trackSid,
+      });
+      
       if (track.kind === 'audio') {
         // Check if this is screen share audio (from screen share source)
         const isScreenShareAudio = (publication as any).source === Track.Source.ScreenShareAudio;
+        
+        // Log audio track details for debugging
+        const mediaStreamTrack = (track as any).mediaStreamTrack;
+        if (mediaStreamTrack) {
+          console.log(`🔊 Audio track details from ${participant.identity}:`, {
+            label: mediaStreamTrack.label,
+            enabled: mediaStreamTrack.enabled,
+            muted: mediaStreamTrack.muted,
+            readyState: mediaStreamTrack.readyState,
+            isScreenShareAudio,
+          });
+        }
         
         if (isScreenShareAudio) {
           // Screen share audio - auto-play for all participants in the voice channel
@@ -407,7 +514,14 @@
           streamAudioElements.set(participant.identity, audioElement);
           
           // Attempt to play (may be blocked by browser autoplay policy)
-          audioElement.play().catch((err) => {
+          audioElement.play().then(() => {
+            console.log(`✓ Screen share audio playing from ${participant.identity}:`, {
+              volume: audioElement.volume,
+              muted: audioElement.muted,
+              paused: audioElement.paused,
+              currentTime: audioElement.currentTime,
+            });
+          }).catch((err) => {
             console.warn('Screen share audio autoplay blocked, will play on user interaction:', err);
             // If autoplay is blocked, try to play on next user interaction
             const playOnInteraction = () => {
@@ -419,7 +533,7 @@
             document.addEventListener('keydown', playOnInteraction, { once: true });
           });
           
-          console.log(`🔊 Screen share audio from ${participant.identity} is now playing`);
+          console.log(`🔊 Screen share audio from ${participant.identity} attached to element`);
         } else {
           // Regular microphone audio - auto-play as normal
           const audioElement = document.createElement('audio');
@@ -431,6 +545,25 @@
           track.attach(audioElement);
           audioElement.style.display = 'none';
           document.body.appendChild(audioElement);
+          
+          // Verify audio is playing
+          audioElement.play().then(() => {
+            console.log(`✓ Microphone audio playing from ${participant.identity}:`, {
+              volume: audioElement.volume,
+              muted: audioElement.muted,
+              paused: audioElement.paused,
+            });
+          }).catch((err) => {
+            console.warn(`⚠️ Microphone audio autoplay blocked for ${participant.identity}:`, err);
+            // If autoplay is blocked, try to play on next user interaction
+            const playOnInteraction = () => {
+              audioElement.play().catch(console.warn);
+              document.removeEventListener('click', playOnInteraction);
+              document.removeEventListener('keydown', playOnInteraction);
+            };
+            document.addEventListener('click', playOnInteraction, { once: true });
+            document.addEventListener('keydown', playOnInteraction, { once: true });
+          });
         }
       }
       updateParticipantDisplays();
@@ -442,9 +575,42 @@
       updateParticipantDisplays();
     });
 
-    room.on(RoomEvent.LocalTrackPublished, () => updateParticipantDisplays());
-    room.on(RoomEvent.LocalTrackUnpublished, () => updateParticipantDisplays());
-    room.on(RoomEvent.AudioPlaybackStatusChanged, () => updateParticipantDisplays());
+    room.on(RoomEvent.LocalTrackPublished, (publication: TrackPublication) => {
+      console.log(`📤 Local track published:`, {
+        kind: publication.kind,
+        source: (publication as any).source,
+        trackSid: (publication as any).trackSid,
+      });
+      updateParticipantDisplays();
+    });
+    room.on(RoomEvent.LocalTrackUnpublished, (publication: TrackPublication) => {
+      console.log(`📤 Local track unpublished:`, {
+        kind: publication.kind,
+        source: (publication as any).source,
+      });
+      updateParticipantDisplays();
+    });
+    room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
+      console.log('🔊 Audio playback status changed, canPlaybackAudio:', room?.canPlaybackAudio);
+      updateParticipantDisplays();
+    });
+    
+    // Track mute/unmute events for debugging
+    room.on(RoomEvent.TrackMuted, (publication: TrackPublication, participant: RemoteParticipant | LocalParticipant) => {
+      console.log(`🔇 Track muted: ${participant.identity}`, {
+        kind: publication.kind,
+        source: (publication as any).source,
+      });
+      updateParticipantDisplays();
+    });
+    
+    room.on(RoomEvent.TrackUnmuted, (publication: TrackPublication, participant: RemoteParticipant | LocalParticipant) => {
+      console.log(`🔊 Track unmuted: ${participant.identity}`, {
+        kind: publication.kind,
+        source: (publication as any).source,
+      });
+      updateParticipantDisplays();
+    });
     
     room.on(RoomEvent.ConnectionQualityChanged, (quality: ConnectionQuality) => {
       connectionQuality = quality;
@@ -518,8 +684,66 @@
   async function enableMicrophone() {
     if (!room) return;
     try {
+      // First, verify we can get audio permissions
+      console.log('🎤 Requesting microphone access...');
+      
+      // Pre-check permissions with getUserMedia (helps surface permission issues early)
+      try {
+        const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioTracks = testStream.getAudioTracks();
+        console.log('🎤 Audio permission granted, tracks:', audioTracks.length);
+        if (audioTracks.length === 0) {
+          console.error('❌ No audio tracks captured - microphone may be unavailable');
+          error = 'No microphone found. Please check your audio devices.';
+          return;
+        }
+        // Log audio track details
+        audioTracks.forEach((track, i) => {
+          console.log(`🎤 Audio track ${i}:`, {
+            label: track.label,
+            enabled: track.enabled,
+            muted: track.muted,
+            readyState: track.readyState,
+            settings: track.getSettings(),
+          });
+        });
+        // Stop the test stream - LiveKit will create its own
+        testStream.getTracks().forEach(t => t.stop());
+      } catch (permErr) {
+        console.error('❌ Microphone permission denied or error:', permErr);
+        error = 'Microphone permission denied. Please allow microphone access in your browser settings.';
+        return;
+      }
+      
+      // Enable microphone through LiveKit
       await room.localParticipant.setMicrophoneEnabled(true);
       isMuted = false;
+      
+      // Verify LiveKit captured the audio track
+      const audioPublications = Array.from(room.localParticipant.audioTrackPublications.values());
+      console.log('🎤 LiveKit audio publications:', audioPublications.length);
+      
+      if (audioPublications.length === 0) {
+        console.error('❌ LiveKit failed to publish audio track');
+        error = 'Failed to publish microphone audio. Please try again.';
+        return;
+      }
+      
+      // Log each audio publication
+      audioPublications.forEach((pub: any, i) => {
+        console.log(`🎤 Audio publication ${i}:`, {
+          trackSid: pub.trackSid,
+          source: pub.source,
+          isMuted: pub.isMuted,
+          isSubscribed: pub.isSubscribed,
+          track: pub.track ? {
+            kind: pub.track.kind,
+            mediaStreamTrack: pub.track.mediaStreamTrack ? 'exists' : 'missing',
+          } : 'no track',
+        });
+      });
+      
+      console.log('✓ Microphone enabled and publishing');
       
       // Apply Krisp noise cancellation to the audio track
       if (isKrispEnabled) {
