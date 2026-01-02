@@ -69,6 +69,82 @@
   let activeVoiceCallChannelName: string | null = null;
   let activeVoiceCallGuildId: string | null = null;
   
+  // Voice call persistence keys
+  const VOICE_STATE_KEY = 'unison_voice_state';
+  
+  interface SavedVoiceState {
+    channelId: string;
+    channelName: string;
+    guildId: string;
+    timestamp: number;
+  }
+  
+  // Save voice state to sessionStorage for reconnection on refresh
+  function saveVoiceState() {
+    if (activeVoiceCallChannelId && activeVoiceCallChannelName && activeVoiceCallGuildId) {
+      const state: SavedVoiceState = {
+        channelId: activeVoiceCallChannelId,
+        channelName: activeVoiceCallChannelName,
+        guildId: activeVoiceCallGuildId,
+        timestamp: Date.now()
+      };
+      sessionStorage.setItem(VOICE_STATE_KEY, JSON.stringify(state));
+    }
+  }
+  
+  // Clear saved voice state
+  function clearVoiceState() {
+    sessionStorage.removeItem(VOICE_STATE_KEY);
+  }
+  
+  // Restore voice state from sessionStorage (on page refresh)
+  function restoreVoiceState(): SavedVoiceState | null {
+    try {
+      const saved = sessionStorage.getItem(VOICE_STATE_KEY);
+      if (!saved) return null;
+      
+      const state = JSON.parse(saved) as SavedVoiceState;
+      
+      // Check if the saved state is recent (within 5 minutes)
+      const MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+      if (Date.now() - state.timestamp > MAX_AGE_MS) {
+        clearVoiceState();
+        return null;
+      }
+      
+      return state;
+    } catch {
+      clearVoiceState();
+      return null;
+    }
+  }
+  
+  // Auto-reconnect to voice channel if we have saved state
+  function tryAutoReconnectVoice() {
+    const savedState = restoreVoiceState();
+    if (!savedState) return;
+    
+    // Verify the guild still exists in user's guilds
+    const guild = guilds.find(g => g.id === savedState.guildId);
+    if (!guild) {
+      clearVoiceState();
+      return;
+    }
+    
+    console.log('[VoiceKeepAlive] Reconnecting to voice channel:', savedState.channelName);
+    
+    // Restore voice call state
+    activeVoiceCallChannelId = savedState.channelId;
+    activeVoiceCallChannelName = savedState.channelName;
+    activeVoiceCallGuildId = savedState.guildId;
+    
+    // Navigate to the voice channel
+    selectedGuildId = savedState.guildId;
+    selectedChannelId = savedState.channelId;
+    selectedChannelType = 'voice';
+    selectedChannelName = savedState.channelName;
+  }
+  
   // Voice call UI state (controlled from VoiceRoom or MiniPlayer)
   let voiceIsMuted: boolean = false;
   let voiceIsDeafened: boolean = false;
@@ -141,6 +217,9 @@
     voiceIsMuted = false;
     voiceIsDeafened = false;
     voiceIsVideoEnabled = false;
+    
+    // Clear saved voice state on explicit disconnect
+    clearVoiceState();
     voiceIsScreenSharing = false;
     showStreamPopout = true; // Reset for next call
     streamState = {
@@ -261,6 +340,9 @@
       activeVoiceCallChannelId = selectedChannelId;
       activeVoiceCallChannelName = selectedChannelName;
       activeVoiceCallGuildId = selectedGuildId;
+      
+      // Save voice state for reconnection on refresh
+      saveVoiceState();
     }
     
     // Update URL
@@ -656,6 +738,9 @@
             showSettings = true;
           }
         }
+        
+        // Try to reconnect to voice channel if we were in one before refresh
+        tryAutoReconnectVoice();
       });
     } else {
       loading = false;
@@ -663,10 +748,21 @@
     
     // Listen for browser navigation events
     window.addEventListener('popstate', handlePopState);
+    
+    // Save voice state before page unload (refresh/close)
+    window.addEventListener('beforeunload', handleBeforeUnload);
   });
+  
+  // Handle page unload - update voice state timestamp for reconnection
+  function handleBeforeUnload() {
+    if (activeVoiceCallChannelId) {
+      saveVoiceState();
+    }
+  }
 
   onDestroy(() => {
     window.removeEventListener('popstate', handlePopState);
+    window.removeEventListener('beforeunload', handleBeforeUnload);
     if (streamStateInterval) {
       clearInterval(streamStateInterval);
       streamStateInterval = null;
