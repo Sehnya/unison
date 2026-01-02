@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
-  import { Room, RoomEvent, RemoteParticipant, LocalParticipant, TrackPublication, Track, ConnectionQuality, VideoPresets } from 'livekit-client';
+  import { Room, RoomEvent, RemoteParticipant, LocalParticipant, TrackPublication, Track, ConnectionQuality, VideoPresets, type ScreenShareCaptureOptions } from 'livekit-client';
   import { KrispNoiseFilter } from '@livekit/krisp-noise-filter';
   import type { User } from '../types';
   import { apiUrl } from '../lib/api';
@@ -347,6 +347,10 @@
             { width: 1920, height: 1080, bitrate: 6_000_000, suffix: 'h' },
             { width: 3840, height: 2160, bitrate: 15_000_000, suffix: 'f' }, // 4K screen sharing
           ],
+          // Screen share audio settings - highest quality for streaming games, music, videos
+          screenShareAudioPreset: {
+            maxBitrate: 320_000, // 320 kbps - highest quality stereo audio for streams
+          },
         },
       });
 
@@ -388,12 +392,13 @@
         const isScreenShareAudio = (publication as any).source === Track.Source.ScreenShareAudio;
         
         if (isScreenShareAudio) {
-          // Store screen share audio but don't auto-play - user must click to watch
+          // Screen share audio - auto-play for all participants in the voice channel
+          // This allows everyone to hear the stream audio (games, music, videos, etc.)
           const audioElement = document.createElement('audio');
-          audioElement.autoplay = false; // Don't auto-play screen share audio
+          audioElement.autoplay = true; // Auto-play stream audio for all participants
           (audioElement as any).playsInline = true;
           audioElement.volume = outputVolume / 100;
-          audioElement.muted = true; // Start muted
+          audioElement.muted = isDeafened; // Only mute if user is deafened
           audioElement.dataset.participantId = participant.identity;
           audioElement.dataset.isScreenShare = 'true';
           track.attach(audioElement);
@@ -401,17 +406,27 @@
           document.body.appendChild(audioElement);
           streamAudioElements.set(participant.identity, audioElement);
           
-          // If user is already watching this stream, unmute and play
-          if (watchingStreamId === participant.identity) {
-            audioElement.muted = false;
-            audioElement.play().catch(console.warn);
-          }
+          // Attempt to play (may be blocked by browser autoplay policy)
+          audioElement.play().catch((err) => {
+            console.warn('Screen share audio autoplay blocked, will play on user interaction:', err);
+            // If autoplay is blocked, try to play on next user interaction
+            const playOnInteraction = () => {
+              audioElement.play().catch(console.warn);
+              document.removeEventListener('click', playOnInteraction);
+              document.removeEventListener('keydown', playOnInteraction);
+            };
+            document.addEventListener('click', playOnInteraction, { once: true });
+            document.addEventListener('keydown', playOnInteraction, { once: true });
+          });
+          
+          console.log(`🔊 Screen share audio from ${participant.identity} is now playing`);
         } else {
           // Regular microphone audio - auto-play as normal
           const audioElement = document.createElement('audio');
           audioElement.autoplay = true;
           (audioElement as any).playsInline = true;
           audioElement.volume = outputVolume / 100;
+          audioElement.muted = isDeafened; // Respect deafen state
           audioElement.dataset.participantId = participant.identity;
           track.attach(audioElement);
           audioElement.style.display = 'none';
@@ -681,7 +696,35 @@
     if (!room) return;
     try {
       isScreenSharing = !isScreenSharing;
-      await room.localParticipant.setScreenShareEnabled(isScreenSharing);
+      
+      if (isScreenSharing) {
+        // Enable screen share with system audio for highest quality streaming
+        const screenShareOptions: ScreenShareCaptureOptions = {
+          audio: {
+            // Capture system audio (tab/window audio) - highest quality settings
+            autoGainControl: false, // Disable AGC for authentic audio
+            echoCancellation: false, // Disable echo cancellation for stream audio
+            noiseSuppression: false, // Disable noise suppression for full audio fidelity
+            sampleRate: 48000, // Studio-quality 48kHz sample rate
+            channelCount: 2, // Stereo audio
+          },
+          video: {
+            displaySurface: 'monitor', // Prefer full screen capture
+          },
+          // Prefer current tab audio (for browser-based content)
+          preferCurrentTab: false,
+          // Request system audio (for application audio)
+          systemAudio: 'include',
+          // Surface switching allows user to change what's being shared
+          surfaceSwitching: 'include',
+          // Self browser surface - include to allow sharing the current tab
+          selfBrowserSurface: 'include',
+        };
+        
+        await room.localParticipant.setScreenShareEnabled(true, screenShareOptions);
+      } else {
+        await room.localParticipant.setScreenShareEnabled(false);
+      }
       
       // Only update local participant's screen share track
       const lp = room.localParticipant;
