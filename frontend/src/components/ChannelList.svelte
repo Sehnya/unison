@@ -54,10 +54,18 @@
   let voicePresenceChannels: Map<string, any> = new Map();
   let presenceRefreshInterval: ReturnType<typeof setInterval> | null = null;
   
-  // Reactive trigger for voice users - increments when activeVoiceChannelId changes
+  // Reactive trigger for voice users - increments on ANY presence change to force re-render
   let voiceUsersTrigger = 0;
+  
+  // Also trigger when activeVoiceChannelId changes
   $: if (activeVoiceChannelId !== undefined) {
     voiceUsersTrigger++;
+  }
+  
+  // Helper to increment trigger and force re-render of voice user lists
+  function triggerVoicePresenceUpdate() {
+    voiceUsersTrigger++;
+    console.log('[VoicePresence] UI update triggered, count:', voiceUsersTrigger);
   }
 
   // Channel settings cache for backgrounds
@@ -131,6 +139,8 @@
   
   // Refresh voice presence for all channels
   function refreshVoicePresence() {
+    let anyChanges = false;
+    
     voicePresenceChannels.forEach((presenceChannel, channelId) => {
       presenceChannel.presence.get({ waitForSync: true }).then((members: any[]) => {
         const users: VoiceUser[] = members.map((m: any) => ({
@@ -145,9 +155,11 @@
           users.some((u, i) => currentUsers[i]?.id !== u.id);
         
         if (hasChanged) {
-          console.log('[VoicePresence] Refresh found changes for channel:', channelId, users.length, 'users');
+          console.log('[VoicePresence] 🔄 Refresh found changes for channel:', channelId, users.length, 'users');
           voicePresence.set(channelId, users);
           voicePresence = new Map(voicePresence);
+          anyChanges = true;
+          triggerVoicePresenceUpdate(); // Force UI re-render
         }
       }).catch((err: Error) => {
         // Ignore errors during refresh but log them
@@ -209,6 +221,11 @@
     if (presenceRefreshInterval) {
       clearInterval(presenceRefreshInterval);
     }
+    
+    // Clear voice presence retry timeout
+    if (voicePresenceRetryTimeout) {
+      clearTimeout(voicePresenceRetryTimeout);
+    }
   });
 
   // Subscribe to guild channels when guild changes
@@ -223,12 +240,27 @@
     }
   }
   
+  // Retry subscribing to voice presence if Ably wasn't ready
+  let voicePresenceRetryTimeout: ReturnType<typeof setTimeout> | null = null;
+  
   // Subscribe to voice channel presence for all voice channels
   function subscribeToVoicePresence(channels: Channel[]) {
     const client = getAblyClient();
     if (!client) {
-      console.log('[VoicePresence] No Ably client available');
+      console.log('[VoicePresence] No Ably client available, will retry in 2 seconds...');
+      // Retry after a delay if Ably isn't ready yet
+      if (voicePresenceRetryTimeout) clearTimeout(voicePresenceRetryTimeout);
+      voicePresenceRetryTimeout = setTimeout(() => {
+        console.log('[VoicePresence] Retrying voice presence subscription...');
+        subscribeToVoicePresence(channels);
+      }, 2000);
       return;
+    }
+    
+    // Clear retry timeout if we have a client
+    if (voicePresenceRetryTimeout) {
+      clearTimeout(voicePresenceRetryTimeout);
+      voicePresenceRetryTimeout = null;
     }
     
     channels.forEach((channel) => {
@@ -241,7 +273,7 @@
       
       // Handle user entering voice channel
       const handleEnter = (member: any) => {
-        console.log('[VoicePresence] User entered:', member.clientId, member.data);
+        console.log('[VoicePresence] 🟢 User ENTERED:', member.clientId, member.data?.username, 'in channel:', channel.name);
         const users = voicePresence.get(channel.id) || [];
         if (!users.find(u => u.id === member.clientId)) {
           users.push({
@@ -251,21 +283,23 @@
           });
           voicePresence.set(channel.id, [...users]);
           voicePresence = new Map(voicePresence);
+          triggerVoicePresenceUpdate(); // Force UI re-render
         }
       };
       
       // Handle user leaving voice channel
       const handleLeave = (member: any) => {
-        console.log('[VoicePresence] User left:', member.clientId);
+        console.log('[VoicePresence] 🔴 User LEFT:', member.clientId, 'from channel:', channel.name);
         const users = voicePresence.get(channel.id) || [];
         const filtered = users.filter(u => u.id !== member.clientId);
         voicePresence.set(channel.id, filtered);
         voicePresence = new Map(voicePresence);
+        triggerVoicePresenceUpdate(); // Force UI re-render
       };
       
       // Handle presence update (user data changed)
       const handleUpdate = (member: any) => {
-        console.log('[VoicePresence] User updated:', member.clientId, member.data);
+        console.log('[VoicePresence] 🔄 User UPDATED:', member.clientId, member.data);
         const users = voicePresence.get(channel.id) || [];
         const idx = users.findIndex(u => u.id === member.clientId);
         if (idx >= 0) {
@@ -276,6 +310,7 @@
           };
           voicePresence.set(channel.id, [...users]);
           voicePresence = new Map(voicePresence);
+          triggerVoicePresenceUpdate(); // Force UI re-render
         }
       };
       
@@ -287,7 +322,9 @@
       
       // Get initial presence after subscribing to events
       presenceChannel.presence.get({ waitForSync: true }).then((members: any[]) => {
-        console.log('[VoicePresence] Initial presence for', channel.name, ':', members.length, 'members');
+        console.log('[VoicePresence] 📋 Initial presence for', channel.name, ':', members.length, 'members');
+        members.forEach(m => console.log('  -', m.clientId, m.data?.username));
+        
         const users: VoiceUser[] = members.map((m) => ({
           id: m.clientId,
           username: m.data?.username || `User ${m.clientId.slice(0, 6)}`,
@@ -295,6 +332,7 @@
         }));
         voicePresence.set(channel.id, users);
         voicePresence = new Map(voicePresence);
+        triggerVoicePresenceUpdate(); // Force UI re-render with initial presence
       }).catch((err: Error) => {
         console.warn('[VoicePresence] Failed to get initial presence for', channel.name, err);
       });
@@ -1049,6 +1087,7 @@
     list-style: none;
     padding: 0;
     margin: 2px 0 6px 22px;
+    overflow: hidden;
   }
 
   .voice-user {
@@ -1057,7 +1096,19 @@
     gap: 8px;
     padding: 4px 8px;
     border-radius: 4px;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease, opacity 0.2s ease, transform 0.2s ease;
+    animation: voiceUserEnter 0.25s ease-out forwards;
+  }
+  
+  @keyframes voiceUserEnter {
+    from {
+      opacity: 0;
+      transform: translateX(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
 
   .voice-user:hover {
