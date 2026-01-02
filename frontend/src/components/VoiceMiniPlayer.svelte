@@ -154,11 +154,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 14px;
-    background: linear-gradient(180deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.04) 100%);
-    border-top: 1px solid rgba(34, 197, 94, 0.15);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.2);
-    gap: 12px;
+    padding: 12px 12px;
+    background: rgba(5, 5, 5, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    gap: 10px;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
@@ -170,14 +169,14 @@
     background: none;
     border: none;
     cursor: pointer;
-    padding: 4px 8px 4px 4px;
+    padding: 6px 8px;
     border-radius: 8px;
     transition: background 0.15s ease;
     min-width: 0;
   }
 
   .expand-btn:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.04);
   }
 
   .channel-info {
@@ -188,11 +187,11 @@
   }
 
   .voice-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    background: rgba(34, 197, 94, 0.15);
-    border: 1px solid rgba(34, 197, 94, 0.2);
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid rgba(34, 197, 94, 0.15);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -202,8 +201,8 @@
   }
 
   .voice-icon.streaming {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.2);
     color: #ef4444;
     animation: pulse-stream 2s ease-in-out infinite;
   }
@@ -217,6 +216,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    gap: 2px;
     min-width: 0;
   }
 
@@ -224,10 +224,11 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 500;
     color: #22c55e;
     text-transform: lowercase;
+    letter-spacing: -0.01em;
   }
 
   .live-dot {
@@ -245,35 +246,35 @@
 
   .channel-name {
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
     text-transform: lowercase;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 120px;
+    max-width: 110px;
   }
 
   .controls {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     flex-shrink: 0;
   }
 
   .control-divider {
     width: 1px;
-    height: 20px;
-    background: rgba(255, 255, 255, 0.1);
-    margin: 0 4px;
+    height: 18px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 0 2px;
   }
 
   .control-btn {
-    width: 30px;
-    height: 30px;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid transparent;
     background: rgba(255, 255, 255, 0.04);
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -282,40 +283,40 @@
   }
 
   .control-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.15);
-    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
   }
 
   .control-btn.active {
-    background: rgba(34, 197, 94, 0.15);
-    border-color: rgba(34, 197, 94, 0.3);
+    background: rgba(34, 197, 94, 0.12);
+    border-color: rgba(34, 197, 94, 0.2);
     color: #22c55e;
   }
 
   .control-btn.muted {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.25);
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.15);
     color: #ef4444;
   }
 
   .control-btn.disconnect {
-    background: rgba(255, 255, 255, 0.9);
-    border-color: #fff;
+    background: #fff;
+    border-color: transparent;
     color: #0a0a0a;
   }
 
   .control-btn.disconnect:hover {
-    background: #fff;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
   }
 
   .control-btn.show-video {
-    background: rgba(59, 130, 246, 0.15);
-    border-color: rgba(59, 130, 246, 0.3);
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.2);
     color: #3b82f6;
   }
 
   .control-btn.show-video:hover {
-    background: rgba(59, 130, 246, 0.25);
+    background: rgba(59, 130, 246, 0.2);
   }
 </style>

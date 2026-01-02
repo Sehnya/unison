@@ -70,13 +70,33 @@
   let joinSound: HTMLAudioElement | null = null;
   let leaveSound: HTMLAudioElement | null = null;
   
-  // Initialize presence sounds
+  // Stream sounds - play when users start/stop screen sharing
+  let streamUpSound: HTMLAudioElement | null = null;
+  let streamDownSound: HTMLAudioElement | null = null;
+  
+  // Track who is currently screen sharing (for detecting when they stop)
+  let currentScreenSharers: Set<string> = new Set();
+  
+  // Initialize presence and stream sounds
   function initPresenceSounds() {
     if (typeof window !== 'undefined') {
+      // Join/leave sounds
       joinSound = new Audio('/sounds/chat_in.wav');
       leaveSound = new Audio('/sounds/chat_out.wav');
       joinSound.volume = 0.5;
       leaveSound.volume = 0.5;
+      
+      // Stream start/stop sounds
+      streamUpSound = new Audio('/sounds/stream_up.wav');
+      streamDownSound = new Audio('/sounds/stream_down.wav');
+      streamUpSound.volume = 0.6;
+      streamDownSound.volume = 0.6;
+      
+      // Preload sounds
+      joinSound.load();
+      leaveSound.load();
+      streamUpSound.load();
+      streamDownSound.load();
     }
   }
   
@@ -93,6 +113,24 @@
     if (leaveSound && !isDeafened) {
       leaveSound.currentTime = 0;
       leaveSound.play().catch(err => console.warn('Failed to play leave sound:', err));
+    }
+  }
+  
+  // Play stream up sound (when someone starts screen sharing)
+  function playStreamUpSound() {
+    if (streamUpSound && !isDeafened) {
+      streamUpSound.currentTime = 0;
+      streamUpSound.play().catch(err => console.warn('Failed to play stream up sound:', err));
+      console.log('🎬 Stream started sound played');
+    }
+  }
+  
+  // Play stream down sound (when someone stops screen sharing)
+  function playStreamDownSound() {
+    if (streamDownSound && !isDeafened) {
+      streamDownSound.currentTime = 0;
+      streamDownSound.play().catch(err => console.warn('Failed to play stream down sound:', err));
+      console.log('🎬 Stream ended sound played');
     }
   }
   
@@ -500,6 +538,16 @@
         trackSid: (publication as any).trackSid,
       });
       
+      // Play stream up sound when a REMOTE participant starts screen sharing
+      // Check for ScreenShare video track (not audio) to avoid playing twice
+      if ((publication as any).source === Track.Source.ScreenShare && track.kind === 'video') {
+        // Only play if it's a remote participant (not ourselves)
+        if (participant.identity !== room?.localParticipant?.identity) {
+          playStreamUpSound();
+          console.log(`🎬 ${participant.name || participant.identity} started screen sharing`);
+        }
+      }
+      
       if (track.kind === 'audio') {
         // Check if this is screen share audio (from screen share source)
         const isScreenShareAudio = (publication as any).source === Track.Source.ScreenShareAudio;
@@ -599,6 +647,13 @@
         source: (publication as any).source,
         trackSid: (publication as any).trackSid,
       });
+      
+      // Play stream up sound when LOCAL user starts screen sharing
+      if ((publication as any).source === Track.Source.ScreenShare) {
+        playStreamUpSound();
+        console.log('🎬 You started screen sharing');
+      }
+      
       updateParticipantDisplays();
     });
     room.on(RoomEvent.LocalTrackUnpublished, (publication: TrackPublication) => {
@@ -606,6 +661,13 @@
         kind: publication.kind,
         source: (publication as any).source,
       });
+      
+      // Play stream down sound when LOCAL user stops screen sharing
+      if ((publication as any).source === Track.Source.ScreenShare) {
+        playStreamDownSound();
+        console.log('🎬 You stopped screen sharing');
+      }
+      
       updateParticipantDisplays();
     });
     room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
@@ -672,6 +734,9 @@
       });
     }
 
+    // Track current screen sharers to detect when someone stops
+    const newScreenSharers: Set<string> = new Set();
+    
     room.remoteParticipants.forEach((participant: any) => {
       const videoPub = Array.from(participant.videoTrackPublications.values()).find((p: any) => p.source === Track.Source.Camera);
       const screenPub = Array.from(participant.videoTrackPublications.values()).find((p: any) => p.source === Track.Source.ScreenShare);
@@ -679,6 +744,11 @@
       const videoTrack = (videoPub as any)?.track;
       const screenTrack = (screenPub as any)?.track;
       const audioPub = participant.audioTrackPublications.values().next().value;
+      
+      // Track who is screen sharing
+      if (screenTrack) {
+        newScreenSharers.add(participant.identity);
+      }
       
       displays.push({
         id: participant.identity,
@@ -695,6 +765,20 @@
         screenShareAudioTrack: (screenShareAudioPub as any)?.track,
       });
     });
+    
+    // Detect when a remote participant STOPS screen sharing
+    currentScreenSharers.forEach(sharerId => {
+      if (!newScreenSharers.has(sharerId) && sharerId !== room?.localParticipant?.identity) {
+        // This person was sharing but isn't anymore
+        const participant = room?.remoteParticipants.get(sharerId);
+        const participantName = participant?.name || participant?.identity || sharerId;
+        console.log(`🎬 ${participantName} stopped screen sharing`);
+        playStreamDownSound();
+      }
+    });
+    
+    // Update the current screen sharers set
+    currentScreenSharers = newScreenSharers;
 
     participantDisplays = displays;
   }
@@ -878,9 +962,11 @@
         console.log(`  ${isDeafened ? '🔇' : '🔊'} ${isScreenShare ? 'Stream' : 'Mic'} audio from ${participantId}: muted=${isDeafened}`);
       });
       
-      // Also mute/unmute presence sounds
+      // Also mute/unmute presence and stream sounds
       if (joinSound) joinSound.muted = isDeafened;
       if (leaveSound) leaveSound.muted = isDeafened;
+      if (streamUpSound) streamUpSound.muted = isDeafened;
+      if (streamDownSound) streamDownSound.muted = isDeafened;
       
       dispatch('deafenChange', { isDeafened });
       updateParticipantDisplays();
@@ -1054,9 +1140,11 @@
     document.querySelectorAll('audio').forEach((el) => {
       el.volume = outputVolume / 100;
     });
-    // Also update presence sound volumes
+    // Also update presence and stream sound volumes
     if (joinSound) joinSound.volume = (outputVolume / 100) * 0.5;
     if (leaveSound) leaveSound.volume = (outputVolume / 100) * 0.5;
+    if (streamUpSound) streamUpSound.volume = (outputVolume / 100) * 0.6;
+    if (streamDownSound) streamDownSound.volume = (outputVolume / 100) * 0.6;
   }
 
   function getConnectionQualityLabel(quality: ConnectionQuality): string {
