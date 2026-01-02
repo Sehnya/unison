@@ -2,9 +2,11 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import type { User } from '../types';
   import Avatar from './Avatar.svelte';
+  import MiniProfileSettings from './MiniProfileSettings.svelte';
   import { apiUrl } from '../lib/api';
   import { authStorage } from '../utils/storage';
   import { closeAbly } from '../lib/ably';
+  import { invalidateMiniProfile } from '../lib/miniProfileCache';
 
   export let user: User | null = null;
   export let authToken: string = '';
@@ -16,7 +18,7 @@
   }>();
 
   type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline';
-  type SettingsTab = 'profile' | 'account' | 'appearance' | 'privacy';
+  type SettingsTab = 'profile' | 'account' | 'appearance' | 'privacy' | 'mini-profile';
 
   let activeTab: SettingsTab = 'profile';
   let username = user?.username || '';
@@ -37,6 +39,18 @@
   
   // Font selection
   let selectedFont = (user as any)?.username_font || 'Inter';
+  
+  // Mini-profile settings
+  let miniProfileSettings = {
+    backgroundImage: (user as any)?.mini_profile_background || null,
+    usernameFont: (user as any)?.mini_profile_font || 'Inter',
+    textColor: (user as any)?.mini_profile_text_color || '#ffffff'
+  };
+  let miniProfileSettingsComponent: MiniProfileSettings;
+  let savingMiniProfile = false;
+  
+  // Reactive user bio (for type safety in templates)
+  $: userBio = (user as any)?.bio || null;
   
   // Popular Google Fonts for username display
   const fontOptions = [
@@ -158,6 +172,9 @@
 
     saving = true;
     try {
+      // Get current mini-profile settings from component if available
+      const currentMiniSettings = miniProfileSettingsComponent?.getSettings() || miniProfileSettings;
+      
       const response = await fetch(apiUrl('/api/auth/profile'), {
         method: 'PATCH',
         headers: {
@@ -168,16 +185,26 @@
           username: username.trim(),
           avatar: avatarBase64,
           username_font: selectedFont,
+          mini_profile_background: currentMiniSettings.backgroundImage,
+          mini_profile_font: currentMiniSettings.usernameFont,
+          mini_profile_text_color: currentMiniSettings.textColor,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
+        // Invalidate the mini-profile cache for this user
+        if (user?.id) {
+          invalidateMiniProfile(user.id);
+        }
         dispatch('updateUser', {
           user: data.user || {
             username: username.trim(),
             avatar: avatarBase64,
             username_font: selectedFont,
+            mini_profile_background: currentMiniSettings.backgroundImage,
+            mini_profile_font: currentMiniSettings.usernameFont,
+            mini_profile_text_color: currentMiniSettings.textColor,
           }
         });
         saveMessage = 'changes saved';
@@ -305,6 +332,18 @@
           <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
         </svg>
         privacy
+      </button>
+      <button 
+        class="tab" 
+        class:active={activeTab === 'mini-profile'}
+        on:click={() => activeTab = 'mini-profile'}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+          <circle cx="8" cy="10" r="2"/>
+          <path d="M14 8h4M14 12h4"/>
+        </svg>
+        mini-profile
       </button>
     </nav>
 
@@ -545,6 +584,20 @@
             </button>
           </div>
         </section>
+      {:else if activeTab === 'mini-profile'}
+        <!-- Mini-Profile Settings Section -->
+        <MiniProfileSettings
+          bind:this={miniProfileSettingsComponent}
+          {authToken}
+          currentSettings={miniProfileSettings}
+          username={user?.username || username}
+          avatar={avatarUrl || user?.avatar || null}
+          userId={user?.id || ''}
+          bio={userBio}
+          on:change={(e) => {
+            miniProfileSettings = e.detail;
+          }}
+        />
       {/if}
 
       <!-- Save Message -->

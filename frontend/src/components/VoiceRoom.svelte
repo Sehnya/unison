@@ -17,6 +17,8 @@
   const dispatch = createEventDispatcher<{
     muteChange: { isMuted: boolean };
     deafenChange: { isDeafened: boolean };
+    videoChange: { isVideoEnabled: boolean };
+    screenShareChange: { isScreenSharing: boolean };
   }>();
 
   let room: Room | null = null;
@@ -51,18 +53,48 @@
   let watchingStreamId: string | null = null;
   let streamAudioElements: Map<string, HTMLAudioElement> = new Map();
   
-  // Video resolution options
+  // Video resolution options - defaults to 4K for highest quality, fallback to 1080p
   type VideoResolution = '4k' | '1080p' | '720p';
-  let selectedResolution: VideoResolution = '1080p';
+  let selectedResolution: VideoResolution = '4k';
   
   const resolutionPresets: Record<VideoResolution, { width: number; height: number; frameRate: number; bitrate: number }> = {
-    '4k': { width: 3840, height: 2160, frameRate: 30, bitrate: 15_000_000 },  // 15 Mbps for 4K
-    '1080p': { width: 1920, height: 1080, frameRate: 30, bitrate: 6_000_000 }, // 6 Mbps for 1080p
-    '720p': { width: 1280, height: 720, frameRate: 30, bitrate: 3_000_000 },   // 3 Mbps for 720p
+    '4k': { width: 3840, height: 2160, frameRate: 30, bitrate: 20_000_000 },   // 20 Mbps for pristine 4K
+    '1080p': { width: 1920, height: 1080, frameRate: 30, bitrate: 8_000_000 }, // 8 Mbps for high quality 1080p fallback
+    '720p': { width: 1280, height: 720, frameRate: 30, bitrate: 4_000_000 },   // 4 Mbps for 720p
   };
   
   // Ably presence channel
   let ablyPresenceChannel: any = null;
+  
+  // Presence sounds - play when users join/leave
+  let joinSound: HTMLAudioElement | null = null;
+  let leaveSound: HTMLAudioElement | null = null;
+  
+  // Initialize presence sounds
+  function initPresenceSounds() {
+    if (typeof window !== 'undefined') {
+      joinSound = new Audio('/sounds/chat_in.wav');
+      leaveSound = new Audio('/sounds/chat_out.wav');
+      joinSound.volume = 0.5;
+      leaveSound.volume = 0.5;
+    }
+  }
+  
+  // Play join sound (when someone enters the voice channel)
+  function playJoinSound() {
+    if (joinSound && !isDeafened) {
+      joinSound.currentTime = 0;
+      joinSound.play().catch(err => console.warn('Failed to play join sound:', err));
+    }
+  }
+  
+  // Play leave sound (when someone exits the voice channel)
+  function playLeaveSound() {
+    if (leaveSound && !isDeafened) {
+      leaveSound.currentTime = 0;
+      leaveSound.play().catch(err => console.warn('Failed to play leave sound:', err));
+    }
+  }
   
   // Expose methods for external control
   export function setMuted(muted: boolean) {
@@ -79,6 +111,49 @@
   
   export function getState() {
     return { isMuted, isDeafened, isConnected };
+  }
+  
+  // Expose stream state for popout view
+  export function getStreamState() {
+    const focused = focusedParticipant;
+    const hasStream = participantDisplays.some(p => p.isVideoEnabled || p.isScreenSharing);
+    
+    return {
+      hasActiveStream: hasStream,
+      focusedParticipantId: focused?.id || null,
+      focusedParticipantName: focused?.name || null,
+      focusedParticipantAvatar: focused?.avatar || null,
+      isScreenSharing: focused?.isScreenSharing || false,
+      isVideoEnabled: focused?.isVideoEnabled || false,
+      videoTrack: focused?.videoTrack || null,
+      participantCount: participantDisplays.length,
+    };
+  }
+  
+  // Expose full state for mini panel controls
+  export function getFullState() {
+    return {
+      isMuted,
+      isDeafened,
+      isVideoEnabled,
+      isScreenSharing,
+      isConnected,
+      isKrispEnabled,
+      participantCount: participantDisplays.length,
+    };
+  }
+  
+  // External control methods for mini panel
+  export function setVideoEnabled(enabled: boolean) {
+    if (enabled !== isVideoEnabled) {
+      toggleVideo();
+    }
+  }
+  
+  export function setScreenSharing(enabled: boolean) {
+    if (enabled !== isScreenSharing) {
+      toggleScreenShare();
+    }
   }
 
   // Participant display data
@@ -204,6 +279,9 @@
 
     isConnecting = true;
     error = null;
+    
+    // Initialize presence sounds
+    initPresenceSounds();
 
     try {
       const response = await fetch(apiUrl('/api/livekit/token'), {
@@ -234,8 +312,8 @@
           autoGainControl: true,
           echoCancellation: true,
           noiseSuppression: true,
-          sampleRate: 48000,
-          channelCount: 2,
+          sampleRate: 48000,        // Studio-quality 48kHz
+          channelCount: 2,          // Stereo audio
         },
         audioOutput: {
           deviceId: 'default',
@@ -249,23 +327,25 @@
         },
         publishDefaults: {
           audioPreset: {
-            maxBitrate: 192_000, // 192 kbps for high quality audio (increased from 128)
+            maxBitrate: 320_000, // 320 kbps - highest quality Opus audio for crystal-clear voice
           },
-          videoCodec: 'vp9', // Better quality codec
+          videoCodec: 'vp9', // Better quality codec with superior compression
           videoSimulcastLayers: [
-            { width: 640, height: 360, bitrate: 800_000, suffix: 'q' },    // Low quality layer
-            { width: 1280, height: 720, bitrate: 3_000_000, suffix: 'h' }, // Medium quality layer
-            { width: currentPreset.width, height: currentPreset.height, bitrate: currentPreset.bitrate, suffix: 'f' }, // Full quality layer
+            { width: 640, height: 360, bitrate: 1_000_000, suffix: 'q' },    // Low quality layer
+            { width: 1280, height: 720, bitrate: 4_000_000, suffix: 'h' },   // Medium quality layer (1080p fallback-ready)
+            { width: 1920, height: 1080, bitrate: 8_000_000, suffix: 'm' },  // High quality 1080p layer
+            { width: currentPreset.width, height: currentPreset.height, bitrate: currentPreset.bitrate, suffix: 'f' }, // Full quality layer (4K when selected)
           ],
           dtx: true, // Discontinuous transmission - saves bandwidth when not speaking
           red: true, // Redundant encoding for packet loss resilience
           screenShareEncoding: {
-            maxBitrate: 10_000_000, // 10 Mbps for screen sharing
+            maxBitrate: 15_000_000, // 15 Mbps for high-fidelity screen sharing
             maxFramerate: 30,
           },
           screenShareSimulcastLayers: [
-            { width: 1280, height: 720, bitrate: 2_000_000, suffix: 'h' },
-            { width: 1920, height: 1080, bitrate: 5_000_000, suffix: 'f' },
+            { width: 1280, height: 720, bitrate: 3_000_000, suffix: 'q' },
+            { width: 1920, height: 1080, bitrate: 6_000_000, suffix: 'h' },
+            { width: 3840, height: 2160, bitrate: 15_000_000, suffix: 'f' }, // 4K screen sharing
           ],
         },
       });
@@ -290,8 +370,17 @@
   function setupRoomListeners() {
     if (!room) return;
 
-    room.on(RoomEvent.ParticipantConnected, () => updateParticipantDisplays());
-    room.on(RoomEvent.ParticipantDisconnected, () => updateParticipantDisplays());
+    room.on(RoomEvent.ParticipantConnected, (participant) => {
+      console.log(`🔊 ${participant.name || participant.identity} joined the voice channel`);
+      playJoinSound();
+      updateParticipantDisplays();
+    });
+    
+    room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+      console.log(`🔇 ${participant.name || participant.identity} left the voice channel`);
+      playLeaveSound();
+      updateParticipantDisplays();
+    });
     
     room.on(RoomEvent.TrackSubscribed, (track: Track, publication: TrackPublication, participant: RemoteParticipant | LocalParticipant) => {
       if (track.kind === 'audio') {
@@ -541,6 +630,7 @@
           return p;
         });
       }
+      dispatch('videoChange', { isVideoEnabled });
     } catch (err) {
       console.error('Failed to toggle video:', err);
       isVideoEnabled = !isVideoEnabled;
@@ -611,6 +701,7 @@
         }
         return p;
       });
+      dispatch('screenShareChange', { isScreenSharing });
     } catch (err) {
       console.error('Failed to toggle screen share:', err);
       isScreenSharing = !isScreenSharing;
@@ -623,6 +714,9 @@
     document.querySelectorAll('audio').forEach((el) => {
       el.volume = outputVolume / 100;
     });
+    // Also update presence sound volumes
+    if (joinSound) joinSound.volume = (outputVolume / 100) * 0.5;
+    if (leaveSound) leaveSound.volume = (outputVolume / 100) * 0.5;
   }
 
   function getConnectionQualityLabel(quality: ConnectionQuality): string {
@@ -679,7 +773,17 @@
   }
 
   onMount(() => connectToRoom());
-  onDestroy(() => disconnect());
+  
+  // Note: We do NOT disconnect on destroy - the voice call should persist
+  // until the user explicitly clicks disconnect. The component may be 
+  // hidden/shown while staying connected.
+  onDestroy(() => {
+    // Only cleanup intervals, don't disconnect
+    if (speakingInterval) {
+      clearInterval(speakingInterval);
+      speakingInterval = null;
+    }
+  });
 </script>
 
 <div class="voice-room" class:hidden>
@@ -807,7 +911,7 @@
             4K
           </button>
         </div>
-        <span class="settings-hint">higher quality uses more bandwidth</span>
+        <span class="settings-hint">defaults to 4k · falls back to 1080p if bandwidth is limited</span>
       </div>
     </div>
   {/if}
@@ -1188,9 +1292,8 @@
   }
   
   .voice-room.hidden {
-    position: absolute;
-    left: -9999px;
-    visibility: hidden;
+    /* Hidden state now handled by parent container in App.svelte */
+    /* This class is no longer used for visibility */
   }
 
   /* Header */

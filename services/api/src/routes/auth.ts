@@ -25,6 +25,16 @@ export interface AuthServiceInterface {
   updateProfile(userId: string, updates: { username?: string; avatar?: string; bio?: string }): Promise<unknown>;
   getProfileData(userId: string): Promise<unknown>;
   saveProfileData(userId: string, profileData: unknown, backgroundImage?: string | null): Promise<void>;
+  getMiniProfileData(userId: string): Promise<{
+    userId: string;
+    username: string;
+    avatar: string | null;
+    bio: string | null;
+    backgroundImage: string | null;
+    usernameFont: string | null;
+    textColor: string | null;
+  } | null>;
+  updateMiniProfileSettings(userId: string, settings: { mini_profile_background?: string | null; mini_profile_font?: string; mini_profile_text_color?: string }): Promise<unknown>;
 }
 
 /**
@@ -266,6 +276,31 @@ export function createAuthRoutes(config: AuthRoutesConfig): Router {
   });
 
   /**
+   * GET /auth/users/:user_id/mini-profile
+   * Get mini-profile data for a user
+   * Requirements: 1.3, 2.5
+   */
+  router.get('/users/:user_id/mini-profile', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { user_id } = req.params;
+      
+      if (!user_id) {
+        throw new ApiError(ApiErrorCode.VALIDATION_ERROR, 400, 'User ID is required');
+      }
+
+      const miniProfile = await authService.getMiniProfileData(user_id);
+
+      if (!miniProfile) {
+        throw new ApiError(ApiErrorCode.USER_NOT_FOUND, 404, 'User not found');
+      }
+
+      res.status(200).json(miniProfile);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * POST /auth/accept-terms
    * Accept terms and conditions
    */
@@ -283,19 +318,22 @@ export function createAuthRoutes(config: AuthRoutesConfig): Router {
 
   /**
    * PATCH /auth/profile
-   * Update user profile (username, avatar, bio, username_font)
+   * Update user profile (username, avatar, bio, username_font, mini-profile settings)
    */
   router.patch('/profile', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id: userId } = (req as AuthenticatedRequest).user;
-      const { username, avatar, bio, background_image, username_font } = req.body;
+      const { username, avatar, bio, background_image, username_font, mini_profile_background, mini_profile_font, mini_profile_text_color } = req.body;
 
-      const updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string } = {};
+      const updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string; mini_profile_background?: string | null; mini_profile_font?: string; mini_profile_text_color?: string } = {};
       if (username !== undefined) updates.username = username;
       if (avatar !== undefined) updates.avatar = avatar;
       if (bio !== undefined) updates.bio = bio;
       if (background_image !== undefined) updates.background_image = background_image;
       if (username_font !== undefined) updates.username_font = username_font;
+      if (mini_profile_background !== undefined) updates.mini_profile_background = mini_profile_background;
+      if (mini_profile_font !== undefined) updates.mini_profile_font = mini_profile_font;
+      if (mini_profile_text_color !== undefined) updates.mini_profile_text_color = mini_profile_text_color;
 
       const user = await authService.updateProfile(userId, updates);
 

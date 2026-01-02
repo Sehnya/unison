@@ -4,6 +4,7 @@
   import { apiUrl } from '../lib/api';
   import Avatar from './Avatar.svelte';
   import EmojiPicker from './EmojiPicker.svelte';
+  import MiniProfileTrigger from './MiniProfileTrigger.svelte';
   import { 
     initAbly, 
     initAblyWithUser,
@@ -1527,14 +1528,23 @@
           on:mouseleave={() => { hoveredMessageId = null; if (showMessageMenu === message.id) showMessageMenu = null; }}
         >
           {#if shouldShowAvatar(message, index)}
-            <button class="message-avatar" on:click={() => handleUserClick(message)} aria-label="View {message.authorName}'s profile">
-              <Avatar 
-                src={message.authorAvatar}
-                username={message.authorName}
-                userId={message.authorId}
-                size={40}
-              />
-            </button>
+            <MiniProfileTrigger
+              userId={message.authorId}
+              username={message.authorName}
+              avatar={message.authorAvatar}
+              {authToken}
+              currentUserId={currentUser?.id || ''}
+              onViewProfile={(userId) => handleUserClick(message)}
+            >
+              <button class="message-avatar" on:click={() => handleUserClick(message)} aria-label="View {message.authorName}'s profile">
+                <Avatar 
+                  src={message.authorAvatar}
+                  username={message.authorName}
+                  userId={message.authorId}
+                  size={40}
+                />
+              </button>
+            </MiniProfileTrigger>
           {:else}
             <div class="message-avatar-spacer"></div>
           {/if}
@@ -1542,11 +1552,20 @@
           <div class="message-content">
             {#if shouldShowHeader(message, index)}
               <div class="message-header">
-                <button 
-                  class="message-author" 
-                  on:click={() => handleUserClick(message)}
-                  style={message.authorFont ? `font-family: '${message.authorFont}', sans-serif;` : ''}
-                >{message.authorName}</button>
+                <MiniProfileTrigger
+                  userId={message.authorId}
+                  username={message.authorName}
+                  avatar={message.authorAvatar}
+                  {authToken}
+                  currentUserId={currentUser?.id || ''}
+                  onViewProfile={(userId) => handleUserClick(message)}
+                >
+                  <button 
+                    class="message-author" 
+                    on:click={() => handleUserClick(message)}
+                    style={message.authorFont ? `font-family: '${message.authorFont}', sans-serif;` : ''}
+                  >{message.authorName}</button>
+                </MiniProfileTrigger>
                 <span class="message-time">{formatTimestamp(message.timestamp)}{message.edited ? ' (edited)' : ''}</span>
               </div>
             {/if}

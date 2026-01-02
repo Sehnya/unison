@@ -26,6 +26,10 @@ export interface FriendsServiceInterface {
   // Friends
   getFriends(userId: string): Promise<unknown[]>;
   removeFriend(userId: string, friendId: string): Promise<void>;
+  getMutualFriends(userId: string, otherUserId: string): Promise<{
+    mutualFriends: { id: string; username: string; avatar: string | null }[];
+    totalCount: number;
+  }>;
   
   // Blocking
   blockUser(userId: string, blockedUserId: string): Promise<void>;
@@ -224,6 +228,27 @@ export function createFriendsRoutes(config: FriendsRoutesConfig): Router {
       const userId = (req as AuthenticatedRequest).user.id;
       const friends = await friendsService.getFriends(userId);
       res.json(friends);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * GET /friends/mutual/:userId
+   * Get mutual friends between the authenticated user and the target user
+   * Requirements: 4.1, 4.2
+   */
+  router.get('/mutual/:userId', authMiddleware, async (req, res: Response, next: NextFunction) => {
+    try {
+      const currentUserId = (req as AuthenticatedRequest).user.id;
+      const { userId } = req.params;
+
+      if (!userId) {
+        throw new ApiError(ApiErrorCode.VALIDATION_ERROR, 400, 'User ID is required');
+      }
+
+      const result = await friendsService.getMutualFriends(currentUserId, userId);
+      res.json(result);
     } catch (error) {
       next(error);
     }

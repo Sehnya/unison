@@ -360,6 +360,20 @@ export class FriendsService {
   }
 
   /**
+   * Get mutual friends between the current user and another user
+   */
+  async getMutualFriends(userId: Snowflake, otherUserId: Snowflake): Promise<{
+    mutualFriends: { id: string; username: string; avatar: string | null }[];
+    totalCount: number;
+  }> {
+    const mutualFriends = await this.repository.getMutualFriends(userId, otherUserId);
+    return {
+      mutualFriends,
+      totalCount: mutualFriends.length,
+    };
+  }
+
+  /**
    * Get repository for direct access
    */
   getRepository(): FriendsRepository {

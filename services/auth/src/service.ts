@@ -305,7 +305,7 @@ export class AuthService {
    */
   async updateProfile(
     userId: Snowflake,
-    updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string }
+    updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string; mini_profile_background?: string | null; mini_profile_font?: string; mini_profile_text_color?: string }
   ): Promise<User> {
     // Validate username if provided
     if (updates.username !== undefined) {
@@ -316,6 +316,31 @@ export class AuthService {
     }
 
     return this.repository.updateProfile(userId, updates);
+  }
+
+  /**
+   * Get mini-profile data for a user
+   */
+  async getMiniProfileData(userId: Snowflake): Promise<{
+    userId: string;
+    username: string;
+    avatar: string | null;
+    bio: string | null;
+    backgroundImage: string | null;
+    usernameFont: string | null;
+    textColor: string | null;
+  } | null> {
+    return this.repository.getMiniProfileData(userId);
+  }
+
+  /**
+   * Update mini-profile settings
+   */
+  async updateMiniProfileSettings(
+    userId: Snowflake,
+    settings: { mini_profile_background?: string | null; mini_profile_font?: string; mini_profile_text_color?: string }
+  ): Promise<User> {
+    return this.repository.updateMiniProfileSettings(userId, settings);
   }
 
   /**

@@ -8,6 +8,7 @@
   import ChatArea from './components/ChatArea.svelte';
   import VoiceRoom from './components/VoiceRoom.svelte';
   import VoiceMiniPlayer from './components/VoiceMiniPlayer.svelte';
+  import VoiceStreamPopout from './components/VoiceStreamPopout.svelte';
   import GroupInfo from './components/GroupInfo.svelte';
   import UserProfile from './components/UserProfile.svelte';
   import SettingsPanel from './components/SettingsPanel.svelte';
@@ -71,11 +72,66 @@
   // Voice call UI state (controlled from VoiceRoom or MiniPlayer)
   let voiceIsMuted: boolean = false;
   let voiceIsDeafened: boolean = false;
+  let voiceIsVideoEnabled: boolean = false;
+  let voiceIsScreenSharing: boolean = false;
   let voiceRoomRef: VoiceRoom | null = null;
+  
+  // Stream popout state - tracks active video/screen share for popout view
+  let streamState: {
+    hasActiveStream: boolean;
+    focusedParticipantId: string | null;
+    focusedParticipantName: string | null;
+    focusedParticipantAvatar: string | null;
+    isScreenSharing: boolean;
+    isVideoEnabled: boolean;
+    videoTrack: any | null;
+    participantCount: number;
+  } = {
+    hasActiveStream: false,
+    focusedParticipantId: null,
+    focusedParticipantName: null,
+    focusedParticipantAvatar: null,
+    isScreenSharing: false,
+    isVideoEnabled: false,
+    videoTrack: null,
+    participantCount: 0,
+  };
+  let streamStateInterval: ReturnType<typeof setInterval> | null = null;
+  let showStreamPopout: boolean = true; // Default to showing popout when there's a stream
   
   // Computed: is user viewing the active voice call channel?
   $: isViewingVoiceCall = selectedChannelId === activeVoiceCallChannelId && selectedChannelType === 'voice';
   $: hasActiveVoiceCall = activeVoiceCallChannelId !== null;
+  
+  // Computed: should show stream popout (when navigating away from voice with active video/screen)
+  $: shouldShowStreamPopout = hasActiveVoiceCall && !isViewingVoiceCall && streamState.hasActiveStream && showStreamPopout;
+  $: shouldShowMiniPlayer = hasActiveVoiceCall && !isViewingVoiceCall && !shouldShowStreamPopout;
+  
+  // Poll stream state from VoiceRoom when in a call
+  function updateStreamState() {
+    if (voiceRoomRef) {
+      streamState = voiceRoomRef.getStreamState();
+      // Also update local user's video/screen share state
+      const fullState = voiceRoomRef.getFullState();
+      voiceIsVideoEnabled = fullState.isVideoEnabled;
+      voiceIsScreenSharing = fullState.isScreenSharing;
+    }
+  }
+  
+  // Start/stop polling when voice call state changes
+  $: if (hasActiveVoiceCall && !isViewingVoiceCall) {
+    // Start polling stream state when navigating away
+    if (!streamStateInterval) {
+      streamStateInterval = setInterval(updateStreamState, 500);
+      updateStreamState(); // Initial update
+    }
+  } else {
+    // Stop polling when viewing voice call or no call
+    if (streamStateInterval) {
+      clearInterval(streamStateInterval);
+      streamStateInterval = null;
+    }
+  }
   
   // Handle disconnecting from voice call
   function handleVoiceDisconnect() {
@@ -84,6 +140,23 @@
     activeVoiceCallGuildId = null;
     voiceIsMuted = false;
     voiceIsDeafened = false;
+    voiceIsVideoEnabled = false;
+    voiceIsScreenSharing = false;
+    showStreamPopout = true; // Reset for next call
+    streamState = {
+      hasActiveStream: false,
+      focusedParticipantId: null,
+      focusedParticipantName: null,
+      focusedParticipantAvatar: null,
+      isScreenSharing: false,
+      isVideoEnabled: false,
+      videoTrack: null,
+      participantCount: 0,
+    };
+    if (streamStateInterval) {
+      clearInterval(streamStateInterval);
+      streamStateInterval = null;
+    }
   }
   
   // Navigate back to the voice channel
@@ -93,6 +166,7 @@
       selectedChannelId = activeVoiceCallChannelId;
       selectedChannelType = 'voice';
       selectedChannelName = activeVoiceCallChannelName;
+      showStreamPopout = true; // Reset popout preference when expanding
     }
   }
   
@@ -110,6 +184,22 @@
     if (voiceIsDeafened) voiceIsMuted = true;
     if (voiceRoomRef) {
       voiceRoomRef.setDeafened(voiceIsDeafened);
+    }
+  }
+  
+  // Toggle video from mini player
+  function handleMiniPlayerToggleVideo() {
+    voiceIsVideoEnabled = !voiceIsVideoEnabled;
+    if (voiceRoomRef) {
+      voiceRoomRef.setVideoEnabled(voiceIsVideoEnabled);
+    }
+  }
+  
+  // Toggle screen share from mini player
+  function handleMiniPlayerToggleScreenShare() {
+    voiceIsScreenSharing = !voiceIsScreenSharing;
+    if (voiceRoomRef) {
+      voiceRoomRef.setScreenSharing(voiceIsScreenSharing);
     }
   }
 
@@ -577,6 +667,10 @@
 
   onDestroy(() => {
     window.removeEventListener('popstate', handlePopState);
+    if (streamStateInterval) {
+      clearInterval(streamStateInterval);
+      streamStateInterval = null;
+    }
   });
 </script>
 
@@ -650,20 +744,7 @@
           on:close={() => { showUserProfile = false; viewedUser = null; }}
         />
       {:else if selectedChannelId}
-        {#if selectedChannelType === 'voice' && isViewingVoiceCall}
-          <!-- Show VoiceRoom in main area when viewing the active call -->
-          <VoiceRoom 
-            bind:this={voiceRoomRef}
-            channelId={activeVoiceCallChannelId || selectedChannelId}
-            channelName={activeVoiceCallChannelName || selectedChannelName || 'Voice Channel'}
-            {authToken}
-            currentUser={currentUser}
-            hidden={false}
-            onDisconnect={handleVoiceDisconnect}
-            on:muteChange={(e) => voiceIsMuted = e.detail.isMuted}
-            on:deafenChange={(e) => voiceIsDeafened = e.detail.isDeafened}
-          />
-        {:else}
+        {#if !(selectedChannelType === 'voice' && isViewingVoiceCall)}
           <ChatArea 
             channelId={selectedChannelId}
             guildId={selectedGuildId}
@@ -764,32 +845,67 @@
         }}
       />
       
-      <!-- Hidden VoiceRoom that persists when navigating away -->
-      {#if hasActiveVoiceCall && !isViewingVoiceCall}
-        <VoiceRoom 
-          bind:this={voiceRoomRef}
-          channelId={activeVoiceCallChannelId || ''}
-          channelName={activeVoiceCallChannelName || 'Voice Channel'}
-          {authToken}
-          currentUser={currentUser}
-          hidden={true}
-          onDisconnect={handleVoiceDisconnect}
-          on:muteChange={(e) => voiceIsMuted = e.detail.isMuted}
-          on:deafenChange={(e) => voiceIsDeafened = e.detail.isDeafened}
-        />
+      <!-- Single persistent VoiceRoom - always mounted at root level, never destroyed until disconnect -->
+      {#if hasActiveVoiceCall}
+        <div class="voice-room-persistent" class:viewing={isViewingVoiceCall} class:no-guild={!selectedGuildId}>
+          <VoiceRoom 
+            bind:this={voiceRoomRef}
+            channelId={activeVoiceCallChannelId || ''}
+            channelName={activeVoiceCallChannelName || 'Voice Channel'}
+            {authToken}
+            currentUser={currentUser}
+            hidden={false}
+            onDisconnect={handleVoiceDisconnect}
+            on:muteChange={(e) => voiceIsMuted = e.detail.isMuted}
+            on:deafenChange={(e) => voiceIsDeafened = e.detail.isDeafened}
+            on:videoChange={(e) => voiceIsVideoEnabled = e.detail.isVideoEnabled}
+            on:screenShareChange={(e) => voiceIsScreenSharing = e.detail.isScreenSharing}
+          />
+        </div>
       {/if}
 
-      <!-- Voice Mini Player (shows when in call but viewing other content) -->
-      {#if hasActiveVoiceCall && !isViewingVoiceCall}
+      <!-- Voice Stream Popout (shows when in call with active stream but viewing other content) -->
+      {#if shouldShowStreamPopout}
+        <VoiceStreamPopout 
+          channelName={activeVoiceCallChannelName || 'Voice Channel'}
+          isMuted={voiceIsMuted}
+          isDeafened={voiceIsDeafened}
+          isVideoEnabled={voiceIsVideoEnabled}
+          isLocalScreenSharing={voiceIsScreenSharing}
+          focusedParticipantName={streamState.focusedParticipantName || ''}
+          focusedParticipantId={streamState.focusedParticipantId || ''}
+          focusedParticipantAvatar={streamState.focusedParticipantAvatar}
+          isScreenSharing={streamState.isScreenSharing}
+          videoTrack={streamState.videoTrack}
+          participantCount={streamState.participantCount}
+          on:toggleMute={handleMiniPlayerToggleMute}
+          on:toggleDeafen={handleMiniPlayerToggleDeafen}
+          on:toggleVideo={handleMiniPlayerToggleVideo}
+          on:toggleScreenShare={handleMiniPlayerToggleScreenShare}
+          on:disconnect={handleVoiceDisconnect}
+          on:expand={expandVoiceCall}
+          on:minimize={() => showStreamPopout = false}
+        />
+      {/if}
+      
+      <!-- Voice Mini Player (shows when in call but no active stream or popout minimized) -->
+      {#if shouldShowMiniPlayer}
         <div class="voice-mini-player-container">
           <VoiceMiniPlayer 
             channelName={activeVoiceCallChannelName || 'Voice Channel'}
             isMuted={voiceIsMuted}
             isDeafened={voiceIsDeafened}
+            isVideoEnabled={voiceIsVideoEnabled}
+            isScreenSharing={voiceIsScreenSharing}
+            hasActiveStream={streamState.hasActiveStream}
+            participantCount={streamState.participantCount}
             on:toggleMute={handleMiniPlayerToggleMute}
             on:toggleDeafen={handleMiniPlayerToggleDeafen}
+            on:toggleVideo={handleMiniPlayerToggleVideo}
+            on:toggleScreenShare={handleMiniPlayerToggleScreenShare}
             on:disconnect={handleVoiceDisconnect}
             on:expand={expandVoiceCall}
+            on:showPopout={() => showStreamPopout = true}
           />
         </div>
       {/if}
@@ -868,6 +984,42 @@
   
   .app-layout:not(.has-player) .voice-mini-player-container {
     bottom: 0;
+  }
+
+  /* Persistent VoiceRoom container - positioned absolutely to overlay when viewing */
+  .voice-room-persistent {
+    position: fixed;
+    top: 0;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  /* When viewing the voice channel, position it in the main content area */
+  .voice-room-persistent.viewing {
+    position: fixed;
+    top: 0;
+    left: 352px; /* 72px sidebar + 280px channel list */
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    visibility: visible;
+    pointer-events: auto;
+    z-index: 10;
+  }
+
+  .app-layout.has-player .voice-room-persistent.viewing {
+    bottom: 72px; /* Account for music mini player */
+  }
+
+  /* Handle case when no guild is selected (no channel list shown) */
+  .voice-room-persistent.viewing.no-guild {
+    left: 72px; /* Just sidebar */
   }
 
   .auth-container {

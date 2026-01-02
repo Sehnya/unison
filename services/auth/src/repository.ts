@@ -13,6 +13,9 @@ export interface UserRow {
   bio: string | null;
   background_image: string | null;
   username_font: string | null;
+  mini_profile_background: string | null;
+  mini_profile_font: string | null;
+  mini_profile_text_color: string | null;
   created_at: Date;
   terms_accepted_at?: Date | null;
 }
@@ -49,6 +52,15 @@ export function rowToUser(row: UserRow): User {
   }
   if (row.username_font) {
     (user as User & { username_font?: string }).username_font = row.username_font;
+  }
+  if (row.mini_profile_background) {
+    (user as User & { mini_profile_background?: string }).mini_profile_background = row.mini_profile_background;
+  }
+  if (row.mini_profile_font) {
+    (user as User & { mini_profile_font?: string }).mini_profile_font = row.mini_profile_font;
+  }
+  if (row.mini_profile_text_color) {
+    (user as User & { mini_profile_text_color?: string }).mini_profile_text_color = row.mini_profile_text_color;
   }
   if (row.terms_accepted_at) {
     (user as User & { terms_accepted_at?: Date }).terms_accepted_at = row.terms_accepted_at;
@@ -90,7 +102,7 @@ export class AuthRepository {
     const result = await conn.query<UserRow>(
       `INSERT INTO users (id, email, username, password_hash)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, email, username, password_hash, avatar, bio, background_image, username_font, created_at, terms_accepted_at`,
+       RETURNING id, email, username, password_hash, avatar, bio, background_image, username_font, mini_profile_background, mini_profile_font, mini_profile_text_color, created_at, terms_accepted_at`,
       [id, email.toLowerCase().trim(), username.trim(), passwordHash]
     );
     const row = result.rows[0];
@@ -105,7 +117,7 @@ export class AuthRepository {
    */
   async findUserByEmail(email: string): Promise<(User & { password_hash: string }) | null> {
     const result = await this.pool.query<UserRow>(
-      `SELECT id, email, username, password_hash, avatar, bio, background_image, username_font, created_at, terms_accepted_at
+      `SELECT id, email, username, password_hash, avatar, bio, background_image, username_font, mini_profile_background, mini_profile_font, mini_profile_text_color, created_at, terms_accepted_at
        FROM users WHERE email = $1`,
       [email.toLowerCase().trim()]
     );
@@ -125,7 +137,7 @@ export class AuthRepository {
    */
   async findUserById(id: Snowflake): Promise<User | null> {
     const result = await this.pool.query<UserRow>(
-      `SELECT id, email, username, password_hash, avatar, bio, background_image, username_font, created_at, terms_accepted_at
+      `SELECT id, email, username, password_hash, avatar, bio, background_image, username_font, mini_profile_background, mini_profile_font, mini_profile_text_color, created_at, terms_accepted_at
        FROM users WHERE id = $1`,
       [id]
     );
@@ -332,7 +344,7 @@ export class AuthRepository {
    */
   async updateProfile(
     userId: Snowflake,
-    updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string }
+    updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string; mini_profile_background?: string | null; mini_profile_font?: string; mini_profile_text_color?: string }
   ): Promise<User> {
     const setClauses: string[] = [];
     const values: (string | null)[] = [];
@@ -358,6 +370,18 @@ export class AuthRepository {
       setClauses.push(`username_font = $${paramIndex++}`);
       values.push(updates.username_font || null);
     }
+    if (updates.mini_profile_background !== undefined) {
+      setClauses.push(`mini_profile_background = $${paramIndex++}`);
+      values.push(updates.mini_profile_background || null);
+    }
+    if (updates.mini_profile_font !== undefined) {
+      setClauses.push(`mini_profile_font = $${paramIndex++}`);
+      values.push(updates.mini_profile_font || null);
+    }
+    if (updates.mini_profile_text_color !== undefined) {
+      setClauses.push(`mini_profile_text_color = $${paramIndex++}`);
+      values.push(updates.mini_profile_text_color || null);
+    }
 
     if (setClauses.length === 0) {
       const user = await this.findUserById(userId);
@@ -371,7 +395,7 @@ export class AuthRepository {
     const result = await this.pool.query<UserRow>(
       `UPDATE users SET ${setClauses.join(', ')}
        WHERE id = $${paramIndex}
-       RETURNING id, email, username, password_hash, avatar, bio, background_image, username_font, created_at, terms_accepted_at`,
+       RETURNING id, email, username, password_hash, avatar, bio, background_image, username_font, mini_profile_background, mini_profile_font, mini_profile_text_color, created_at, terms_accepted_at`,
       values
     );
     const row = result.rows[0];
@@ -379,6 +403,56 @@ export class AuthRepository {
       throw new Error('User not found');
     }
     return rowToUser(row);
+  }
+
+  /**
+   * Update mini-profile settings
+   */
+  async updateMiniProfileSettings(
+    userId: Snowflake,
+    settings: { mini_profile_background?: string | null; mini_profile_font?: string; mini_profile_text_color?: string }
+  ): Promise<User> {
+    return this.updateProfile(userId, settings);
+  }
+
+  /**
+   * Get mini-profile data for a user
+   */
+  async getMiniProfileData(userId: Snowflake): Promise<{
+    userId: string;
+    username: string;
+    avatar: string | null;
+    bio: string | null;
+    backgroundImage: string | null;
+    usernameFont: string | null;
+    textColor: string | null;
+  } | null> {
+    const result = await this.pool.query<{
+      id: string;
+      username: string;
+      avatar: string | null;
+      bio: string | null;
+      mini_profile_background: string | null;
+      mini_profile_font: string | null;
+      mini_profile_text_color: string | null;
+    }>(
+      `SELECT id, username, avatar, bio, mini_profile_background, mini_profile_font, mini_profile_text_color
+       FROM users WHERE id = $1`,
+      [userId]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+    return {
+      userId: row.id,
+      username: row.username,
+      avatar: row.avatar,
+      bio: row.bio,
+      backgroundImage: row.mini_profile_background,
+      usernameFont: row.mini_profile_font,
+      textColor: row.mini_profile_text_color,
+    };
   }
 
   /**

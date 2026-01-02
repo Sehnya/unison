@@ -531,6 +531,31 @@ export class FriendsRepository {
   }
 
   /**
+   * Get mutual friends between two users
+   */
+  async getMutualFriends(userId: Snowflake, otherUserId: Snowflake): Promise<{ id: string; username: string; avatar: string | null }[]> {
+    const result = await this.pool.query<{ id: string; username: string; avatar: string | null }>(
+      `SELECT u.id, u.username, u.avatar
+       FROM users u
+       WHERE u.id IN (
+         -- Friends of userId
+         SELECT CASE WHEN f1.user_id = $1 THEN f1.friend_id ELSE f1.user_id END
+         FROM friends f1
+         WHERE (f1.user_id = $1 OR f1.friend_id = $1) AND f1.status = 'accepted'
+       )
+       AND u.id IN (
+         -- Friends of otherUserId
+         SELECT CASE WHEN f2.user_id = $2 THEN f2.friend_id ELSE f2.user_id END
+         FROM friends f2
+         WHERE (f2.user_id = $2 OR f2.friend_id = $2) AND f2.status = 'accepted'
+       )
+       ORDER BY u.username ASC`,
+      [userId, otherUserId]
+    );
+    return result.rows;
+  }
+
+  /**
    * Get a database client for transactions
    */
   async getClient(): Promise<PoolClient> {
