@@ -427,32 +427,65 @@ export class AuthRepository {
     usernameFont: string | null;
     textColor: string | null;
   } | null> {
-    const result = await this.pool.query<{
-      id: string;
-      username: string;
-      avatar: string | null;
-      bio: string | null;
-      mini_profile_background: string | null;
-      mini_profile_font: string | null;
-      mini_profile_text_color: string | null;
-    }>(
-      `SELECT id, username, avatar, bio, mini_profile_background, mini_profile_font, mini_profile_text_color
-       FROM users WHERE id = $1`,
-      [userId]
-    );
-    const row = result.rows[0];
-    if (!row) {
-      return null;
+    try {
+      // Try to fetch with mini-profile columns
+      const result = await this.pool.query<{
+        id: string;
+        username: string;
+        avatar: string | null;
+        bio: string | null;
+        mini_profile_background: string | null;
+        mini_profile_font: string | null;
+        mini_profile_text_color: string | null;
+      }>(
+        `SELECT id, username, avatar, bio, mini_profile_background, mini_profile_font, mini_profile_text_color
+         FROM users WHERE id = $1`,
+        [userId]
+      );
+      const row = result.rows[0];
+      if (!row) {
+        return null;
+      }
+      return {
+        userId: row.id,
+        username: row.username,
+        avatar: row.avatar,
+        bio: row.bio,
+        backgroundImage: row.mini_profile_background,
+        usernameFont: row.mini_profile_font,
+        textColor: row.mini_profile_text_color,
+      };
+    } catch (error) {
+      // If columns don't exist (migration not run), fallback to basic user info
+      console.warn('getMiniProfileData: Fallback to basic query due to error:', error);
+      try {
+        const result = await this.pool.query<{
+          id: string;
+          username: string;
+          avatar: string | null;
+          bio: string | null;
+        }>(
+          `SELECT id, username, avatar, bio FROM users WHERE id = $1`,
+          [userId]
+        );
+        const row = result.rows[0];
+        if (!row) {
+          return null;
+        }
+        return {
+          userId: row.id,
+          username: row.username,
+          avatar: row.avatar,
+          bio: row.bio,
+          backgroundImage: null,
+          usernameFont: null,
+          textColor: null,
+        };
+      } catch (fallbackError) {
+        console.error('getMiniProfileData: Fallback query also failed:', fallbackError);
+        throw fallbackError;
+      }
     }
-    return {
-      userId: row.id,
-      username: row.username,
-      avatar: row.avatar,
-      bio: row.bio,
-      backgroundImage: row.mini_profile_background,
-      usernameFont: row.mini_profile_font,
-      textColor: row.mini_profile_text_color,
-    };
   }
 
   /**
