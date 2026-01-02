@@ -12,10 +12,43 @@ export interface MiniWidget {
   gifUrl?: string;
 }
 
+export interface CardStyle {
+  // Dimensions
+  width?: string;        // e.g., '300px', '100%', 'auto'
+  height?: string;       // e.g., '200px', 'auto'
+  minHeight?: string;    // e.g., '150px'
+  maxHeight?: string;    // e.g., '400px'
+  
+  // Colors and backgrounds
+  backgroundColor?: string;     // e.g., '#1a1a1a', 'rgba(40, 40, 40, 0.6)'
+  backgroundImage?: string;     // e.g., 'url(...)', 'linear-gradient(...)'
+  backgroundSize?: string;      // e.g., 'cover', 'contain'
+  backgroundPosition?: string;  // e.g., 'center', 'top left'
+  opacity?: number;             // 0 to 1
+  
+  // Border
+  borderWidth?: string;         // e.g., '1px', '2px'
+  borderStyle?: string;         // e.g., 'solid', 'dashed', 'none'
+  borderColor?: string;         // e.g., '#333', 'rgba(255,255,255,0.2)'
+  borderRadius?: string;        // e.g., '16px', '8px'
+  
+  // Transitions and animations
+  transitionIn?: 'none' | 'fade' | 'slide-up' | 'slide-down' | 'slide-left' | 'slide-right' | 'zoom' | 'bounce';
+  transitionOut?: 'none' | 'fade' | 'slide-up' | 'slide-down' | 'slide-left' | 'slide-right' | 'zoom';
+  transitionDuration?: string;  // e.g., '0.3s', '500ms'
+  
+  // Shadows
+  boxShadow?: string;           // e.g., '0 4px 6px rgba(0,0,0,0.3)'
+  
+  // Blur/backdrop
+  backdropBlur?: string;        // e.g., '10px'
+}
+
 export interface ProfileCard {
   id: string;
   type: 'quote' | 'gradient' | 'music' | 'games' | 'github' | 'friends';
-  size: 'small' | 'wide';
+  size: 'small' | 'wide' | 'custom';
+  style?: CardStyle;
 }
 
 export interface QuoteCardData {

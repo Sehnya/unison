@@ -59,13 +59,16 @@
   // Quote card content (keyed by card id)
   let quoteContents: Record<string, string> = {};
 
-  // Card definitions
+  // Card definitions - import CardStyle type
+  import type { CardStyle } from '../lib/profileStorage';
+  
   type CardType = 'quote' | 'gradient' | 'music' | 'games' | 'github' | 'friends';
   
   interface Card {
     id: string;
     type: CardType;
-    size: 'small' | 'wide';
+    size: 'small' | 'wide' | 'custom';
+    style?: CardStyle;
   }
 
   interface CardOption {
@@ -87,6 +90,76 @@
 
   let cards: Card[] = [];
   let showAddCardMenu = false;
+  let cardSettingsOpen: string | null = null; // ID of card being customized
+  
+  // Convert CardStyle to inline CSS string
+  function getCardStyleCSS(style?: CardStyle): string {
+    if (!style) return '';
+    
+    const styles: string[] = [];
+    
+    if (style.width) styles.push(`width: ${style.width}`);
+    if (style.height) styles.push(`height: ${style.height}`);
+    if (style.minHeight) styles.push(`min-height: ${style.minHeight}`);
+    if (style.maxHeight) styles.push(`max-height: ${style.maxHeight}`);
+    if (style.backgroundColor) styles.push(`background-color: ${style.backgroundColor}`);
+    if (style.backgroundImage) styles.push(`background-image: ${style.backgroundImage}`);
+    if (style.backgroundSize) styles.push(`background-size: ${style.backgroundSize}`);
+    if (style.backgroundPosition) styles.push(`background-position: ${style.backgroundPosition}`);
+    if (style.opacity !== undefined) styles.push(`opacity: ${style.opacity}`);
+    if (style.borderWidth) styles.push(`border-width: ${style.borderWidth}`);
+    if (style.borderStyle) styles.push(`border-style: ${style.borderStyle}`);
+    if (style.borderColor) styles.push(`border-color: ${style.borderColor}`);
+    if (style.borderRadius) styles.push(`border-radius: ${style.borderRadius}`);
+    if (style.boxShadow) styles.push(`box-shadow: ${style.boxShadow}`);
+    if (style.backdropBlur) styles.push(`backdrop-filter: blur(${style.backdropBlur})`);
+    if (style.transitionDuration) styles.push(`transition-duration: ${style.transitionDuration}`);
+    
+    return styles.join('; ');
+  }
+  
+  // Get wrapper style for custom sizes
+  function getWrapperStyleCSS(card: Card): string {
+    if (card.size !== 'custom' || !card.style) return '';
+    
+    const styles: string[] = [];
+    if (card.style.width) styles.push(`flex-basis: ${card.style.width}`);
+    
+    return styles.join('; ');
+  }
+  
+  // Get transition class for card animations
+  function getTransitionClass(card: Card): string {
+    if (!card.style?.transitionIn) return '';
+    return `transition-${card.style.transitionIn}`;
+  }
+  
+  // Update a card's style
+  function updateCardStyle(cardId: string, newStyle: Partial<CardStyle>) {
+    const cardIndex = cards.findIndex(c => c.id === cardId);
+    if (cardIndex === -1) return;
+    
+    cards[cardIndex] = {
+      ...cards[cardIndex],
+      style: { ...cards[cardIndex].style, ...newStyle }
+    };
+    cards = [...cards]; // Trigger reactivity
+    
+    // Save to profile
+    if (canEdit) {
+      updateProfileCards(cards as ProfileCard[]);
+    }
+  }
+  
+  // Open card settings
+  function openCardSettings(cardId: string) {
+    cardSettingsOpen = cardId;
+  }
+  
+  // Close card settings
+  function closeCardSettings() {
+    cardSettingsOpen = null;
+  }
 
   // Track the user ID we loaded profile for to detect changes
   let loadedUserId: string | null = null;
@@ -700,9 +773,10 @@
   <div class="profile-grid" class:edit-mode={isEditMode}>
     {#each cards as card, index (card.id)}
       <div
-        class="card-wrapper {card.size}"
+        class="card-wrapper {card.size} {getTransitionClass(card)}"
         class:drag-over={dragOverIndex === index}
         class:dragging={draggedCard?.id === card.id}
+        style={getWrapperStyleCSS(card)}
         draggable={isEditMode}
         on:dragstart={(e) => handleDragStart(e, card, e.currentTarget)}
         on:dragend={handleDragEnd}
@@ -716,7 +790,16 @@
           <div class="drop-indicator"></div>
         {/if}
         
-        <div class="card {card.type}-card" class:edit-mode={isEditMode}>
+        <div 
+          class="card {card.type}-card" 
+          class:edit-mode={isEditMode}
+          class:has-custom-bg={card.style?.backgroundImage}
+          style={getCardStyleCSS(card.style)}
+        >
+          {#if card.style?.backgroundImage}
+            <div class="card-bg-overlay"></div>
+          {/if}
+          
           {#if isEditMode}
             <div class="card-edit-controls">
               <div class="drag-handle">
@@ -726,6 +809,13 @@
                   <circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
                 </svg>
               </div>
+              <!-- Card settings button -->
+              <button class="card-settings-btn" on:click|stopPropagation={() => openCardSettings(card.id)} title="Card settings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </button>
               <button class="remove-card-btn" on:click|stopPropagation={() => removeCard(card.id)} title="Remove card">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 6L6 18M6 6l12 12"/>
@@ -798,6 +888,221 @@
   {/if}
 </div>
 
+<!-- Card Settings Panel -->
+{#if cardSettingsOpen}
+  {@const editingCard = cards.find(c => c.id === cardSettingsOpen)}
+  {#if editingCard}
+    <div class="card-settings-overlay" on:click={closeCardSettings} on:keydown={(e) => e.key === 'Escape' && closeCardSettings()} role="button" tabindex="0">
+      <div class="card-settings-panel" on:click|stopPropagation role="dialog" aria-labelledby="card-settings-title">
+        <div class="settings-header">
+          <h3 id="card-settings-title">Card Settings</h3>
+          <button class="close-settings-btn" on:click={closeCardSettings}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        
+        <div class="settings-body">
+          <!-- Size -->
+          <div class="settings-section">
+            <label class="settings-label">Size</label>
+            <div class="size-options">
+              <button 
+                class="size-option" 
+                class:active={editingCard.size === 'small'}
+                on:click={() => { editingCard.size = 'small'; cards = [...cards]; updateProfileCards(cards); }}
+              >Small</button>
+              <button 
+                class="size-option" 
+                class:active={editingCard.size === 'wide'}
+                on:click={() => { editingCard.size = 'wide'; cards = [...cards]; updateProfileCards(cards); }}
+              >Wide</button>
+              <button 
+                class="size-option" 
+                class:active={editingCard.size === 'custom'}
+                on:click={() => { editingCard.size = 'custom'; cards = [...cards]; updateProfileCards(cards); }}
+              >Custom</button>
+            </div>
+          </div>
+          
+          <!-- Dimensions (for custom size) -->
+          {#if editingCard.size === 'custom'}
+            <div class="settings-section">
+              <label class="settings-label">Dimensions</label>
+              <div class="dimension-inputs">
+                <div class="input-group">
+                  <label>Width</label>
+                  <input 
+                    type="text" 
+                    value={editingCard.style?.width || ''} 
+                    placeholder="e.g., 300px, 50%"
+                    on:change={(e) => updateCardStyle(editingCard.id, { width: (e.target as HTMLInputElement).value })}
+                  />
+                </div>
+                <div class="input-group">
+                  <label>Height</label>
+                  <input 
+                    type="text" 
+                    value={editingCard.style?.height || ''} 
+                    placeholder="e.g., 250px, auto"
+                    on:change={(e) => updateCardStyle(editingCard.id, { height: (e.target as HTMLInputElement).value })}
+                  />
+                </div>
+              </div>
+            </div>
+          {/if}
+          
+          <!-- Background Color -->
+          <div class="settings-section">
+            <label class="settings-label">Background Color</label>
+            <div class="color-input-row">
+              <input 
+                type="color" 
+                value={editingCard.style?.backgroundColor?.startsWith('#') ? editingCard.style.backgroundColor : '#282828'}
+                on:change={(e) => updateCardStyle(editingCard.id, { backgroundColor: (e.target as HTMLInputElement).value })}
+              />
+              <input 
+                type="text" 
+                value={editingCard.style?.backgroundColor || ''} 
+                placeholder="rgba(40, 40, 40, 0.6)"
+                on:change={(e) => updateCardStyle(editingCard.id, { backgroundColor: (e.target as HTMLInputElement).value })}
+              />
+            </div>
+          </div>
+          
+          <!-- Opacity -->
+          <div class="settings-section">
+            <label class="settings-label">Opacity: {Math.round((editingCard.style?.opacity ?? 1) * 100)}%</label>
+            <input 
+              type="range" 
+              min="0" 
+              max="100" 
+              value={Math.round((editingCard.style?.opacity ?? 1) * 100)}
+              on:input={(e) => updateCardStyle(editingCard.id, { opacity: parseInt((e.target as HTMLInputElement).value) / 100 })}
+              class="opacity-slider"
+            />
+          </div>
+          
+          <!-- Background Image -->
+          <div class="settings-section">
+            <label class="settings-label">Background Image</label>
+            <input 
+              type="text" 
+              value={editingCard.style?.backgroundImage?.replace(/^url\(['"]?|['"]?\)$/g, '') || ''} 
+              placeholder="https://example.com/image.jpg"
+              on:change={(e) => {
+                const value = (e.target as HTMLInputElement).value;
+                updateCardStyle(editingCard.id, { 
+                  backgroundImage: value ? `url('${value}')` : undefined,
+                  backgroundSize: value ? 'cover' : undefined,
+                  backgroundPosition: value ? 'center' : undefined,
+                });
+              }}
+            />
+          </div>
+          
+          <!-- Border -->
+          <div class="settings-section">
+            <label class="settings-label">Border</label>
+            <div class="border-inputs">
+              <div class="input-group">
+                <label>Width</label>
+                <input 
+                  type="text" 
+                  value={editingCard.style?.borderWidth || ''} 
+                  placeholder="1px"
+                  on:change={(e) => updateCardStyle(editingCard.id, { borderWidth: (e.target as HTMLInputElement).value })}
+                />
+              </div>
+              <div class="input-group">
+                <label>Style</label>
+                <select 
+                  value={editingCard.style?.borderStyle || 'none'}
+                  on:change={(e) => updateCardStyle(editingCard.id, { borderStyle: (e.target as HTMLSelectElement).value })}
+                >
+                  <option value="none">None</option>
+                  <option value="solid">Solid</option>
+                  <option value="dashed">Dashed</option>
+                  <option value="dotted">Dotted</option>
+                  <option value="double">Double</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label>Color</label>
+                <input 
+                  type="color" 
+                  value={editingCard.style?.borderColor?.startsWith('#') ? editingCard.style.borderColor : '#333333'}
+                  on:change={(e) => updateCardStyle(editingCard.id, { borderColor: (e.target as HTMLInputElement).value })}
+                />
+              </div>
+            </div>
+          </div>
+          
+          <!-- Border Radius -->
+          <div class="settings-section">
+            <label class="settings-label">Border Radius</label>
+            <input 
+              type="text" 
+              value={editingCard.style?.borderRadius || ''} 
+              placeholder="16px"
+              on:change={(e) => updateCardStyle(editingCard.id, { borderRadius: (e.target as HTMLInputElement).value })}
+            />
+          </div>
+          
+          <!-- Transition In -->
+          <div class="settings-section">
+            <label class="settings-label">Entrance Animation</label>
+            <select 
+              value={editingCard.style?.transitionIn || 'none'}
+              on:change={(e) => updateCardStyle(editingCard.id, { transitionIn: (e.target as HTMLSelectElement).value as CardStyle['transitionIn'] })}
+            >
+              <option value="none">None</option>
+              <option value="fade">Fade In</option>
+              <option value="slide-up">Slide Up</option>
+              <option value="slide-down">Slide Down</option>
+              <option value="slide-left">Slide Left</option>
+              <option value="slide-right">Slide Right</option>
+              <option value="zoom">Zoom In</option>
+              <option value="bounce">Bounce</option>
+            </select>
+          </div>
+          
+          <!-- Box Shadow -->
+          <div class="settings-section">
+            <label class="settings-label">Box Shadow</label>
+            <input 
+              type="text" 
+              value={editingCard.style?.boxShadow || ''} 
+              placeholder="0 4px 6px rgba(0,0,0,0.3)"
+              on:change={(e) => updateCardStyle(editingCard.id, { boxShadow: (e.target as HTMLInputElement).value })}
+            />
+          </div>
+          
+          <!-- Backdrop Blur -->
+          <div class="settings-section">
+            <label class="settings-label">Backdrop Blur</label>
+            <input 
+              type="text" 
+              value={editingCard.style?.backdropBlur || ''} 
+              placeholder="10px"
+              on:change={(e) => updateCardStyle(editingCard.id, { backdropBlur: (e.target as HTMLInputElement).value })}
+            />
+          </div>
+        </div>
+        
+        <div class="settings-footer">
+          <button class="reset-btn" on:click={() => { editingCard.style = undefined; cards = [...cards]; updateProfileCards(cards); }}>
+            Reset to Default
+          </button>
+          <button class="done-btn" on:click={closeCardSettings}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+{/if}
 
 <style>
   .profile-container {
@@ -1455,5 +1760,451 @@
       flex: 1 1 100%;
       min-width: unset;
     }
+  }
+
+  /* Card settings button */
+  .card-settings-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: none;
+    background: rgba(99, 179, 237, 0.2);
+    color: #63b3ed;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .card-settings-btn:hover {
+    background: rgba(99, 179, 237, 0.4);
+    color: #fff;
+  }
+
+  /* Card background overlay for custom backgrounds */
+  .card.has-custom-bg {
+    position: relative;
+    background-size: cover;
+    background-position: center;
+  }
+
+  .card-bg-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: inherit;
+    z-index: 0;
+  }
+
+  .card.has-custom-bg > :not(.card-bg-overlay) {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Card Settings Panel */
+  .card-settings-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.2s ease;
+  }
+
+  .card-settings-panel {
+    background: #1e1e1e;
+    border-radius: 16px;
+    width: 420px;
+    max-width: 90vw;
+    max-height: 85vh;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.3s ease;
+  }
+
+  .settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .settings-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .close-settings-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .close-settings-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
+
+  .settings-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    max-height: calc(85vh - 160px);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .settings-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .size-options {
+    display: flex;
+    gap: 8px;
+  }
+
+  .size-option {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .size-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  .size-option.active {
+    background: rgba(99, 179, 237, 0.2);
+    border-color: #63b3ed;
+    color: #63b3ed;
+  }
+
+  .dimension-inputs,
+  .border-inputs {
+    display: flex;
+    gap: 12px;
+  }
+
+  .input-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .input-group label {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .settings-body input[type="text"],
+  .settings-body select {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+    font-size: 13px;
+    width: 100%;
+    transition: all 0.15s ease;
+  }
+
+  .settings-body input[type="text"]:focus,
+  .settings-body select:focus {
+    outline: none;
+    border-color: #63b3ed;
+    background: rgba(99, 179, 237, 0.1);
+  }
+
+  .settings-body input[type="text"]::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  .settings-body select {
+    cursor: pointer;
+  }
+
+  .settings-body select option {
+    background: #1e1e1e;
+    color: #fff;
+  }
+
+  .color-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .color-input-row input[type="color"] {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: transparent;
+    cursor: pointer;
+    padding: 4px;
+  }
+
+  .color-input-row input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+
+  .color-input-row input[type="color"]::-webkit-color-swatch {
+    border-radius: 4px;
+    border: none;
+  }
+
+  .color-input-row input[type="text"] {
+    flex: 1;
+  }
+
+  .opacity-slider {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .opacity-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #63b3ed;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  .opacity-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #63b3ed;
+    cursor: pointer;
+    border: 2px solid #fff;
+  }
+
+  .settings-footer {
+    display: flex;
+    gap: 12px;
+    padding: 20px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .reset-btn {
+    flex: 1;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .reset-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .done-btn {
+    flex: 1;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: none;
+    background: #3182ce;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .done-btn:hover {
+    background: #2c5282;
+  }
+
+  /* Card transition animations */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { 
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Card entrance animations */
+  .card-wrapper.transition-fade {
+    animation: cardFadeIn 0.5s ease-out forwards;
+  }
+
+  .card-wrapper.transition-slide-up {
+    animation: cardSlideUp 0.5s ease-out forwards;
+  }
+
+  .card-wrapper.transition-slide-down {
+    animation: cardSlideDown 0.5s ease-out forwards;
+  }
+
+  .card-wrapper.transition-slide-left {
+    animation: cardSlideLeft 0.5s ease-out forwards;
+  }
+
+  .card-wrapper.transition-slide-right {
+    animation: cardSlideRight 0.5s ease-out forwards;
+  }
+
+  .card-wrapper.transition-zoom {
+    animation: cardZoom 0.5s ease-out forwards;
+  }
+
+  .card-wrapper.transition-bounce {
+    animation: cardBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+  }
+
+  @keyframes cardFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes cardSlideUp {
+    from { 
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes cardSlideDown {
+    from { 
+      opacity: 0;
+      transform: translateY(-30px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes cardSlideLeft {
+    from { 
+      opacity: 0;
+      transform: translateX(30px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes cardSlideRight {
+    from { 
+      opacity: 0;
+      transform: translateX(-30px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes cardZoom {
+    from { 
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    to { 
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes cardBounce {
+    from { 
+      opacity: 0;
+      transform: scale(0.3);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+    70% {
+      transform: scale(0.95);
+    }
+    to { 
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Custom size card wrapper */
+  .card-wrapper.custom {
+    flex: 0 0 auto;
+  }
+
+  /* Settings body scrollbar */
+  .settings-body::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .settings-body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .settings-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+  }
+
+  .settings-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
   }
 </style>
