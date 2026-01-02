@@ -321,6 +321,30 @@ export class FriendsRepository {
     return result.rows.length > 0;
   }
 
+  /**
+   * Get a specific incoming friend request from another user
+   */
+  async getIncomingRequestFrom(userId: Snowflake, fromUserId: Snowflake): Promise<FriendRow | null> {
+    const result = await this.pool.query<FriendRow>(
+      `SELECT * FROM friends
+       WHERE user_id = $2 AND friend_id = $1 AND status = 'pending'`,
+      [userId, fromUserId]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  /**
+   * Get a specific outgoing friend request to another user
+   */
+  async getOutgoingRequestTo(userId: Snowflake, toUserId: Snowflake): Promise<FriendRow | null> {
+    const result = await this.pool.query<FriendRow>(
+      `SELECT * FROM friends
+       WHERE user_id = $1 AND friend_id = $2 AND status = 'pending'`,
+      [userId, toUserId]
+    );
+    return result.rows[0] ?? null;
+  }
+
   // ============================================
   // DM Conversations
   // ============================================

@@ -2303,7 +2303,7 @@
   .message-author {
     font-weight: 500;
     color: #fff;
-    font-size: 14px;
+    font-size: 20px;
     cursor: pointer;
     background: none;
     border: none;
@@ -3242,5 +3242,85 @@
 
   .edit-save-btn:hover {
     transform: scale(1.02);
+  }
+
+  /* Mobile breakpoint */
+  @media (max-width: 768px) {
+    .chat-area {
+      padding-bottom: 64px; /* Space for mobile navbar */
+    }
+
+    .chat-header {
+      padding: 12px 16px;
+    }
+
+    .channel-name {
+      font-size: 15px;
+    }
+
+    .messages-container {
+      padding: 12px;
+    }
+
+    .message {
+      padding: 10px 12px;
+    }
+
+    .message-author {
+      font-size: 18px;
+    }
+
+    .message-content {
+      font-size: 14px;
+    }
+
+    .message-input-container {
+      padding: 12px;
+    }
+
+    .message-input-wrapper {
+      padding: 10px 12px;
+    }
+
+    .message-input {
+      font-size: 15px;
+    }
+
+    .send-button {
+      width: 36px;
+      height: 36px;
+    }
+
+    .emoji-picker-container {
+      right: 8px;
+      bottom: 70px;
+      max-width: calc(100vw - 16px);
+    }
+
+    .attachment-preview {
+      max-width: 100%;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .chat-header {
+      padding: 10px 12px;
+    }
+
+    .messages-container {
+      padding: 8px;
+    }
+
+    .message {
+      padding: 8px 10px;
+    }
+
+    .message-content {
+      font-size: 13px;
+    }
+
+    .message-input-container {
+      padding: 8px;
+    }
   }
 </style>

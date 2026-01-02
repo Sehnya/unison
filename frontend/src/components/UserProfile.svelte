@@ -18,6 +18,7 @@
     updateProfileWidgets,
     updateQuoteCard,
     removeCardData,
+    CUSTOM_FONTS,
     type ProfileData,
     type ProfileCard,
     type MiniWidget
@@ -98,19 +99,32 @@
     
     const styles: string[] = [];
     
+    // Dimensions
     if (style.width) styles.push(`width: ${style.width}`);
     if (style.height) styles.push(`height: ${style.height}`);
     if (style.minHeight) styles.push(`min-height: ${style.minHeight}`);
     if (style.maxHeight) styles.push(`max-height: ${style.maxHeight}`);
+    
+    // Typography
+    if (style.fontFamily) styles.push(`font-family: ${style.fontFamily}`);
+    if (style.fontSize) styles.push(`font-size: ${style.fontSize}`);
+    if (style.fontWeight) styles.push(`font-weight: ${style.fontWeight}`);
+    if (style.textColor) styles.push(`color: ${style.textColor}`);
+    
+    // Background
     if (style.backgroundColor) styles.push(`background-color: ${style.backgroundColor}`);
     if (style.backgroundImage) styles.push(`background-image: ${style.backgroundImage}`);
     if (style.backgroundSize) styles.push(`background-size: ${style.backgroundSize}`);
     if (style.backgroundPosition) styles.push(`background-position: ${style.backgroundPosition}`);
     if (style.opacity !== undefined) styles.push(`opacity: ${style.opacity}`);
+    
+    // Border
     if (style.borderWidth) styles.push(`border-width: ${style.borderWidth}`);
     if (style.borderStyle) styles.push(`border-style: ${style.borderStyle}`);
     if (style.borderColor) styles.push(`border-color: ${style.borderColor}`);
     if (style.borderRadius) styles.push(`border-radius: ${style.borderRadius}`);
+    
+    // Effects
     if (style.boxShadow) styles.push(`box-shadow: ${style.boxShadow}`);
     if (style.backdropBlur) styles.push(`backdrop-filter: blur(${style.backdropBlur})`);
     if (style.transitionDuration) styles.push(`transition-duration: ${style.transitionDuration}`);
@@ -146,6 +160,35 @@
     cards = [...cards]; // Trigger reactivity
     
     // Save to profile
+    if (canEdit) {
+      updateProfileCards(cards as ProfileCard[]);
+    }
+  }
+  
+  // Helper to update transition style with proper typing
+  function updateTransitionIn(cardId: string, value: string) {
+    updateCardStyle(cardId, { transitionIn: value as CardStyle['transitionIn'] });
+  }
+  
+  // Helper to update card size
+  function updateCardSize(cardId: string, size: 'small' | 'wide' | 'custom') {
+    const cardIndex = cards.findIndex(c => c.id === cardId);
+    if (cardIndex === -1) return;
+    
+    cards[cardIndex] = { ...cards[cardIndex], size };
+    cards = [...cards];
+    if (canEdit) {
+      updateProfileCards(cards as ProfileCard[]);
+    }
+  }
+  
+  // Helper to reset card style
+  function resetCardStyle(cardId: string) {
+    const cardIndex = cards.findIndex(c => c.id === cardId);
+    if (cardIndex === -1) return;
+    
+    cards[cardIndex] = { ...cards[cardIndex], style: undefined };
+    cards = [...cards];
     if (canEdit) {
       updateProfileCards(cards as ProfileCard[]);
     }
@@ -832,16 +875,36 @@
             </div>
 
           {:else if card.type === 'gradient'}
-            <ImageGalleryCard editable={isEditMode} cardId={card.id} />
+            <ImageGalleryCard 
+              editable={isEditMode && isOwnProfile} 
+              cardId={card.id}
+              profileGalleryData={profileData?.galleryCards?.[card.id] || null}
+              isOwnProfile={isOwnProfile}
+            />
 
           {:else if card.type === 'music'}
-            <MusicCard editable={isEditMode} />
+            <MusicCard 
+              editable={isEditMode && isOwnProfile} 
+              profileMusicData={profileData?.musicCard || null}
+              isOwnProfile={isOwnProfile}
+              autoplay={!isOwnProfile}
+            />
 
           {:else if card.type === 'games'}
-            <FavoriteGamesCard editable={isEditMode} cardId={card.id} />
+            <FavoriteGamesCard 
+              editable={isEditMode && isOwnProfile} 
+              cardId={card.id}
+              profileGamesData={profileData?.gamesCards?.[card.id] || null}
+              isOwnProfile={isOwnProfile}
+            />
 
           {:else if card.type === 'github'}
-            <GitHubProjectsCard editable={isEditMode} cardId={card.id} />
+            <GitHubProjectsCard 
+              editable={isEditMode && isOwnProfile} 
+              cardId={card.id}
+              profileGitHubData={profileData?.githubCards?.[card.id] || null}
+              isOwnProfile={isOwnProfile}
+            />
 
           {:else if card.type === 'friends'}
             <FriendsCard editable={isEditMode} {authToken} userId={effectiveUserId} />
@@ -911,17 +974,17 @@
               <button 
                 class="size-option" 
                 class:active={editingCard.size === 'small'}
-                on:click={() => { editingCard.size = 'small'; cards = [...cards]; updateProfileCards(cards); }}
+                on:click={() => updateCardSize(editingCard.id, 'small')}
               >Small</button>
               <button 
                 class="size-option" 
                 class:active={editingCard.size === 'wide'}
-                on:click={() => { editingCard.size = 'wide'; cards = [...cards]; updateProfileCards(cards); }}
+                on:click={() => updateCardSize(editingCard.id, 'wide')}
               >Wide</button>
               <button 
                 class="size-option" 
                 class:active={editingCard.size === 'custom'}
-                on:click={() => { editingCard.size = 'custom'; cards = [...cards]; updateProfileCards(cards); }}
+                on:click={() => updateCardSize(editingCard.id, 'custom')}
               >Custom</button>
             </div>
           </div>
@@ -937,7 +1000,7 @@
                     type="text" 
                     value={editingCard.style?.width || ''} 
                     placeholder="e.g., 300px, 50%"
-                    on:change={(e) => updateCardStyle(editingCard.id, { width: (e.target as HTMLInputElement).value })}
+                    on:change={(e) => updateCardStyle(editingCard.id, { width: e.currentTarget.value })}
                   />
                 </div>
                 <div class="input-group">
@@ -946,12 +1009,47 @@
                     type="text" 
                     value={editingCard.style?.height || ''} 
                     placeholder="e.g., 250px, auto"
-                    on:change={(e) => updateCardStyle(editingCard.id, { height: (e.target as HTMLInputElement).value })}
+                    on:change={(e) => updateCardStyle(editingCard.id, { height: e.currentTarget.value })}
                   />
                 </div>
               </div>
             </div>
           {/if}
+          
+          <!-- Font Family -->
+          <div class="settings-section">
+            <label class="settings-label">Font Family</label>
+            <div class="font-options">
+              {#each CUSTOM_FONTS as font}
+                <button 
+                  class="font-option" 
+                  class:active={editingCard.style?.fontFamily === font.value}
+                  style="font-family: {font.value}"
+                  on:click={() => updateCardStyle(editingCard.id, { fontFamily: font.value })}
+                >
+                  {font.name}
+                </button>
+              {/each}
+            </div>
+          </div>
+          
+          <!-- Text Color -->
+          <div class="settings-section">
+            <label class="settings-label">Text Color</label>
+            <div class="color-input-row">
+              <input 
+                type="color" 
+                value={editingCard.style?.textColor?.startsWith('#') ? editingCard.style.textColor : '#ffffff'}
+                on:change={(e) => updateCardStyle(editingCard.id, { textColor: e.currentTarget.value })}
+              />
+              <input 
+                type="text" 
+                value={editingCard.style?.textColor || ''} 
+                placeholder="#ffffff"
+                on:change={(e) => updateCardStyle(editingCard.id, { textColor: e.currentTarget.value })}
+              />
+            </div>
+          </div>
           
           <!-- Background Color -->
           <div class="settings-section">
@@ -960,13 +1058,13 @@
               <input 
                 type="color" 
                 value={editingCard.style?.backgroundColor?.startsWith('#') ? editingCard.style.backgroundColor : '#282828'}
-                on:change={(e) => updateCardStyle(editingCard.id, { backgroundColor: (e.target as HTMLInputElement).value })}
+                on:change={(e) => updateCardStyle(editingCard.id, { backgroundColor: e.currentTarget.value })}
               />
               <input 
                 type="text" 
                 value={editingCard.style?.backgroundColor || ''} 
                 placeholder="rgba(40, 40, 40, 0.6)"
-                on:change={(e) => updateCardStyle(editingCard.id, { backgroundColor: (e.target as HTMLInputElement).value })}
+                on:change={(e) => updateCardStyle(editingCard.id, { backgroundColor: e.currentTarget.value })}
               />
             </div>
           </div>
@@ -979,7 +1077,7 @@
               min="0" 
               max="100" 
               value={Math.round((editingCard.style?.opacity ?? 1) * 100)}
-              on:input={(e) => updateCardStyle(editingCard.id, { opacity: parseInt((e.target as HTMLInputElement).value) / 100 })}
+              on:input={(e) => updateCardStyle(editingCard.id, { opacity: parseInt(e.currentTarget.value) / 100 })}
               class="opacity-slider"
             />
           </div>
@@ -992,7 +1090,7 @@
               value={editingCard.style?.backgroundImage?.replace(/^url\(['"]?|['"]?\)$/g, '') || ''} 
               placeholder="https://example.com/image.jpg"
               on:change={(e) => {
-                const value = (e.target as HTMLInputElement).value;
+                const value = e.currentTarget.value;
                 updateCardStyle(editingCard.id, { 
                   backgroundImage: value ? `url('${value}')` : undefined,
                   backgroundSize: value ? 'cover' : undefined,
@@ -1012,14 +1110,14 @@
                   type="text" 
                   value={editingCard.style?.borderWidth || ''} 
                   placeholder="1px"
-                  on:change={(e) => updateCardStyle(editingCard.id, { borderWidth: (e.target as HTMLInputElement).value })}
+                  on:change={(e) => updateCardStyle(editingCard.id, { borderWidth: e.currentTarget.value })}
                 />
               </div>
               <div class="input-group">
                 <label>Style</label>
                 <select 
                   value={editingCard.style?.borderStyle || 'none'}
-                  on:change={(e) => updateCardStyle(editingCard.id, { borderStyle: (e.target as HTMLSelectElement).value })}
+                  on:change={(e) => updateCardStyle(editingCard.id, { borderStyle: e.currentTarget.value })}
                 >
                   <option value="none">None</option>
                   <option value="solid">Solid</option>
@@ -1033,7 +1131,7 @@
                 <input 
                   type="color" 
                   value={editingCard.style?.borderColor?.startsWith('#') ? editingCard.style.borderColor : '#333333'}
-                  on:change={(e) => updateCardStyle(editingCard.id, { borderColor: (e.target as HTMLInputElement).value })}
+                  on:change={(e) => updateCardStyle(editingCard.id, { borderColor: e.currentTarget.value })}
                 />
               </div>
             </div>
@@ -1046,7 +1144,7 @@
               type="text" 
               value={editingCard.style?.borderRadius || ''} 
               placeholder="16px"
-              on:change={(e) => updateCardStyle(editingCard.id, { borderRadius: (e.target as HTMLInputElement).value })}
+              on:change={(e) => updateCardStyle(editingCard.id, { borderRadius: e.currentTarget.value })}
             />
           </div>
           
@@ -1055,7 +1153,7 @@
             <label class="settings-label">Entrance Animation</label>
             <select 
               value={editingCard.style?.transitionIn || 'none'}
-              on:change={(e) => updateCardStyle(editingCard.id, { transitionIn: (e.target as HTMLSelectElement).value as CardStyle['transitionIn'] })}
+              on:change={(e) => updateTransitionIn(editingCard.id, e.currentTarget.value)}
             >
               <option value="none">None</option>
               <option value="fade">Fade In</option>
@@ -1075,7 +1173,7 @@
               type="text" 
               value={editingCard.style?.boxShadow || ''} 
               placeholder="0 4px 6px rgba(0,0,0,0.3)"
-              on:change={(e) => updateCardStyle(editingCard.id, { boxShadow: (e.target as HTMLInputElement).value })}
+              on:change={(e) => updateCardStyle(editingCard.id, { boxShadow: e.currentTarget.value })}
             />
           </div>
           
@@ -1086,13 +1184,13 @@
               type="text" 
               value={editingCard.style?.backdropBlur || ''} 
               placeholder="10px"
-              on:change={(e) => updateCardStyle(editingCard.id, { backdropBlur: (e.target as HTMLInputElement).value })}
+              on:change={(e) => updateCardStyle(editingCard.id, { backdropBlur: e.currentTarget.value })}
             />
           </div>
         </div>
         
         <div class="settings-footer">
-          <button class="reset-btn" on:click={() => { editingCard.style = undefined; cards = [...cards]; updateProfileCards(cards); }}>
+          <button class="reset-btn" on:click={() => resetCardStyle(editingCard.id)}>
             Reset to Default
           </button>
           <button class="done-btn" on:click={closeCardSettings}>
@@ -1548,6 +1646,7 @@
     position: relative;
     height: 100%;
     min-height: 200px;
+    font-size: 18px;
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
   }
 
@@ -1755,10 +1854,197 @@
     z-index: 1;
   }
 
+  /* Tablet breakpoint */
   @media (max-width: 900px) {
     .card-wrapper.small, .card-wrapper.wide {
       flex: 1 1 100%;
       min-width: unset;
+    }
+  }
+
+  /* Mobile breakpoint */
+  @media (max-width: 640px) {
+    .profile-container {
+      padding: 12px;
+    }
+
+    .profile-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 16px;
+    }
+
+    .greeting-section {
+      width: 100%;
+    }
+
+    .greeting {
+      font-size: 2.5rem;
+    }
+
+    .username {
+      font-size: 2rem;
+    }
+
+    .header-right {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .card {
+      padding: 14px;
+      min-height: 160px;
+      font-size: 16px;
+    }
+
+    .card-edit-controls {
+      top: 8px;
+      right: 8px;
+      gap: 4px;
+    }
+
+    .card-edit-controls button,
+    .card-edit-controls .drag-handle {
+      width: 24px;
+      height: 24px;
+    }
+
+    .profile-grid {
+      gap: 12px;
+    }
+
+    .edit-hint {
+      font-size: 12px;
+      padding: 10px;
+      margin-top: 16px;
+    }
+
+    /* Card settings panel mobile */
+    .card-settings-panel {
+      width: 100%;
+      max-width: 100vw;
+      max-height: 90vh;
+      border-radius: 16px 16px 0 0;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+    }
+
+    .card-settings-overlay {
+      align-items: flex-end;
+    }
+
+    .settings-header {
+      padding: 16px 20px;
+    }
+
+    .settings-header h3 {
+      font-size: 16px;
+    }
+
+    .settings-body {
+      padding: 16px 20px;
+      max-height: calc(90vh - 140px);
+      gap: 16px;
+    }
+
+    .settings-footer {
+      padding: 16px 20px;
+    }
+
+    .size-options {
+      flex-wrap: wrap;
+    }
+
+    .size-option {
+      flex: 1 1 calc(33% - 6px);
+      min-width: 80px;
+      padding: 10px 12px;
+      font-size: 12px;
+    }
+
+    .font-options {
+      gap: 6px;
+    }
+
+    .font-option {
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+
+    .dimension-inputs,
+    .border-inputs {
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .input-group {
+      width: 100%;
+    }
+
+    .settings-body input[type="text"],
+    .settings-body select {
+      padding: 12px;
+      font-size: 14px;
+    }
+
+    .color-input-row {
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .color-input-row input[type="color"] {
+      width: 100%;
+      height: 48px;
+    }
+
+    .reset-btn,
+    .done-btn {
+      padding: 14px 20px;
+      font-size: 15px;
+    }
+
+    /* Add card menu mobile */
+    .add-card-menu {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      top: auto;
+      border-radius: 16px 16px 0 0;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    .menu-options {
+      grid-template-columns: 1fr;
+    }
+
+    .menu-option {
+      padding: 14px;
+    }
+  }
+
+  /* Small mobile */
+  @media (max-width: 380px) {
+    .greeting {
+      font-size: 2rem;
+    }
+
+    .username {
+      font-size: 1.5rem;
+    }
+
+    .card {
+      padding: 12px;
+      font-size: 14px;
+    }
+
+    .font-option {
+      font-size: 12px;
+      padding: 8px 10px;
     }
   }
 
@@ -1906,6 +2192,35 @@
   }
 
   .size-option.active {
+    background: rgba(99, 179, 237, 0.2);
+    border-color: #63b3ed;
+    color: #63b3ed;
+  }
+
+  /* Font options */
+  .font-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .font-option {
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .font-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  .font-option.active {
     background: rgba(99, 179, 237, 0.2);
     border-color: #63b3ed;
     color: #63b3ed;

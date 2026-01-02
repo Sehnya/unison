@@ -4,6 +4,8 @@
 
   export let editable: boolean = false;
   export let cardId: string = 'default';
+  export let profileGalleryData: GalleryCardData | null = null; // Gallery data from viewed profile
+  export let isOwnProfile: boolean = true;
 
   type TransitionType = 'fade' | 'slideRight' | 'slideLeft' | 'slideUp' | 'slideDown' | 'zoom' | 'blur' | 'disintegrate';
   type FilterType = 'none' | 'grayscale' | 'sepia' | 'saturate' | 'contrast' | 'brightness' | 'hueRotate' | 'invert' | 'blur' | 'vintage' | 'cool' | 'warm';
@@ -34,20 +36,40 @@
 
   // Load saved data on mount
   onMount(() => {
-    const profile = loadProfile();
-    if (profile.galleryCards && profile.galleryCards[cardId]) {
-      const saved = profile.galleryCards[cardId];
-      settings = {
-        images: saved.images as GalleryImage[],
-        transition: saved.transition as TransitionType,
-        filter: saved.filter as FilterType,
-        interval: saved.interval
-      };
-    }
+    loadGalleryData();
     startSlideshow();
   });
 
+  // Reload when profileGalleryData changes
+  $: if (profileGalleryData !== undefined) {
+    loadGalleryData();
+  }
+
+  function loadGalleryData() {
+    // If viewing another user's profile and they have gallery data, use it
+    if (!isOwnProfile && profileGalleryData) {
+      settings = {
+        images: profileGalleryData.images as GalleryImage[],
+        transition: profileGalleryData.transition as TransitionType,
+        filter: profileGalleryData.filter as FilterType,
+        interval: profileGalleryData.interval
+      };
+    } else if (isOwnProfile) {
+      const profile = loadProfile();
+      if (profile.galleryCards && profile.galleryCards[cardId]) {
+        const saved = profile.galleryCards[cardId];
+        settings = {
+          images: saved.images as GalleryImage[],
+          transition: saved.transition as TransitionType,
+          filter: saved.filter as FilterType,
+          interval: saved.interval
+        };
+      }
+    }
+  }
+
   function saveSettings() {
+    if (!isOwnProfile) return;
     updateGalleryCard(cardId, {
       images: settings.images,
       transition: settings.transition,

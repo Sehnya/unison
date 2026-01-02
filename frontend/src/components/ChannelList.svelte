@@ -21,6 +21,7 @@
     selectGuild: { guildId: string };
     channelCreated: { channel: Channel };
     openChannelSettings: { channel: Channel };
+    viewUserProfile: { userId: string };
   }>();
 
   type ViewMode = 'list' | 'box' | 'icon';
@@ -690,7 +691,13 @@
                 {#if getVoiceUsers(channel.id, voiceUsersTrigger).length > 0}
                   <ul class="voice-users">
                     {#each getVoiceUsers(channel.id, voiceUsersTrigger) as user (user.id)}
-                      <li class="voice-user">
+                      <li 
+                        class="voice-user" 
+                        role="button"
+                        tabindex="0"
+                        on:click={() => dispatch('viewUserProfile', { userId: user.id })}
+                        on:keydown={(e) => e.key === 'Enter' && dispatch('viewUserProfile', { userId: user.id })}
+                      >
                         <div class="user-avatar">
                           <Avatar 
                             userId={user.id} 
@@ -1096,6 +1103,7 @@
     gap: 8px;
     padding: 4px 8px;
     border-radius: 4px;
+    cursor: pointer;
     transition: background 0.15s ease, opacity 0.2s ease, transform 0.2s ease;
     animation: voiceUserEnter 0.25s ease-out forwards;
   }
@@ -1172,5 +1180,75 @@
   .delete-btn:hover {
     color: #ef4444;
     background: rgba(239, 68, 68, 0.15);
+  }
+
+  /* Mobile breakpoint */
+  @media (max-width: 768px) {
+    .channel-list {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 64px; /* Above mobile navbar */
+      width: 100%;
+      min-width: 100%;
+      max-width: 100%;
+      z-index: 900;
+      transform: translateX(-100%);
+      transition: transform 0.3s ease;
+    }
+
+    .channel-list.mobile-open {
+      transform: translateX(0);
+    }
+
+    .channel-list-header {
+      padding: 16px;
+    }
+
+    .guild-name {
+      font-size: 16px;
+    }
+
+    .channels {
+      padding: 8px 12px;
+    }
+
+    .channel-btn {
+      padding: 12px 14px;
+      font-size: 14px;
+    }
+
+    .channel-icon {
+      width: 20px;
+      height: 20px;
+    }
+
+    .voice-users-list {
+      padding-left: 36px;
+    }
+
+    .voice-user {
+      padding: 8px 10px;
+    }
+
+    .add-channel-btn {
+      padding: 12px 14px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .channel-list-header {
+      padding: 12px;
+    }
+
+    .channels {
+      padding: 6px 10px;
+    }
+
+    .channel-btn {
+      padding: 10px 12px;
+      font-size: 13px;
+    }
   }
 </style>

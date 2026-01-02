@@ -67,6 +67,7 @@ export class FriendsService {
 
   /**
    * Send a friend request
+   * If the other user has already sent a request, automatically accept both (mutual friend request)
    */
   async sendFriendRequest(userId: Snowflake, friendId: Snowflake): Promise<FriendWithUser> {
     // Can't friend yourself
@@ -92,9 +93,27 @@ export class FriendsService {
       throw new UserBlockedError();
     }
 
-    // Check if request already exists
-    const hasPending = await this.repository.hasPendingRequest(userId, friendId);
-    if (hasPending) {
+    // Check if the other user has already sent us a pending request
+    // If so, auto-accept it instead of creating a duplicate
+    const incomingRequest = await this.repository.getIncomingRequestFrom(userId, friendId);
+    if (incomingRequest) {
+      // Accept the existing incoming request - both users want to be friends
+      await this.repository.acceptFriendRequest(incomingRequest.id as Snowflake, userId);
+      return {
+        ...incomingRequest,
+        id: incomingRequest.id as Snowflake,
+        user_id: incomingRequest.user_id as Snowflake,
+        friend_id: incomingRequest.friend_id as Snowflake,
+        status: 'accepted',
+        friend_username: targetUser.username,
+        friend_avatar: targetUser.avatar,
+        friend_bio: null,
+      };
+    }
+
+    // Check if we already sent a request to them (avoid duplicates)
+    const outgoingRequest = await this.repository.getOutgoingRequestTo(userId, friendId);
+    if (outgoingRequest) {
       throw new FriendRequestExistsError();
     }
 

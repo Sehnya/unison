@@ -12,12 +12,34 @@ export interface MiniWidget {
   gifUrl?: string;
 }
 
+// Available custom fonts for profile cards
+export const CUSTOM_FONTS = [
+  { name: 'Default', value: 'inherit' },
+  { name: 'Inter', value: 'Inter, sans-serif' },
+  { name: 'Heellaaz', value: 'Heellaaz, sans-serif' },
+  { name: 'Roderika', value: 'Roderika, serif' },
+  { name: 'Roderika Rough', value: 'Roderika Rough, serif' },
+  { name: 'Matte Nature', value: 'Matte Nature, serif' },
+  { name: 'Purple Magic', value: 'Purple Magic, fantasy' },
+  { name: 'Humble Popstar', value: 'Humble Popstar, sans-serif' },
+  { name: 'Gury Pump', value: 'Gury Pump, fantasy' },
+  { name: 'Shocker', value: 'Shocker, fantasy' },
+] as const;
+
+export type CustomFontValue = typeof CUSTOM_FONTS[number]['value'];
+
 export interface CardStyle {
   // Dimensions
   width?: string;        // e.g., '300px', '100%', 'auto'
   height?: string;       // e.g., '200px', 'auto'
   minHeight?: string;    // e.g., '150px'
   maxHeight?: string;    // e.g., '400px'
+  
+  // Typography
+  fontFamily?: string;          // e.g., 'Heellaaz', 'Roderika'
+  fontSize?: string;            // e.g., '16px', '1.2rem'
+  fontWeight?: string;          // e.g., 'normal', 'bold', '600'
+  textColor?: string;           // e.g., '#ffffff', 'rgba(255,255,255,0.9)'
   
   // Colors and backgrounds
   backgroundColor?: string;     // e.g., '#1a1a1a', 'rgba(40, 40, 40, 0.6)'

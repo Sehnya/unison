@@ -712,6 +712,7 @@
           on:selectChannel={handleSelectChannel}
           on:selectGuild={(e) => handleSelectGuildFromChannelList(e.detail.guildId)}
           on:openChannelSettings={(e) => { channelToEdit = e.detail.channel; showChannelSettingsModal = true; }}
+          on:viewUserProfile={(e) => handleViewUserProfile(new CustomEvent('viewProfile', { detail: { userId: e.detail.userId, username: '', avatar: undefined } }))}
         />
         <button 
           class="collapse-toggle" 
@@ -1172,5 +1173,65 @@
   :global(body) {
     margin: 0;
     padding: 0;
+  }
+
+  /* Tablet breakpoint */
+  @media (max-width: 1024px) {
+    .collapse-toggle {
+      display: none;
+    }
+  }
+
+  /* Mobile breakpoint */
+  @media (max-width: 768px) {
+    .app-layout {
+      flex-direction: column;
+    }
+
+    .app-layout.has-player {
+      padding-bottom: 64px;
+    }
+
+    .voice-mini-player-container {
+      left: 0;
+      right: 0;
+      bottom: 64px;
+      width: 100%;
+      padding: 0 12px;
+      box-sizing: border-box;
+    }
+
+    .auth-modal {
+      width: 100%;
+      max-width: 100vw;
+      margin: 0;
+      border-radius: 0;
+      height: 100vh;
+      max-height: 100vh;
+    }
+
+    .welcome-screen {
+      padding: 20px;
+    }
+
+    .welcome-screen .welcome-icon {
+      width: 60px;
+      height: 60px;
+    }
+
+    .welcome-screen h2 {
+      font-size: 1.25rem;
+    }
+
+    .welcome-screen p {
+      font-size: 13px;
+    }
+  }
+
+  /* Small mobile */
+  @media (max-width: 480px) {
+    .auth-modal {
+      padding: 16px;
+    }
   }
 </style>

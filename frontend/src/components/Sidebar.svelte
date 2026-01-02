@@ -400,4 +400,104 @@
     transform: scale(1.05);
     box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
   }
+
+  /* Mobile breakpoint - bottom navigation */
+  @media (max-width: 768px) {
+    .sidebar {
+      flex-direction: row;
+      width: 100%;
+      min-width: 100%;
+      height: 64px;
+      min-height: 64px;
+      padding: 0 8px;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      border-right: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      overflow-x: auto;
+      overflow-y: hidden;
+      justify-content: flex-start;
+      gap: 4px;
+    }
+
+    .sidebar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .divider {
+      width: 2px;
+      height: 24px;
+      margin: 0 4px;
+    }
+
+    .guild-icon,
+    .action-btn {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      font-size: 12px;
+    }
+
+    .guild-icon img {
+      width: 44px;
+      height: 44px;
+    }
+
+    .action-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .user-section {
+      margin-top: 0;
+      margin-left: auto;
+      padding-left: 8px;
+    }
+
+    .user-avatar-btn {
+      width: 40px;
+      height: 40px;
+    }
+
+    .user-avatar-btn img {
+      width: 40px;
+      height: 40px;
+    }
+
+    .indicator {
+      width: 3px;
+      height: 20px;
+      left: auto;
+      right: auto;
+      bottom: -4px;
+      top: auto;
+      border-radius: 3px 3px 0 0;
+    }
+
+    .guild-icon.active .indicator,
+    .action-btn.active .indicator {
+      height: 24px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .sidebar {
+      padding: 0 4px;
+    }
+
+    .guild-icon,
+    .action-btn {
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
+    }
+
+    .guild-icon img {
+      width: 40px;
+      height: 40px;
+    }
+  }
 </style>

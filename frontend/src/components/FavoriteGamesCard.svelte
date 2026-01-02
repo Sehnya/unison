@@ -5,6 +5,8 @@
 
   export let editable: boolean = false;
   export let cardId: string = 'default';
+  export let profileGamesData: { games: UserGame[] } | null = null; // Games data from viewed profile
+  export let isOwnProfile: boolean = true;
 
   interface GameData {
     id: string;
@@ -44,14 +46,28 @@
 
   // Load saved games from profile storage
   onMount(() => {
-    const profile = loadProfile();
-    if (profile.gamesCards && profile.gamesCards[cardId]) {
-      games = profile.gamesCards[cardId].games as GameData[];
-    }
+    loadGamesData();
   });
+
+  // Reload when profileGamesData changes
+  $: if (profileGamesData !== undefined) {
+    loadGamesData();
+  }
+
+  function loadGamesData() {
+    if (!isOwnProfile && profileGamesData) {
+      games = profileGamesData.games as GameData[];
+    } else if (isOwnProfile) {
+      const profile = loadProfile();
+      if (profile.gamesCards && profile.gamesCards[cardId]) {
+        games = profile.gamesCards[cardId].games as GameData[];
+      }
+    }
+  }
 
   // Save games to profile storage
   function saveGames() {
+    if (!isOwnProfile) return;
     updateGamesCard(cardId, games as UserGame[]);
     dispatch('update', { games });
   }

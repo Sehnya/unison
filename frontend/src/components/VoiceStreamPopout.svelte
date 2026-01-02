@@ -483,5 +483,81 @@
   .voice-stream-popout {
     animation: popout-appear 0.25s ease-out;
   }
+
+  /* Mobile breakpoint */
+  @media (max-width: 768px) {
+    .voice-stream-popout {
+      width: calc(100vw - 24px) !important;
+      max-width: 100%;
+      left: 12px !important;
+      right: 12px !important;
+      bottom: 80px !important;
+      top: auto !important;
+    }
+
+    .popout-header {
+      padding: 10px 12px;
+    }
+
+    .stream-info {
+      gap: 8px;
+    }
+
+    .streamer-avatar {
+      width: 28px;
+      height: 28px;
+    }
+
+    .streamer-name {
+      font-size: 12px;
+    }
+
+    .live-badge {
+      font-size: 9px;
+      padding: 2px 6px;
+    }
+
+    .header-controls {
+      gap: 4px;
+    }
+
+    .header-btn {
+      width: 28px;
+      height: 28px;
+    }
+
+    .popout-controls {
+      padding: 10px 12px;
+      gap: 6px;
+    }
+
+    .control-btn {
+      width: 36px;
+      height: 36px;
+    }
+
+    .control-btn.disconnect {
+      width: 44px;
+      height: 36px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .voice-stream-popout {
+      width: calc(100vw - 16px) !important;
+      left: 8px !important;
+      right: 8px !important;
+    }
+
+    .control-btn {
+      width: 32px;
+      height: 32px;
+    }
+
+    .control-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
 </style>
 

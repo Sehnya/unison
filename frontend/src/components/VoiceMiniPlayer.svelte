@@ -319,4 +319,60 @@
   .control-btn.show-video:hover {
     background: rgba(59, 130, 246, 0.2);
   }
+
+  /* Mobile breakpoint */
+  @media (max-width: 768px) {
+    .mini-player {
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+
+    .channel-info {
+      gap: 8px;
+    }
+
+    .channel-name {
+      font-size: 12px;
+      max-width: 100px;
+    }
+
+    .participant-count {
+      font-size: 11px;
+      padding: 2px 6px;
+    }
+
+    .controls {
+      gap: 4px;
+    }
+
+    .control-btn {
+      width: 32px;
+      height: 32px;
+    }
+
+    .control-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .control-btn.disconnect {
+      width: 32px;
+      height: 32px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .mini-player {
+      padding: 8px 10px;
+    }
+
+    .channel-name {
+      max-width: 80px;
+    }
+
+    .control-btn {
+      width: 28px;
+      height: 28px;
+    }
+  }
 </style>

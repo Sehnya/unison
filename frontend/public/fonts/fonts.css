@@ -1,0 +1,84 @@
+/* Custom Fonts for Unison Profile Cards */
+
+/* Heellaaz - Fun Bold Display Sans */
+@font-face {
+  font-family: 'Heellaaz';
+  src: url('/fonts/Heellaaz.woff2') format('woff2'),
+       url('/fonts/Heellaaz.woff') format('woff'),
+       url('/fonts/Heellaaz.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Roderika Regular */
+@font-face {
+  font-family: 'Roderika';
+  src: url('/fonts/Webfonts/Roderika%20Regular.woff') format('woff'),
+       url('/fonts/Roderika%20Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Roderika Rough */
+@font-face {
+  font-family: 'Roderika Rough';
+  src: url('/fonts/Webfonts/Roderika%20Rough.woff') format('woff'),
+       url('/fonts/Roderika%20Rough.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* TBJ Matte Nature - Retro Serif */
+@font-face {
+  font-family: 'Matte Nature';
+  src: url('/fonts/WOFF/TBJ%20Matte%20Nature.woff2') format('woff2'),
+       url('/fonts/WOFF/TBJ%20Matte%20Nature.woff') format('woff'),
+       url('/fonts/TTF/TBJ%20Matte%20Nature.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Purple Magic - Magical Display Font */
+@font-face {
+  font-family: 'Purple Magic';
+  src: url('/fonts/Purple%20Magic.woff2') format('woff2'),
+       url('/fonts/Purple%20Magic.woff') format('woff'),
+       url('/fonts/Purple%20Magic.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Humble Popstar - Bold Display Font */
+@font-face {
+  font-family: 'Humble Popstar';
+  src: url('/fonts/HumblePopstar.ttf') format('truetype'),
+       url('/fonts/HumblePopstar.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Gury Pump - 3D Display Font */
+@font-face {
+  font-family: 'Gury Pump';
+  src: url('/fonts/GuryPump/GuryPump.ttf') format('truetype'),
+       url('/fonts/GuryPump/GuryPump.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Shocker - Electric Display Font */
+@font-face {
+  font-family: 'Shocker';
+  src: url('/fonts/Shocker/OpenType-TT/Shocker.ttf') format('truetype'),
+       url('/fonts/Shocker/OpenType-PS/Shocker.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}

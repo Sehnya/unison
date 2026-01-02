@@ -4,6 +4,8 @@
 
   export let editable: boolean = false;
   export let cardId: string = 'default';
+  export let profileGitHubData: { projects: GitHubProject[] } | null = null; // GitHub data from viewed profile
+  export let isOwnProfile: boolean = true;
 
   interface ProjectData {
     id: string;
@@ -36,13 +38,27 @@
 
   // Load saved projects from profile storage
   onMount(() => {
-    const profile = loadProfile();
-    if (profile.githubCards && profile.githubCards[cardId]) {
-      projects = profile.githubCards[cardId].projects as ProjectData[];
-    }
+    loadProjectsData();
   });
 
+  // Reload when profileGitHubData changes
+  $: if (profileGitHubData !== undefined) {
+    loadProjectsData();
+  }
+
+  function loadProjectsData() {
+    if (!isOwnProfile && profileGitHubData) {
+      projects = profileGitHubData.projects as ProjectData[];
+    } else if (isOwnProfile) {
+      const profile = loadProfile();
+      if (profile.githubCards && profile.githubCards[cardId]) {
+        projects = profile.githubCards[cardId].projects as ProjectData[];
+      }
+    }
+  }
+
   function saveProjects() {
+    if (!isOwnProfile) return;
     updateGitHubCard(cardId, projects as GitHubProject[]);
     dispatch('update', { projects });
   }

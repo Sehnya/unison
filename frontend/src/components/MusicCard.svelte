@@ -4,7 +4,9 @@
   import { musicStore, type Playlist, type Track } from '../lib/musicStore';
 
   export let editable: boolean = false;
-  export let autoplay: boolean = false; // Don't autoplay in card, let user click
+  export let autoplay: boolean = false; // Autoplay when viewing another user's profile
+  export let profileMusicData: MusicCardData | null = null; // Music data from viewed profile (for other users)
+  export let isOwnProfile: boolean = true; // Whether viewing own profile
 
   const dispatch = createEventDispatcher<{
     update: { playlist: Playlist };
@@ -16,19 +18,53 @@
     tracks: []
   };
 
+  let hasAutoPlayed = false;
+
   // Load saved data on mount
   onMount(() => {
-    const profile = loadProfile();
-    if (profile.musicCard) {
-      playlist = {
-        name: profile.musicCard.name,
-        coverImage: profile.musicCard.coverImage,
-        tracks: profile.musicCard.tracks as Track[]
-      };
-    }
+    loadPlaylistData();
   });
 
+  // Reload when profileMusicData changes (viewing different user)
+  $: if (profileMusicData !== undefined) {
+    loadPlaylistData();
+  }
+
+  function loadPlaylistData() {
+    // If viewing another user's profile and they have music data, use it
+    if (!isOwnProfile && profileMusicData) {
+      playlist = {
+        name: profileMusicData.name,
+        coverImage: profileMusicData.coverImage,
+        tracks: profileMusicData.tracks as Track[]
+      };
+      
+      // Autoplay if enabled, has tracks, and hasn't auto-played yet
+      if (autoplay && playlist.tracks.length > 0 && !hasAutoPlayed) {
+        hasAutoPlayed = true;
+        // Small delay to let the component mount
+        setTimeout(() => {
+          musicStore.setPlaylist(playlist);
+          musicStore.play();
+        }, 500);
+      }
+    } else if (isOwnProfile) {
+      // Load own profile data
+      const profile = loadProfile();
+      if (profile.musicCard) {
+        playlist = {
+          name: profile.musicCard.name,
+          coverImage: profile.musicCard.coverImage,
+          tracks: profile.musicCard.tracks as Track[]
+        };
+      }
+    }
+  }
+
   function savePlaylist() {
+    // Only save if viewing own profile
+    if (!isOwnProfile) return;
+    
     updateMusicCard({
       name: playlist.name,
       coverImage: playlist.coverImage,
