@@ -229,7 +229,7 @@ export function subscribeToChannel(
   onMessage: (message: ChatMessage) => void
 ): RealtimeChannel | null {
   if (!ablyClient) {
-    console.error('Ably client not initialized');
+    console.warn('Ably client not initialized - cannot subscribe to channel:', channelName);
     return null;
   }
 

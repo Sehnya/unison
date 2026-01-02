@@ -68,6 +68,11 @@
   }
 
   function subscribeToRealtime() {
+    const client = getAblyClient();
+    if (!client) {
+      console.warn('Ably client not initialized - real-time DM updates disabled');
+      return;
+    }
     const channelName = `dm:${conversation.id}`;
     ablyChannel = subscribeToChannel(channelName, (message) => {
       if (message.authorId !== currentUser?.id) {

@@ -793,8 +793,8 @@
 
     // Initialize Ably in background (don't block UI)
     try {
-      const currentClient = getAblyClient();
-      if (!currentClient) {
+      let ablyReady = !!getAblyClient();
+      if (!ablyReady) {
         // Check if API key is available before initializing
         const apiKey = import.meta.env.VITE_ABLY_API_KEY;
         if (!apiKey) {
@@ -808,8 +808,9 @@
         // but we ensure it's initialized here if needed
         if (currentUser?.id) {
           initAblyWithUser(currentUser.id, currentUser.username, currentUser.avatar || null);
+          ablyReady = true;
         } else {
-          console.warn('Cannot initialize Ably: currentUser not available');
+          console.warn('Cannot initialize Ably: currentUser not available. Real-time features disabled.');
         }
       }
 
@@ -819,9 +820,13 @@
         await leavePresence(`channel:${channelId}`);
       }
 
-      // Subscribe to new channel for real-time messages
-      const channelName = `channel:${channelId}`;
-      ablyChannel = subscribeToChannel(channelName, async (message) => {
+      // Only subscribe if Ably is ready
+      if (!ablyReady) {
+        console.warn('Skipping Ably subscription - client not initialized');
+      } else {
+        // Subscribe to new channel for real-time messages
+        const channelName = `channel:${channelId}`;
+        ablyChannel = subscribeToChannel(channelName, async (message) => {
         console.log('📨 Ably message received:', { id: message.id, authorId: message.authorId, channelId: message.channelId });
         // Only add if message is for this channel and not from current user
         if (message.channelId === channelId && message.authorId !== visitorId) {
@@ -934,14 +939,15 @@
         }
       );
 
-      // Enter presence with minimal user information (avoid large avatars)
-      await enterPresence(channelName, {
-        odId: visitorId,
-        userName: currentUser?.username || userName,
-        status: 'online',
-        // Don't send avatar in presence - it can exceed Ably's message size limit
-        avatar: undefined,
-      });
+        // Enter presence with minimal user information (avoid large avatars)
+        await enterPresence(channelName, {
+          odId: visitorId,
+          userName: currentUser?.username || userName,
+          status: 'online',
+          // Don't send avatar in presence - it can exceed Ably's message size limit
+          avatar: undefined,
+        });
+      } // end of ablyReady else block
     } catch (error) {
       console.warn('Ably initialization failed, continuing without real-time updates:', error);
     }
