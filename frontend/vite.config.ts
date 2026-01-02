@@ -46,6 +46,8 @@ export default defineConfig(({ mode }) => {
     'Project root': projectRoot,
     'VITE_ABLY_API_KEY exists': !!ablyKey,
     'VITE_ABLY_API_KEY length': ablyKey.length,
+    'VITE_TIPTAP_APP_ID': env.VITE_TIPTAP_APP_ID || process.env.VITE_TIPTAP_APP_ID || '(not set)',
+    'VITE_TIPTAP_COLLAB_TOKEN exists': !!(env.VITE_TIPTAP_COLLAB_TOKEN || process.env.VITE_TIPTAP_COLLAB_TOKEN),
     'From env object': !!env.VITE_ABLY_API_KEY,
     'From process.env': !!process.env.VITE_ABLY_API_KEY,
     'All VITE_ vars in env': Object.keys(env).filter(k => k.startsWith('VITE_')),
@@ -109,6 +111,8 @@ export default defineConfig(({ mode }) => {
   // Using define ensures the variable is available at build/runtime
   define: {
     ...(ablyKey ? { 'import.meta.env.VITE_ABLY_API_KEY': JSON.stringify(ablyKey) } : {}),
+    ...(env.VITE_TIPTAP_APP_ID || process.env.VITE_TIPTAP_APP_ID ? { 'import.meta.env.VITE_TIPTAP_APP_ID': JSON.stringify(env.VITE_TIPTAP_APP_ID || process.env.VITE_TIPTAP_APP_ID) } : {}),
+    ...(env.VITE_TIPTAP_COLLAB_TOKEN || process.env.VITE_TIPTAP_COLLAB_TOKEN ? { 'import.meta.env.VITE_TIPTAP_COLLAB_TOKEN': JSON.stringify(env.VITE_TIPTAP_COLLAB_TOKEN || process.env.VITE_TIPTAP_COLLAB_TOKEN) } : {}),
   },
   // Vite automatically exposes VITE_ prefixed vars, but we're being explicit
   envPrefix: ['VITE_']

@@ -68,9 +68,35 @@ export interface CardStyle {
 
 export interface ProfileCard {
   id: string;
-  type: 'quote' | 'gradient' | 'music' | 'games' | 'github' | 'friends';
-  size: 'small' | 'wide' | 'custom';
+  type: 'quote' | 'gradient' | 'music' | 'games' | 'github' | 'friends' | 'embed' | 'calendar';
+  size: 'small' | 'medium' | 'wide' | 'full' | 'custom';
   style?: CardStyle;
+  // Grid position (1-based column and row)
+  gridColumn?: number;  // 1-6 for which column
+  gridRow?: number;     // 1+ for which row in that column
+}
+
+// Embed card data for players and widgets
+export interface EmbedCardData {
+  embedType: 'custom';
+  embedUrl: string;
+  embedCode?: string; // Raw HTML embed code
+  title?: string;
+}
+
+// Calendar card data
+export interface CalendarCardData {
+  calendarType: 'google' | 'outlook' | 'custom';
+  embedUrl: string;
+  title?: string;
+}
+
+// Global page styling
+export interface PageStyle {
+  fontFamily: string;
+  fontSize: 'small' | 'medium' | 'large' | 'xlarge';
+  primaryColor?: string;
+  accentColor?: string;
 }
 
 export interface QuoteCardData {
@@ -138,13 +164,18 @@ export interface ProfileData {
   musicCard: MusicCardData | null;
   gamesCards: Record<string, { games: UserGame[] }>;
   githubCards: Record<string, { projects: GitHubProject[] }>;
+  embedCards: Record<string, EmbedCardData>;
+  calendarCards: Record<string, CalendarCardData>;
+  
+  // Global page styling
+  pageStyle: PageStyle;
   
   // Metadata
   lastUpdated: string;
   version: number;
 }
 
-const CURRENT_VERSION = 2;
+const CURRENT_VERSION = 3;
 let authToken: string | null = null;
 let cachedProfile: ProfileData | null = null;
 let cachedBackgroundImage: string | null = null;
@@ -152,6 +183,16 @@ let cachedBackgroundImage: string | null = null;
 // Set auth token for API calls
 export function setAuthToken(token: string | null): void {
   authToken = token;
+}
+
+// Default page style
+function getDefaultPageStyle(): PageStyle {
+  return {
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+    fontSize: 'medium',
+    primaryColor: '#ffffff',
+    accentColor: '#3182ce',
+  };
 }
 
 // Default profile data
@@ -191,6 +232,9 @@ function getDefaultProfile(): ProfileData {
     githubCards: {
       '5': { projects: [] }
     },
+    embedCards: {},
+    calendarCards: {},
+    pageStyle: getDefaultPageStyle(),
     lastUpdated: new Date().toISOString(),
     version: CURRENT_VERSION
   };
@@ -372,9 +416,45 @@ export function removeCardData(cardId: string, cardType: string): void {
     case 'github':
       if (profile.githubCards) delete profile.githubCards[cardId];
       break;
+    case 'embed':
+      if (profile.embedCards) delete profile.embedCards[cardId];
+      break;
+    case 'calendar':
+      if (profile.calendarCards) delete profile.calendarCards[cardId];
+      break;
   }
   
   saveProfile(profile);
+}
+
+// Update embed card data
+export function updateEmbedCard(cardId: string, data: EmbedCardData): void {
+  const profile = loadProfile();
+  if (!profile.embedCards) profile.embedCards = {};
+  profile.embedCards[cardId] = data;
+  saveProfile(profile);
+}
+
+// Update calendar card data
+export function updateCalendarCard(cardId: string, data: CalendarCardData): void {
+  const profile = loadProfile();
+  if (!profile.calendarCards) profile.calendarCards = {};
+  profile.calendarCards[cardId] = data;
+  saveProfile(profile);
+}
+
+// Update page style
+export function updatePageStyle(style: Partial<PageStyle>): void {
+  const profile = loadProfile();
+  if (!profile.pageStyle) profile.pageStyle = getDefaultPageStyle();
+  profile.pageStyle = { ...profile.pageStyle, ...style };
+  saveProfile(profile);
+}
+
+// Get page style
+export function getPageStyle(): PageStyle {
+  const profile = loadProfile();
+  return profile.pageStyle || getDefaultPageStyle();
 }
 
 // Export profile as JSON (for backup)

@@ -32,6 +32,13 @@ export interface UserLookupInterface {
 const ADMIN_EMAIL = 'sehnyaw@gmail.com';
 
 /**
+ * Database pool interface for document operations
+ */
+export interface PoolInterface {
+  query<T = unknown>(text: string, values?: unknown[]): Promise<{ rows: T[] }>;
+}
+
+/**
  * Channel routes configuration
  */
 export interface ChannelRoutesConfig {
@@ -39,6 +46,7 @@ export interface ChannelRoutesConfig {
   guildService: { getRepository: () => { isOwner: (guildId: string, userId: string) => Promise<boolean> } };
   userLookup?: UserLookupInterface;
   validateToken: TokenValidator;
+  pool?: PoolInterface;
 }
 
 /**
@@ -46,7 +54,7 @@ export interface ChannelRoutesConfig {
  */
 export function createChannelRoutes(config: ChannelRoutesConfig): Router {
   const router = Router();
-  const { channelService, guildService, userLookup, validateToken } = config;
+  const { channelService, guildService, userLookup, validateToken, pool } = config;
   const authMiddleware = createAuthMiddleware(validateToken);
 
   // All channel routes require authentication
@@ -102,6 +110,8 @@ export function createChannelRoutes(config: ChannelRoutesConfig): Router {
           channelType = ChannelType.CATEGORY;
         } else if (type === 'voice' || type === 'VOICE' || type === 2) {
           channelType = ChannelType.VOICE;
+        } else if (type === 'document' || type === 'DOCUMENT' || type === 3) {
+          channelType = ChannelType.DOCUMENT;
         } else if (type !== 'TEXT' && type !== 'text' && type !== 0) {
           throw new ApiError(ApiErrorCode.INVALID_CHANNEL_TYPE, 400, 'Invalid channel type');
         }
@@ -235,6 +245,111 @@ export function createChannelRoutes(config: ChannelRoutesConfig): Router {
       await channelService.deleteChannel(channelId);
 
       res.status(200).json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================
+  // Document Channel Operations
+  // ============================================
+
+  /**
+   * GET /channels/:channel_id/document
+   * Get document content for a document channel
+   */
+  router.get('/channels/:channel_id/document', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const channelId = requireSnowflake('channel_id', req.params.channel_id);
+
+      if (!pool) {
+        throw new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, 'Document storage not available');
+      }
+
+      // Check if channel exists and is a document channel
+      const channel = await channelService.getChannel(channelId) as { type: number } | null;
+      if (!channel) {
+        throw new ApiError(ApiErrorCode.NOT_FOUND, 404, 'Channel not found');
+      }
+      if (channel.type !== ChannelType.DOCUMENT) {
+        throw new ApiError(ApiErrorCode.VALIDATION_ERROR, 400, 'Channel is not a document channel');
+      }
+
+      // Get document content
+      const result = await pool.query<{
+        content: string;
+        version: number;
+        last_edited_by: string | null;
+        last_edited_at: Date;
+      }>(
+        `SELECT cd.content, cd.version, cd.last_edited_by, cd.last_edited_at, u.username as last_edited_by_username
+         FROM channel_documents cd
+         LEFT JOIN users u ON u.id = cd.last_edited_by
+         WHERE cd.channel_id = $1`,
+        [channelId]
+      );
+
+      if (result.rows.length === 0) {
+        // No document exists yet, return empty content
+        res.status(200).json({
+          content: '',
+          version: 0,
+          last_edited_by: null,
+          last_edited_at: null,
+        });
+        return;
+      }
+
+      res.status(200).json(result.rows[0]);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * PUT /channels/:channel_id/document
+   * Update document content for a document channel
+   */
+  router.put('/channels/:channel_id/document', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id: userId } = (req as AuthenticatedRequest).user;
+      const channelId = requireSnowflake('channel_id', req.params.channel_id);
+      const { content, version } = req.body;
+
+      if (!pool) {
+        throw new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, 'Document storage not available');
+      }
+
+      if (content === undefined) {
+        throw new ApiError(ApiErrorCode.VALIDATION_ERROR, 400, 'Content is required');
+      }
+
+      // Check if channel exists and is a document channel
+      const channel = await channelService.getChannel(channelId) as { type: number } | null;
+      if (!channel) {
+        throw new ApiError(ApiErrorCode.NOT_FOUND, 404, 'Channel not found');
+      }
+      if (channel.type !== ChannelType.DOCUMENT) {
+        throw new ApiError(ApiErrorCode.VALIDATION_ERROR, 400, 'Channel is not a document channel');
+      }
+
+      // Upsert document content
+      const result = await pool.query<{ version: number }>(
+        `INSERT INTO channel_documents (channel_id, content, version, last_edited_by, last_edited_at)
+         VALUES ($1, $2, 1, $3, NOW())
+         ON CONFLICT (channel_id) DO UPDATE SET
+           content = $2,
+           version = channel_documents.version + 1,
+           last_edited_by = $3,
+           last_edited_at = NOW()
+         RETURNING version`,
+        [channelId, content, userId]
+      );
+
+      res.status(200).json({
+        success: true,
+        version: result.rows[0]?.version || 1,
+      });
     } catch (error) {
       next(error);
     }

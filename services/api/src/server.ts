@@ -160,6 +160,7 @@ export function createApiServer(config: ApiServerConfig): Express {
       }
     },
     validateToken: config.validateToken,
+    pool: config.pool,
   });
   app.use('/api', channelRoutes);
   app.use('/', channelRoutes);

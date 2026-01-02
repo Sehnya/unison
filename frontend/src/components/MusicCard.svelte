@@ -4,9 +4,9 @@
   import { musicStore, type Playlist, type Track } from '../lib/musicStore';
 
   export let editable: boolean = false;
-  export let autoplay: boolean = false; // Autoplay when viewing another user's profile
-  export let profileMusicData: MusicCardData | null = null; // Music data from viewed profile (for other users)
-  export let isOwnProfile: boolean = true; // Whether viewing own profile
+  export let autoplay: boolean = false;
+  export let profileMusicData: MusicCardData | null = null;
+  export let isOwnProfile: boolean = true;
 
   const dispatch = createEventDispatcher<{
     update: { playlist: Playlist };
@@ -20,18 +20,15 @@
 
   let hasAutoPlayed = false;
 
-  // Load saved data on mount
   onMount(() => {
     loadPlaylistData();
   });
 
-  // Reload when profileMusicData changes (viewing different user)
   $: if (profileMusicData !== undefined) {
     loadPlaylistData();
   }
 
   function loadPlaylistData() {
-    // If viewing another user's profile and they have music data, use it
     if (!isOwnProfile && profileMusicData) {
       playlist = {
         name: profileMusicData.name,
@@ -39,17 +36,14 @@
         tracks: profileMusicData.tracks as Track[]
       };
       
-      // Autoplay if enabled, has tracks, and hasn't auto-played yet
       if (autoplay && playlist.tracks.length > 0 && !hasAutoPlayed) {
         hasAutoPlayed = true;
-        // Small delay to let the component mount
         setTimeout(() => {
           musicStore.setPlaylist(playlist);
           musicStore.play();
         }, 500);
       }
     } else if (isOwnProfile) {
-      // Load own profile data
       const profile = loadProfile();
       if (profile.musicCard) {
         playlist = {
@@ -62,9 +56,7 @@
   }
 
   function savePlaylist() {
-    // Only save if viewing own profile
     if (!isOwnProfile) return;
-    
     updateMusicCard({
       name: playlist.name,
       coverImage: playlist.coverImage,
@@ -73,7 +65,6 @@
     dispatch('update', { playlist });
   }
 
-  // Subscribe to global music store to show current state
   $: globalState = $musicStore;
   $: isGlobalPlaylist = globalState.playlist?.name === playlist.name && 
                         globalState.playlist?.tracks.length === playlist.tracks.length;
@@ -86,26 +77,30 @@
   let coverImageInput: HTMLInputElement;
   let draggedTrackIndex: number | null = null;
   let dragOverIndex: number | null = null;
-  let editingPlaylistName = false;
-  let playlistNameInput: HTMLInputElement;
-  let showVolumeSlider = false;
 
   $: currentTrack = playlist.tracks[currentTrackIndex] || null;
   $: coverDisplay = playlist.coverImage || 'https://i.scdn.co/image/ab67616d0000b2734718e2b124f79258be7bc452';
   $: volume = globalState.volume;
   $: isMuted = globalState.isMuted;
 
-  function toggleMute() {
-    musicStore.toggleMute();
-  }
+  // Parse track title to get song name and artist
+  $: parsedTitle = parseTrackTitle(currentTrack?.title || playlist.name);
 
-  function handleVolumeChange(e: Event) {
-    const target = e.target as HTMLInputElement;
-    musicStore.setVolume(parseInt(target.value));
+  function parseTrackTitle(title: string): { song: string; artist: string } {
+    // Common patterns: "Artist - Song", "Song by Artist", "Song | Artist"
+    const separators = [' - ', ' – ', ' | ', ' by '];
+    for (const sep of separators) {
+      if (title.includes(sep)) {
+        const parts = title.split(sep);
+        if (parts.length >= 2) {
+          return { artist: parts[0].trim(), song: parts.slice(1).join(sep).trim() };
+        }
+      }
+    }
+    return { song: title, artist: playlist.name };
   }
 
   function togglePlay() {
-    // If this playlist isn't loaded globally, load it first
     if (!isGlobalPlaylist) {
       musicStore.setPlaylist(playlist);
       musicStore.play();
@@ -149,7 +144,6 @@
       return;
     }
 
-    // Try to get video title from oEmbed (no API key needed)
     let title = 'Unknown Track';
     try {
       const response = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(newYoutubeUrl)}`);
@@ -210,13 +204,6 @@
     reader.readAsDataURL(file);
   }
 
-  function removeCover() {
-    playlist.coverImage = null;
-    playlist = playlist;
-    savePlaylist();
-  }
-
-  // Drag and drop for reordering
   function handleDragStart(e: DragEvent, index: number) {
     if (!editable) return;
     draggedTrackIndex = index;
@@ -246,167 +233,94 @@
       newTracks.splice(targetIndex, 0, removed);
       playlist.tracks = newTracks;
       playlist = playlist;
-      
-      // Update current track index if needed
-      if (draggedTrackIndex === currentTrackIndex) {
-        currentTrackIndex = targetIndex;
-      } else if (draggedTrackIndex < currentTrackIndex && targetIndex >= currentTrackIndex) {
-        currentTrackIndex--;
-      } else if (draggedTrackIndex > currentTrackIndex && targetIndex <= currentTrackIndex) {
-        currentTrackIndex++;
-      }
-      
       savePlaylist();
     }
     
     draggedTrackIndex = null;
     dragOverIndex = null;
   }
-
-  function startEditingName() {
-    if (!editable) return;
-    editingPlaylistName = true;
-    setTimeout(() => playlistNameInput?.focus(), 0);
-  }
-
-  function finishEditingName() {
-    editingPlaylistName = false;
-    if (!playlist.name.trim()) {
-      playlist.name = 'My Playlist';
-    }
-    savePlaylist();
-  }
 </script>
 
-<div class="music-card-content">
-  <!-- Cover Image -->
-  <div class="cover-section">
-    <div class="album-art" on:click={() => editable && coverImageInput?.click()} class:editable role={editable ? 'button' : undefined}>
-      <img src={coverDisplay} alt="Playlist cover" />
-      {#if editable}
-        <div class="cover-overlay">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            <circle cx="8.5" cy="8.5" r="1.5"/>
-            <path d="M21 15l-5-5L5 21"/>
-          </svg>
-          <span>Change Cover</span>
-        </div>
-      {/if}
-    </div>
-    {#if editable && playlist.coverImage}
-      <button class="remove-cover" on:click={removeCover}>×</button>
+<div class="music-card-modern">
+  <!-- Full-bleed Cover Image -->
+  <div 
+    class="cover-container"
+    class:editable
+    style="background-image: url({coverDisplay})"
+  >
+    <!-- Gradient Overlay -->
+    <div class="cover-gradient"></div>
+    
+    <!-- Edit Cover Button (only in edit mode) -->
+    {#if editable}
+      <button class="edit-cover-btn" on:click={() => coverImageInput?.click()}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <path d="M21 15l-5-5L5 21"/>
+        </svg>
+      </button>
+      <input type="file" bind:this={coverImageInput} on:change={handleCoverUpload} accept="image/*" class="hidden" />
     {/if}
-    <input type="file" bind:this={coverImageInput} on:change={handleCoverUpload} accept="image/*" class="hidden" />
-  </div>
 
-  <!-- Track Info -->
-  <div class="track-info">
-    {#if editingPlaylistName}
-      <input
-        type="text"
-        bind:this={playlistNameInput}
-        bind:value={playlist.name}
-        on:blur={finishEditingName}
-        on:keydown={(e) => e.key === 'Enter' && finishEditingName()}
-        class="playlist-name-input"
-        maxlength="30"
-      />
-    {:else}
-      <span 
-        class="playlist-name" 
-        class:editable
-        on:click={startEditingName}
-        on:keydown={(e) => e.key === 'Enter' && startEditingName()}
-        role={editable ? 'button' : undefined}
-        tabindex={editable ? 0 : undefined}
-      >
-        {playlist.name}
-        {#if editable}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+    <!-- Track Info Overlay -->
+    <div class="track-overlay">
+      <div class="track-details">
+        <h3 class="song-title">{parsedTitle.song}</h3>
+        <p class="artist-name">{parsedTitle.artist}</p>
+      </div>
+      
+      <!-- Play Button -->
+      <button class="play-btn" on:click={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
+        {#if isPlaying}
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+          </svg>
+        {:else}
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5v14l11-7L8 5z"/>
           </svg>
         {/if}
-      </span>
-    {/if}
-    <span class="track-name">{currentTrack?.title || 'No track selected'}</span>
-    <span class="track-count">{playlist.tracks.length} track{playlist.tracks.length !== 1 ? 's' : ''}</span>
+      </button>
+    </div>
   </div>
 
-  <!-- Player Controls -->
-  <div class="player-controls">
-    <button class="control-btn" on:click={prevTrack} disabled={currentTrackIndex === 0}>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M6 6h2v12H6V6zm3.5 6l8.5 6V6l-8.5 6z"/>
-      </svg>
-    </button>
-    <button class="control-btn play" on:click={togglePlay}>
-      {#if isPlaying}
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+  <!-- Mini Player Controls (shown when playing) -->
+  {#if isPlaying || showPlaylist}
+    <div class="mini-controls">
+      <button class="mini-btn" on:click={prevTrack} disabled={currentTrackIndex === 0} aria-label="Previous">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 6h2v12H6V6zm3.5 6l8.5 6V6l-8.5 6z"/>
         </svg>
-      {:else}
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M8 5v14l11-7L8 5z"/>
-        </svg>
-      {/if}
-    </button>
-    <button class="control-btn" on:click={nextTrack} disabled={currentTrackIndex >= playlist.tracks.length - 1}>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M6 18l8.5-6L6 6v12zm2 0V6l6.5 6L8 18zm8-12v12h2V6h-2z"/>
-      </svg>
-    </button>
-  </div>
-
-  <!-- Volume Control -->
-  <div class="volume-control" on:mouseenter={() => showVolumeSlider = true} on:mouseleave={() => showVolumeSlider = false}>
-    <button class="volume-btn" on:click={toggleMute}>
-      {#if isMuted || volume === 0}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M11 5L6 9H2v6h4l5 4V5z"/>
-          <line x1="23" y1="9" x2="17" y2="15"/>
-          <line x1="17" y1="9" x2="23" y2="15"/>
-        </svg>
-      {:else if volume < 50}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M11 5L6 9H2v6h4l5 4V5z"/>
-          <path d="M15.54 8.46a5 5 0 010 7.07"/>
-        </svg>
-      {:else}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M11 5L6 9H2v6h4l5 4V5z"/>
-          <path d="M15.54 8.46a5 5 0 010 7.07"/>
-          <path d="M19.07 4.93a10 10 0 010 14.14"/>
-        </svg>
-      {/if}
-    </button>
-    {#if showVolumeSlider}
-      <div class="volume-slider-container">
-        <input
-          type="range"
-          min="0"
-          max="100"
-          value={isMuted ? 0 : volume}
-          on:input={handleVolumeChange}
-          class="volume-slider"
-        />
-        <span class="volume-value">{isMuted ? 0 : volume}%</span>
+      </button>
+      
+      <div class="progress-info">
+        <span class="track-num">{currentTrackIndex + 1}/{playlist.tracks.length}</span>
       </div>
-    {/if}
-  </div>
-
-  <!-- Playlist Toggle -->
-  <button class="playlist-toggle" on:click={() => showPlaylist = !showPlaylist}>
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-      <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-    </svg>
-    {showPlaylist ? 'Hide' : 'Show'} Playlist
-  </button>
+      
+      <button class="mini-btn" on:click={nextTrack} disabled={currentTrackIndex >= playlist.tracks.length - 1} aria-label="Next">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 18l8.5-6L6 6v12zm2 0V6l6.5 6L8 18zm8-12v12h2V6h-2z"/>
+        </svg>
+      </button>
+      
+      <button class="mini-btn playlist-btn" on:click={() => showPlaylist = !showPlaylist} aria-label="Toggle playlist">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+      </button>
+    </div>
+  {/if}
 
   <!-- Playlist Panel -->
   {#if showPlaylist}
     <div class="playlist-panel">
+      <div class="playlist-header">
+        <span class="playlist-title">{playlist.name}</span>
+        <span class="track-count">{playlist.tracks.length} tracks</span>
+      </div>
+      
       <div class="playlist-tracks">
         {#each playlist.tracks as track, index (track.id)}
           <div
@@ -430,7 +344,11 @@
             <span class="track-number">{index + 1}</span>
             <span class="track-title">{track.title}</span>
             {#if index === currentTrackIndex && isPlaying}
-              <span class="playing-indicator">▶</span>
+              <span class="playing-indicator">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+              </span>
             {/if}
             {#if editable}
               <button class="remove-track" on:click|stopPropagation={() => removeTrack(track.id)}>×</button>
@@ -456,212 +374,179 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 5v14M5 12h14"/>
             </svg>
-            Add YouTube Track
+            Add Track
           </button>
         {/if}
       {/if}
     </div>
   {/if}
+
+  <!-- Empty State -->
+  {#if playlist.tracks.length === 0 && !showPlaylist}
+    <button class="empty-state" on:click={() => showPlaylist = true}>
+      {#if editable}
+        <span>Click to add music</span>
+      {:else}
+        <span>No tracks yet</span>
+      {/if}
+    </button>
+  {/if}
 </div>
 
-
 <style>
-  .music-card-content {
+  .music-card-modern {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 200px;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    height: 100%;
-    padding: 8px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #1a1a1a;
   }
 
   .hidden {
     display: none;
   }
 
-  /* Cover Section */
-  .cover-section {
+  /* Cover Container - Full Bleed */
+  .cover-container {
     position: relative;
-    margin-bottom: 12px;
-  }
-
-  .album-art {
-    width: 120px;
-    height: 120px;
-    border-radius: 12px;
-    overflow: hidden;
-    position: relative;
-  }
-
-  .album-art.editable {
-    cursor: pointer;
-  }
-
-  .album-art img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .cover-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
+    flex: 1;
+    min-height: 180px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    color: #fff;
-    font-size: 11px;
+    justify-content: flex-end;
   }
 
-  .album-art.editable:hover .cover-overlay {
-    opacity: 1;
-  }
-
-  .remove-cover {
+  /* Gradient Overlay */
+  .cover-gradient {
     position: absolute;
-    top: -6px;
-    right: -6px;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: none;
-    background: #ef4444;
-    color: #fff;
-    font-size: 14px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 40%,
+      rgba(0, 0, 0, 0.3) 60%,
+      rgba(0, 0, 0, 0.8) 100%
+    );
+    pointer-events: none;
   }
 
-  /* Track Info */
-  .track-info {
-    text-align: center;
-    margin-bottom: 12px;
-    width: 100%;
-  }
-
-  .playlist-name {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
-  }
-
-  .playlist-name.editable {
-    cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
-
-  .playlist-name.editable:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  .playlist-name svg {
-    opacity: 0;
-  }
-
-  .playlist-name.editable:hover svg {
-    opacity: 0.7;
-  }
-
-  .playlist-name-input {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid #3182ce;
-    border-radius: 4px;
-    color: #fff;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 4px 8px;
-    text-align: center;
-    width: 150px;
-  }
-
-  .track-name {
-    display: block;
-    font-size: 14px;
-    font-weight: 600;
-    color: #fff;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 180px;
-    margin: 0 auto;
-  }
-
-  .track-count {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.4);
-  }
-
-  /* Player Controls */
-  .player-controls {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-
-  .control-btn {
-    background: none;
-    border: none;
-    color: rgba(255, 255, 255, 0.6);
-    cursor: pointer;
-    padding: 8px;
-    transition: color 0.15s ease;
-  }
-
-  .control-btn:hover:not(:disabled) {
-    color: #fff;
-  }
-
-  .control-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-  }
-
-  .control-btn.play {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: #fff;
-    color: #1a1a1a;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .control-btn.play:hover {
-    transform: scale(1.05);
-  }
-
-  /* Volume Control */
-  .volume-control {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    position: relative;
-    margin-bottom: 8px;
-  }
-
-  .volume-btn {
+  /* Edit Cover Button */
+  .edit-cover-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
     width: 36px;
     height: 36px;
     border-radius: 50%;
     border: none;
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.7);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 5;
+  }
+
+  .cover-container.editable:hover .edit-cover-btn {
+    opacity: 1;
+  }
+
+  .edit-cover-btn:hover {
+    transform: scale(1.1);
+    background: rgba(0, 0, 0, 0.7);
+  }
+
+  /* Track Info Overlay */
+  .track-overlay {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 20px;
+    gap: 16px;
+  }
+
+  .track-details {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .song-title {
+    margin: 0 0 4px 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  }
+
+  .artist-name {
+    margin: 0;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.8);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Play Button */
+  .play-btn {
+    flex-shrink: 0;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+  }
+
+  .play-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+  }
+
+  .play-btn:active {
+    transform: scale(0.95);
+  }
+
+  /* Mini Controls */
+  .mini-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+  }
+
+  .mini-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -669,110 +554,70 @@
     transition: all 0.15s ease;
   }
 
-  .volume-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: #fff;
-  }
-
-  .volume-slider-container {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    background: rgba(20, 20, 20, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    position: absolute;
-    left: 44px;
-    white-space: nowrap;
-    z-index: 10;
-  }
-
-  .volume-slider {
-    width: 80px;
-    height: 4px;
-    -webkit-appearance: none;
-    appearance: none;
+  .mini-btn:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.2);
-    border-radius: 2px;
-    cursor: pointer;
-  }
-
-  .volume-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: #fff;
-    cursor: pointer;
-    transition: transform 0.15s ease;
-  }
-
-  .volume-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.2);
-  }
-
-  .volume-slider::-moz-range-thumb {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: #fff;
-    cursor: pointer;
-    border: none;
-  }
-
-  .volume-value {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.6);
-    min-width: 32px;
-    text-align: right;
-  }
-
-  /* Playlist Toggle */
-  .playlist-toggle {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    background: rgba(255, 255, 255, 0.08);
-    border: none;
-    border-radius: 16px;
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 11px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .playlist-toggle:hover {
-    background: rgba(255, 255, 255, 0.12);
     color: #fff;
+  }
+
+  .mini-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .progress-info {
+    padding: 0 12px;
+  }
+
+  .track-num {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .playlist-btn {
+    margin-left: auto;
   }
 
   /* Playlist Panel */
   .playlist-panel {
-    width: 100%;
-    margin-top: 12px;
-    max-height: 200px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(12px);
+    max-height: 250px;
     overflow-y: auto;
+  }
+
+  .playlist-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .playlist-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .track-count {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
   }
 
   .playlist-tracks {
     display: flex;
     flex-direction: column;
-    gap: 2px;
   }
 
   .playlist-track {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 8px;
+    gap: 10px;
+    padding: 10px 16px;
     cursor: pointer;
     transition: background 0.15s ease;
-    position: relative;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   .playlist-track:hover {
@@ -780,11 +625,11 @@
   }
 
   .playlist-track.active {
-    background: rgba(49, 130, 206, 0.2);
+    background: rgba(99, 179, 237, 0.15);
   }
 
   .playlist-track.drag-over {
-    border-top: 2px solid #3182ce;
+    border-top: 2px solid #63b3ed;
   }
 
   .drag-handle {
@@ -794,33 +639,60 @@
     letter-spacing: -2px;
   }
 
-  .drag-handle:active {
-    cursor: grabbing;
-  }
-
   .track-number {
-    font-size: 11px;
+    font-size: 12px;
     color: rgba(255, 255, 255, 0.4);
-    min-width: 16px;
+    min-width: 20px;
+    text-align: center;
   }
 
   .track-title {
     flex: 1;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.8);
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.9);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
+  /* Playing Indicator Animation */
   .playing-indicator {
-    color: #3182ce;
-    font-size: 10px;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 14px;
+  }
+
+  .playing-indicator .bar {
+    width: 3px;
+    background: #63b3ed;
+    border-radius: 1px;
+    animation: equalizer 0.8s ease-in-out infinite;
+  }
+
+  .playing-indicator .bar:nth-child(1) {
+    height: 60%;
+    animation-delay: 0s;
+  }
+
+  .playing-indicator .bar:nth-child(2) {
+    height: 100%;
+    animation-delay: 0.2s;
+  }
+
+  .playing-indicator .bar:nth-child(3) {
+    height: 40%;
+    animation-delay: 0.4s;
+  }
+
+  @keyframes equalizer {
+    0%, 100% { transform: scaleY(0.3); }
+    50% { transform: scaleY(1); }
   }
 
   .remove-track {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     border: none;
     background: rgba(239, 68, 68, 0.2);
@@ -849,41 +721,41 @@
     justify-content: center;
     gap: 6px;
     width: 100%;
-    padding: 10px;
-    margin-top: 8px;
-    background: rgba(49, 130, 206, 0.15);
-    border: 1px dashed rgba(49, 130, 206, 0.4);
-    border-radius: 8px;
-    color: #63b3ed;
+    padding: 12px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
     font-size: 12px;
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
   .add-track-btn:hover {
-    background: rgba(49, 130, 206, 0.25);
-    border-color: rgba(49, 130, 206, 0.6);
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
   }
 
   .add-track-form {
     display: flex;
     gap: 6px;
-    margin-top: 8px;
+    padding: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .add-track-form input {
     flex: 1;
-    padding: 8px 10px;
+    padding: 8px 12px;
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 6px;
+    border-radius: 8px;
     color: #fff;
     font-size: 12px;
   }
 
   .add-track-form input:focus {
     outline: none;
-    border-color: #3182ce;
+    border-color: #63b3ed;
   }
 
   .add-track-form input::placeholder {
@@ -891,13 +763,15 @@
   }
 
   .add-btn {
-    padding: 8px 14px;
-    background: #1a365d;
+    padding: 8px 16px;
+    background: #3182ce;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     color: #fff;
     font-size: 12px;
+    font-weight: 500;
     cursor: pointer;
+    transition: background 0.15s ease;
   }
 
   .add-btn:hover {
@@ -905,10 +779,10 @@
   }
 
   .cancel-btn {
-    width: 32px;
+    width: 34px;
     background: rgba(255, 255, 255, 0.1);
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     color: rgba(255, 255, 255, 0.6);
     font-size: 16px;
     cursor: pointer;
@@ -916,6 +790,30 @@
 
   .cancel-btn:hover {
     background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
+
+  /* Empty State */
+  .empty-state {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    border: 1px dashed rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 3;
+  }
+
+  .empty-state:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.5);
     color: #fff;
   }
 

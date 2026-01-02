@@ -216,9 +216,9 @@
 
 <div class="games-card">
   {#if editable}
-    <div class="card-header">
-      <button class="add-btn" on:click={openAddForm}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <div class="edit-controls">
+      <button class="edit-btn" on:click={openAddForm} title="Add Game">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
         </svg>
       </button>
@@ -410,32 +410,35 @@
     height: 100%;
     display: flex;
     flex-direction: column;
+    position: relative;
   }
 
-  .card-header {
+  /* Edit Controls - Dark UI in top right */
+  .edit-controls {
+    position: absolute;
+    top: 8px;
+    right: 8px;
     display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    margin-bottom: 12px;
+    gap: 6px;
+    z-index: 20;
   }
 
-  .add-btn {
-    width: 28px;
-    height: 28px;
+  .edit-btn {
+    width: 32px;
+    height: 32px;
     border-radius: 8px;
-    border: 1px dashed rgba(49, 130, 206, 0.5);
-    background: rgba(49, 130, 206, 0.1);
-    color: #63b3ed;
+    border: none;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.15s ease;
+    transition: background 0.2s ease;
   }
 
-  .add-btn:hover {
-    background: rgba(49, 130, 206, 0.2);
-    border-color: rgba(49, 130, 206, 0.7);
+  .edit-btn:hover {
+    background: rgba(0, 0, 0, 0.7);
   }
 
   .games-grid {

@@ -9,6 +9,7 @@
   import VoiceRoom from './components/VoiceRoom.svelte';
   import VoiceMiniPlayer from './components/VoiceMiniPlayer.svelte';
   import VoiceStreamPopout from './components/VoiceStreamPopout.svelte';
+  import DocumentEditor from './components/DocumentEditor.svelte';
   import GroupInfo from './components/GroupInfo.svelte';
   import UserProfile from './components/UserProfile.svelte';
   import SettingsPanel from './components/SettingsPanel.svelte';
@@ -38,7 +39,7 @@
   let showGroupInfo: boolean = false;
   let selectedGuildId: string | null = null;
   let selectedChannelId: string | null = null;
-  let selectedChannelType: 'text' | 'voice' | null = null;
+  let selectedChannelType: 'text' | 'voice' | 'document' | null = null;
   let selectedChannelName: string | null = null;
   let currentUser: User | null = null;
   let guilds: Guild[] = [];
@@ -307,7 +308,7 @@
     loadUserData();
   }
 
-  async function handleSelectChannel(event: CustomEvent<{ channelId: string; channelType?: 'text' | 'voice' }>) {
+  async function handleSelectChannel(event: CustomEvent<{ channelId: string; channelType?: 'text' | 'voice' | 'document' }>) {
     selectedChannelId = event.detail.channelId;
     selectedChannelType = event.detail.channelType || null;
     showUserProfile = false;
@@ -326,8 +327,11 @@
           const data = await response.json();
           selectedChannelName = data.channel?.name || null;
           // Use type from API if not provided
+          // ChannelType: TEXT = 0, CATEGORY = 1, VOICE = 2, DOCUMENT = 3
+          // Use Number() to handle string types from JSON
           if (!selectedChannelType && data.channel?.type !== undefined) {
-            selectedChannelType = data.channel.type === 2 ? 'voice' : 'text';
+            const channelType = Number(data.channel.type);
+            selectedChannelType = channelType === 2 ? 'voice' : channelType === 3 ? 'document' : 'text';
           }
         }
       } catch (err) {
@@ -841,7 +845,15 @@
           on:close={() => { showUserProfile = false; viewedUser = null; }}
         />
       {:else if selectedChannelId}
-        {#if !(selectedChannelType === 'voice' && isViewingVoiceCall)}
+        {#if selectedChannelType === 'document'}
+          <DocumentEditor 
+            channelId={selectedChannelId}
+            guildId={selectedGuildId}
+            authToken={authToken || ''}
+            currentUser={currentUser}
+            on:viewUserProfile={handleViewUserProfile}
+          />
+        {:else if !(selectedChannelType === 'voice' && isViewingVoiceCall)}
           <ChatArea 
             channelId={selectedChannelId}
             guildId={selectedGuildId}

@@ -6,6 +6,8 @@
   import FavoriteGamesCard from './FavoriteGamesCard.svelte';
   import GitHubProjectsCard from './GitHubProjectsCard.svelte';
   import FriendsCard from './FriendsCard.svelte';
+  import EmbedCard from './EmbedCard.svelte';
+  import CalendarCard from './CalendarCard.svelte';
   import Avatar from './Avatar.svelte';
   import {
     loadProfile,
@@ -18,10 +20,12 @@
     updateProfileWidgets,
     updateQuoteCard,
     removeCardData,
+    updatePageStyle,
     CUSTOM_FONTS,
     type ProfileData,
     type ProfileCard,
-    type MiniWidget
+    type MiniWidget,
+    type PageStyle
   } from '../lib/profileStorage';
   import { apiUrl } from '../lib/api';
 
@@ -46,6 +50,22 @@
   let isEditingGreeting = false;
   let greetingInput: HTMLInputElement;
   let showWidgetMenu = false;
+  
+  // Bio editing state
+  let editableBio = '';
+  let isEditingBio = false;
+  let bioTextarea: HTMLTextAreaElement;
+  let bioFont = 'system-ui';
+  let showBioFontMenu = false;
+  
+  // Available bio fonts
+  const bioFonts = [
+    { name: 'System', value: 'system-ui, -apple-system, sans-serif' },
+    { name: 'Serif', value: 'Georgia, "Times New Roman", serif' },
+    { name: 'Mono', value: '"SF Mono", "Fira Code", monospace' },
+    { name: 'Handwriting', value: '"Caveat", cursive' },
+    { name: 'Display', value: '"Playfair Display", serif' },
+  ];
   let miniGifInput: HTMLInputElement;
   let profileData: ProfileData | null = null;
   let profileLoading = true;
@@ -63,35 +83,97 @@
   // Card definitions - import CardStyle type
   import type { CardStyle } from '../lib/profileStorage';
   
-  type CardType = 'quote' | 'gradient' | 'music' | 'games' | 'github' | 'friends';
+  type CardType = 'quote' | 'gradient' | 'music' | 'games' | 'github' | 'friends' | 'embed' | 'calendar';
   
   interface Card {
     id: string;
     type: CardType;
-    size: 'small' | 'wide' | 'custom';
+    size: 'small' | 'medium' | 'wide' | 'full' | 'custom';
     style?: CardStyle;
+    gridColumn?: number;  // 1-4 for which column
+    gridRow?: number;     // 1+ for which row
   }
 
   interface CardOption {
     type: CardType;
     label: string;
     icon: string;
-    size: 'small' | 'wide';
+    size: 'small' | 'medium' | 'wide' | 'full';
     singleton?: boolean;
   }
 
   const cardOptions: CardOption[] = [
     { type: 'quote', label: 'Quote Card', icon: '', size: 'small' },
-    { type: 'gradient', label: 'Image Gallery', icon: '', size: 'small' },
-    { type: 'music', label: 'Music Player', icon: '', size: 'small', singleton: true },
+    { type: 'gradient', label: 'Image Gallery', icon: '', size: 'medium' },
+    { type: 'music', label: 'Music Player', icon: '', size: 'medium', singleton: true },
     { type: 'games', label: 'Favorite Games', icon: '', size: 'small' },
-    { type: 'github', label: 'GitHub Projects', icon: '', size: 'small' },
-    { type: 'friends', label: 'Friends', icon: '', size: 'small', singleton: true },
+    { type: 'github', label: 'GitHub Projects', icon: '', size: 'medium' },
+    { type: 'friends', label: 'Friends', icon: '', size: 'wide', singleton: true },
+    { type: 'embed', label: 'Embed Player', icon: '', size: 'wide' },
+    { type: 'calendar', label: 'Calendar', icon: '', size: 'full' },
   ];
+
+  // Page style state
+  let pageStyle: PageStyle = {
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+    fontSize: 'medium',
+    primaryColor: '#ffffff',
+    accentColor: '#3182ce',
+  };
+  let showPageStyleMenu = false;
+
+  // Page font options
+  const pageFonts = [
+    { name: 'System', value: 'system-ui, -apple-system, sans-serif' },
+    { name: 'Inter', value: 'Inter, sans-serif' },
+    { name: 'Roboto', value: 'Roboto, sans-serif' },
+    { name: 'Poppins', value: 'Poppins, sans-serif' },
+    { name: 'Playfair', value: '"Playfair Display", serif' },
+    { name: 'Merriweather', value: 'Merriweather, serif' },
+    { name: 'Fira Code', value: '"Fira Code", monospace' },
+    { name: 'Space Grotesk', value: '"Space Grotesk", sans-serif' },
+  ];
+
+  // Font size options
+  const fontSizes = [
+    { name: 'Small', value: 'small', scale: '0.875' },
+    { name: 'Medium', value: 'medium', scale: '1' },
+    { name: 'Large', value: 'large', scale: '1.125' },
+    { name: 'X-Large', value: 'xlarge', scale: '1.25' },
+  ];
+
+  // Get font size scale
+  function getFontSizeScale(size: string): string {
+    const found = fontSizes.find(f => f.value === size);
+    return found?.scale || '1';
+  }
+
+  // Resize state for cards
+  let resizingCard: string | null = null;
+  let resizeStartPos = { x: 0, y: 0 };
+  let resizeStartSize = { width: 0, height: 0 };
 
   let cards: Card[] = [];
   let showAddCardMenu = false;
+  let addCardMenuPos = { x: 0, y: 0 };
   let cardSettingsOpen: string | null = null; // ID of card being customized
+  
+  // Open add card menu positioned near the button
+  function openAddCardMenu(e: MouseEvent) {
+    const btn = e.currentTarget as HTMLElement;
+    const rect = btn.getBoundingClientRect();
+    
+    // Position menu above the button, centered
+    addCardMenuPos = {
+      x: rect.left + rect.width / 2 - 150, // Center the 300px menu
+      y: rect.top - 12 // 12px above the button
+    };
+    
+    // Clamp to viewport
+    addCardMenuPos.x = Math.max(16, Math.min(addCardMenuPos.x, window.innerWidth - 316));
+    
+    showAddCardMenu = !showAddCardMenu;
+  }
   
   // Convert CardStyle to inline CSS string
   function getCardStyleCSS(style?: CardStyle): string {
@@ -132,12 +214,19 @@
     return styles.join('; ');
   }
   
-  // Get wrapper style for custom sizes
+  // Get wrapper style for custom sizes and minHeight
   function getWrapperStyleCSS(card: Card): string {
-    if (card.size !== 'custom' || !card.style) return '';
-    
     const styles: string[] = [];
-    if (card.style.width) styles.push(`flex-basis: ${card.style.width}`);
+    
+    // Apply minHeight if set (from resize drag)
+    if (card.style?.minHeight) {
+      styles.push(`min-height: ${card.style.minHeight}`);
+    }
+    
+    // Custom size width
+    if (card.size === 'custom' && card.style?.width) {
+      styles.push(`flex-basis: ${card.style.width}`);
+    }
     
     return styles.join('; ');
   }
@@ -171,7 +260,7 @@
   }
   
   // Helper to update card size
-  function updateCardSize(cardId: string, size: 'small' | 'wide' | 'custom') {
+  function updateCardSize(cardId: string, size: 'small' | 'medium' | 'wide' | 'full' | 'custom') {
     const cardIndex = cards.findIndex(c => c.id === cardId);
     if (cardIndex === -1) return;
     
@@ -230,6 +319,16 @@
     cards = profileData.cards as Card[];
     customGreeting = profileData.greeting;
     miniWidgets = profileData.miniWidgets;
+    
+    // Load page style
+    if (profileData.pageStyle) {
+      pageStyle = profileData.pageStyle;
+    }
+    
+    // Load bio font from user if available
+    if (user?.bio_font) {
+      bioFont = user.bio_font;
+    }
     
     // Load quote contents
     if (profileData.quoteCards) {
@@ -378,20 +477,35 @@
     updateProfileCards(cards as ProfileCard[]);
   }
 
-  // Drag state
+  // Drag state for grid-based placement
   let draggedCard: Card | null = null;
-  let dragOverIndex: number | null = null;
   let draggedElement: HTMLElement | null = null;
+  let dropTargetIndex: number | null = null;
+  let isDragging = false;
 
   function handleDragStart(e: DragEvent, card: Card, element: HTMLElement) {
     if (!isEditMode) return;
+    
     draggedCard = card;
     draggedElement = element;
-    element.classList.add('dragging');
+    isDragging = true;
+    
+    // Use setTimeout to allow the drag image to be captured before adding class
+    setTimeout(() => {
+      element.classList.add('dragging');
+    }, 0);
     
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', card.id);
+      // Set a drag image
+      const dragImage = element.cloneNode(true) as HTMLElement;
+      dragImage.style.opacity = '0.8';
+      dragImage.style.position = 'absolute';
+      dragImage.style.top = '-1000px';
+      document.body.appendChild(dragImage);
+      e.dataTransfer.setDragImage(dragImage, 50, 50);
+      setTimeout(() => dragImage.remove(), 0);
     }
   }
 
@@ -401,21 +515,33 @@
     }
     draggedCard = null;
     draggedElement = null;
-    dragOverIndex = null;
+    dropTargetIndex = null;
+    isDragging = false;
   }
 
   function handleDragOver(e: DragEvent, index: number) {
     if (!isEditMode || !draggedCard) return;
     e.preventDefault();
     
-    const draggedIndex = cards.findIndex(c => c.id === draggedCard?.id);
-    if (draggedIndex !== index) {
-      dragOverIndex = index;
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move';
     }
+    
+    const draggedIndex = cards.findIndex(c => c.id === draggedCard?.id);
+    if (draggedIndex === index) {
+      dropTargetIndex = null;
+      return;
+    }
+    
+    dropTargetIndex = index;
   }
 
-  function handleDragLeave() {
-    dragOverIndex = null;
+  function handleDragLeave(e: DragEvent) {
+    // Only clear if leaving the card entirely
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (!relatedTarget || !relatedTarget.closest('.card-wrapper')) {
+      dropTargetIndex = null;
+    }
   }
 
   function handleDrop(e: DragEvent, targetIndex: number) {
@@ -424,16 +550,46 @@
     
     const draggedIndex = cards.findIndex(c => c.id === draggedCard?.id);
     if (draggedIndex === -1 || draggedIndex === targetIndex) {
-      dragOverIndex = null;
+      dropTargetIndex = null;
+      isDragging = false;
       return;
     }
 
+    // Reorder cards
     const newCards = [...cards];
     const [removed] = newCards.splice(draggedIndex, 1);
-    newCards.splice(targetIndex, 0, removed);
-    cards = newCards;
     
-    dragOverIndex = null;
+    // If dragging forward, adjust for the removal
+    const insertIndex = draggedIndex < targetIndex ? targetIndex : targetIndex;
+    newCards.splice(insertIndex, 0, removed);
+    
+    cards = newCards;
+    dropTargetIndex = null;
+    isDragging = false;
+    updateProfileCards(cards as ProfileCard[]);
+  }
+
+  // Handle dropping on the grid background (at the end)
+  function handleGridDrop(e: DragEvent) {
+    if (!isEditMode || !draggedCard) return;
+    
+    // Only handle if not dropped on a card
+    const target = e.target as HTMLElement;
+    if (target.closest('.card-wrapper')) return;
+    
+    e.preventDefault();
+    
+    const draggedIndex = cards.findIndex(c => c.id === draggedCard?.id);
+    if (draggedIndex === -1) return;
+
+    // Move to end
+    const newCards = [...cards];
+    const [removed] = newCards.splice(draggedIndex, 1);
+    newCards.push(removed);
+    
+    cards = newCards;
+    dropTargetIndex = null;
+    isDragging = false;
     updateProfileCards(cards as ProfileCard[]);
   }
 
@@ -568,6 +724,51 @@
     }
   }
 
+  function startEditingBio() {
+    if (!isEditMode) return;
+    editableBio = user?.description || bio || '';
+    isEditingBio = true;
+    setTimeout(() => bioTextarea?.focus(), 0);
+  }
+
+  async function finishEditingBio() {
+    isEditingBio = false;
+    
+    // Save bio to server
+    if (authToken) {
+      try {
+        const response = await fetch(apiUrl('/api/auth/profile'), {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            bio: editableBio,
+            bio_font: bioFont,
+          }),
+        });
+
+        if (response.ok && user) {
+          user.bio = editableBio;
+        }
+      } catch (error) {
+        console.error('Error saving bio:', error);
+      }
+    }
+  }
+
+  function handleBioKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      isEditingBio = false;
+    }
+  }
+
+  function selectBioFont(font: string) {
+    bioFont = font;
+    showBioFontMenu = false;
+  }
+
   function addWidget(type: 'date' | 'time' | 'gif') {
     if (type === 'gif') {
       miniGifInput?.click();
@@ -611,6 +812,205 @@
     return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   }
 
+  function formatLastActive(lastActive: string): string {
+    const date = new Date(lastActive);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  // Page style functions
+  function handlePageFontChange(fontValue: string) {
+    pageStyle = { ...pageStyle, fontFamily: fontValue };
+    if (canEdit) {
+      updatePageStyle({ fontFamily: fontValue });
+    }
+  }
+
+  function handlePageFontSizeChange(sizeValue: string) {
+    pageStyle = { ...pageStyle, fontSize: sizeValue as PageStyle['fontSize'] };
+    if (canEdit) {
+      updatePageStyle({ fontSize: sizeValue as PageStyle['fontSize'] });
+    }
+  }
+
+  // Size cycle order for resize operations
+  const sizeOrder: Array<'small' | 'medium' | 'wide' | 'full'> = ['small', 'medium', 'wide', 'full'];
+  
+  // Get current grid column count based on screen width
+  function getGridColumns(): number {
+    if (typeof window === 'undefined') return 4;
+    const width = window.innerWidth;
+    if (width >= 1800) return 6;
+    if (width >= 1600) return 4;
+    if (width >= 1400) return 3;
+    if (width >= 768) return 2;
+    return 1;
+  }
+
+  // Resize handlers for cards - uses grid-based sizing
+  function handleResizeStart(e: MouseEvent, cardId: string) {
+    if (!isEditMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const cardWrapper = (e.currentTarget as HTMLElement).closest('.card-wrapper') as HTMLElement | null;
+    if (!cardWrapper) return;
+    
+    startResize(e, cardId, cardWrapper);
+  }
+
+  // Resize state for smooth animations
+  let resizeTargetSize: 'small' | 'medium' | 'wide' | 'full' | null = null;
+  let resizeTargetHeight: number = 0;
+  let resizeAnimationFrame: number | null = null;
+  let resizeStartSize_initial: 'small' | 'medium' | 'wide' | 'full' | 'custom' | null = null;
+
+  function startResize(e: MouseEvent, cardId: string, cardElement: HTMLElement) {
+    resizingCard = cardId;
+    resizeStartPos = { x: e.clientX, y: e.clientY };
+    resizeStartSize = { 
+      width: cardElement.offsetWidth, 
+      height: cardElement.offsetHeight 
+    };
+    
+    // Store initial size for reference
+    const cardIndex = cards.findIndex(c => c.id === cardId);
+    if (cardIndex >= 0) {
+      resizeStartSize_initial = cards[cardIndex].size;
+      resizeTargetSize = cards[cardIndex].size as any;
+      resizeTargetHeight = cardElement.offsetHeight;
+    }
+    
+    // Add body class to prevent text selection during drag
+    document.body.style.cursor = 'se-resize';
+    document.body.style.userSelect = 'none';
+    
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('mouseup', stopResize);
+  }
+
+  function handleResize(e: MouseEvent) {
+    if (!resizingCard) return;
+    
+    // Cancel any pending animation frame
+    if (resizeAnimationFrame) {
+      cancelAnimationFrame(resizeAnimationFrame);
+    }
+    
+    // Use requestAnimationFrame for smooth updates
+    resizeAnimationFrame = requestAnimationFrame(() => {
+      if (!resizingCard) return;
+      
+      const deltaX = e.clientX - resizeStartPos.x;
+      const deltaY = e.clientY - resizeStartPos.y;
+      
+      const cardIndex = cards.findIndex(c => c.id === resizingCard);
+      if (cardIndex === -1) return;
+      
+      const gridColumns = getGridColumns();
+      
+      // Calculate new size based on horizontal drag with smoothing
+      // Use smaller threshold for more responsive feel
+      const columnThreshold = 80;
+      const spanDelta = Math.round(deltaX / columnThreshold);
+      
+      // Get initial span count (from when drag started)
+      const initialSizeIndex = sizeOrder.indexOf(resizeStartSize_initial as any);
+      const initialSpan = initialSizeIndex >= 0 ? initialSizeIndex + 1 : 1;
+      
+      // Calculate new span (clamped to grid columns)
+      const newSpan = Math.max(1, Math.min(gridColumns, initialSpan + spanDelta));
+      
+      // Map span to size
+      let newSize: 'small' | 'medium' | 'wide' | 'full';
+      if (newSpan >= gridColumns) {
+        newSize = 'full';
+      } else if (newSpan >= 3) {
+        newSize = 'wide';
+      } else if (newSpan >= 2) {
+        newSize = 'medium';
+      } else {
+        newSize = 'small';
+      }
+      
+      // Calculate new height with smooth interpolation
+      const newHeight = Math.max(180, Math.round(resizeStartSize.height + deltaY));
+      
+      // Update target indicators
+      resizeTargetSize = newSize;
+      resizeTargetHeight = newHeight;
+      
+      // Update card state
+      const currentCard = cards[cardIndex];
+      if (currentCard.size !== newSize || 
+          Math.abs((parseInt(currentCard.style?.minHeight || '0') || 0) - newHeight) > 5) {
+        cards[cardIndex] = {
+          ...currentCard,
+          size: newSize,
+          style: {
+            ...currentCard.style,
+            minHeight: `${newHeight}px`,
+          }
+        };
+        cards = [...cards];
+      }
+    });
+  }
+
+  function stopResize() {
+    // Cancel any pending animation
+    if (resizeAnimationFrame) {
+      cancelAnimationFrame(resizeAnimationFrame);
+      resizeAnimationFrame = null;
+    }
+    
+    // Reset body styles
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    
+    if (resizingCard && canEdit) {
+      updateProfileCards(cards as ProfileCard[]);
+    }
+    
+    resizingCard = null;
+    resizeTargetSize = null;
+    resizeStartSize_initial = null;
+    document.removeEventListener('mousemove', handleResize);
+    document.removeEventListener('mouseup', stopResize);
+  }
+  
+  // Quick resize buttons - cycle through sizes
+  function cycleCardSize(cardId: string, direction: 'expand' | 'shrink') {
+    const cardIndex = cards.findIndex(c => c.id === cardId);
+    if (cardIndex === -1) return;
+    
+    const currentSize = cards[cardIndex].size;
+    const currentIndex = sizeOrder.indexOf(currentSize as any);
+    
+    let newIndex: number;
+    if (direction === 'expand') {
+      newIndex = Math.min(sizeOrder.length - 1, currentIndex + 1);
+    } else {
+      newIndex = Math.max(0, currentIndex - 1);
+    }
+    
+    cards[cardIndex] = { ...cards[cardIndex], size: sizeOrder[newIndex] };
+    cards = [...cards];
+    
+    if (canEdit) {
+      updateProfileCards(cards as ProfileCard[]);
+    }
+  }
+
   let currentTime = formatTime();
   let currentDate = formatDate();
   
@@ -622,7 +1022,7 @@
   }
 </script>
 
-<div class="profile-container" style={backgroundImage ? `background-image: url(${backgroundImage})` : ''} class:has-background={backgroundImage}>
+<div class="profile-container" style="{backgroundImage ? `background-image: url(${backgroundImage});` : ''} font-family: {pageStyle.fontFamily}; --font-scale: {getFontSizeScale(pageStyle.fontSize)};" class:has-background={backgroundImage}>
   {#if backgroundImage}
     <div class="background-overlay"></div>
   {/if}
@@ -635,204 +1035,384 @@
     class="hidden-input"
   />
 
-  {#if isEditMode}
-    <div class="background-picker">
-      <button class="bg-picker-btn" on:click={triggerFileInput}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-          <circle cx="8.5" cy="8.5" r="1.5"/>
-          <path d="M21 15l-5-5L5 21"/>
-        </svg>
-        <span>{backgroundImage ? 'Change Background' : 'Add Background'}</span>
-      </button>
-      {#if backgroundImage}
-        <button class="bg-remove-btn" on:click={removeBackground}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        </button>
-      {/if}
-      <span class="bg-hint">Supports JPG, PNG, GIF, WebP</span>
-    </div>
-  {/if}
+  <input 
+    type="file" 
+    bind:this={miniGifInput}
+    on:change={handleMiniGifUpload}
+    accept="image/gif,image/png,image/jpeg,image/webp"
+    class="hidden-input"
+  />
 
-  <header class="profile-header">
-    <div class="greeting">
-      {#if isEditMode && isEditingGreeting}
-        <input
-          type="text"
-          bind:this={greetingInput}
-          bind:value={customGreeting}
-          on:blur={finishEditingGreeting}
-          on:keydown={handleGreetingKeydown}
-          class="greeting-input"
-          maxlength="30"
-          placeholder="Your greeting..."
-        />
-      {:else}
-        <h1 
-          class:editable={isEditMode}
-          on:click={startEditingGreeting}
-          on:keydown={(e) => e.key === 'Enter' && startEditingGreeting()}
-          role={isEditMode ? 'button' : undefined}
-          tabindex={isEditMode ? 0 : undefined}
-        >
-          {customGreeting} <span class="username">{username.toUpperCase()}!</span>
-          {#if isEditMode}
-            <span class="edit-icon">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
-              </svg>
-            </span>
+  <!-- Top bar with edit controls -->
+  <header class="profile-top-bar">
+    <div class="top-bar-left">
+      {#if isEditMode}
+        <button class="bg-picker-btn" on:click={triggerFileInput}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <path d="M21 15l-5-5L5 21"/>
+          </svg>
+          <span>{backgroundImage ? 'Change BG' : 'Add BG'}</span>
+        </button>
+        {#if backgroundImage}
+          <button class="bg-remove-btn" on:click={removeBackground} title="Remove background">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        {/if}
+        
+        <!-- Page Style Button -->
+        <div class="page-style-wrapper">
+          <button class="page-style-btn" on:click={() => showPageStyleMenu = !showPageStyleMenu}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="4 7 4 4 20 4 20 7"/>
+              <line x1="9" y1="20" x2="15" y2="20"/>
+              <line x1="12" y1="4" x2="12" y2="20"/>
+            </svg>
+            <span>Page Style</span>
+          </button>
+          
+          {#if showPageStyleMenu}
+            <div class="page-style-menu">
+              <div class="style-section">
+                <label class="style-label">Page Font</label>
+                <div class="font-options-grid">
+                  {#each pageFonts as font}
+                    <button 
+                      class="font-opt" 
+                      class:active={pageStyle.fontFamily === font.value}
+                      style="font-family: {font.value}"
+                      on:click={() => handlePageFontChange(font.value)}
+                    >
+                      {font.name}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+              
+              <div class="style-section">
+                <label class="style-label">Text Size</label>
+                <div class="size-options-row">
+                  {#each fontSizes as size}
+                    <button 
+                      class="size-opt" 
+                      class:active={pageStyle.fontSize === size.value}
+                      on:click={() => handlePageFontSizeChange(size.value)}
+                    >
+                      {size.name}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            </div>
           {/if}
-        </h1>
-      {/if}
-      
-      {#if bio}
-        <div class="bio-section">
-          <p class="bio-text">{bio}</p>
         </div>
       {/if}
-      
-      <div class="mini-widgets">
-        {#each miniWidgets as widget (widget.id)}
-          <div class="mini-widget {widget.type}">
-            {#if widget.type === 'date'}
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              <span>{currentDate}</span>
-            {:else if widget.type === 'time'}
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-              </svg>
-              <span>{currentTime}</span>
-            {:else if widget.type === 'gif' && widget.gifUrl}
-              <img src={widget.gifUrl} alt="Mini GIF" class="mini-gif" />
-            {/if}
-            {#if isEditMode}
-              <button class="remove-widget" on:click={() => removeWidget(widget.id)}>×</button>
-            {/if}
-          </div>
-        {/each}
-
-        {#if isEditMode}
-          <div class="add-widget-wrapper">
-            <button class="add-widget-btn" on:click={() => showWidgetMenu = !showWidgetMenu}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-            </button>
-            
-            {#if showWidgetMenu}
-              <div class="widget-menu">
-                <button on:click={() => addWidget('date')}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                  </svg>
-                  Date
-                </button>
-                <button on:click={() => addWidget('time')}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-                  </svg>
-                  Time
-                </button>
-                <button on:click={() => addWidget('gif')}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
-                  </svg>
-                  Mini GIF
-                </button>
-              </div>
-            {/if}
-          </div>
-        {/if}
-      </div>
-
-      <input 
-        type="file" 
-        bind:this={miniGifInput}
-        on:change={handleMiniGifUpload}
-        accept="image/gif,image/png,image/jpeg,image/webp"
-        class="hidden-input"
-      />
     </div>
-    <div class="header-actions">
+    <div class="top-bar-right">
       {#if canEdit}
         {#if isEditMode}
-          <button class="save-btn" on:click={saveLayout}>save changes</button>
-          <button class="cancel-btn" on:click={() => isEditMode = false}>cancel</button>
+          <button class="save-btn" on:click={saveLayout}>Save</button>
+          <button class="cancel-btn" on:click={() => isEditMode = false}>Cancel</button>
         {:else}
-          <button class="edit-space-btn" on:click={toggleEditMode}>edit my space</button>
+          <button class="edit-space-btn" on:click={toggleEditMode}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+            Edit Space
+          </button>
         {/if}
       {:else}
-        <!-- Add Friend button for other users' profiles -->
         {#if friendRequestStatus === 'loading'}
           <button class="friend-btn loading" disabled>
             <span class="spinner-small"></span>
           </button>
         {:else if friendRequestStatus === 'friends'}
           <button class="friend-btn friends" disabled>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M20 6L9 17l-5-5"/>
             </svg>
-            friends
+            Friends
           </button>
         {:else if friendRequestStatus === 'pending' || friendRequestStatus === 'sent'}
-          <button class="friend-btn pending" disabled>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 6v6l4 2"/>
-            </svg>
-            request sent
-          </button>
+          <button class="friend-btn pending" disabled>Request Sent</button>
         {:else}
           <button class="friend-btn add" on:click={sendFriendRequest}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
               <circle cx="8.5" cy="7" r="4"/>
               <line x1="20" y1="8" x2="20" y2="14"/>
               <line x1="23" y1="11" x2="17" y2="11"/>
             </svg>
-            add friend
+            Add Friend
           </button>
         {/if}
-        {#if friendRequestError}
-          <span class="friend-error">{friendRequestError}</span>
-        {/if}
       {/if}
-      <div class="header-avatar">
-        <Avatar 
-          src={avatar}
-          username={username}
-          userId={user?.id || currentUserId}
-          size={44}
-        />
-      </div>
     </div>
   </header>
 
-  <div class="profile-grid" class:edit-mode={isEditMode}>
-    {#each cards as card, index (card.id)}
-      <div
-        class="card-wrapper {card.size} {getTransitionClass(card)}"
-        class:drag-over={dragOverIndex === index}
-        class:dragging={draggedCard?.id === card.id}
-        style={getWrapperStyleCSS(card)}
-        draggable={isEditMode}
-        on:dragstart={(e) => handleDragStart(e, card, e.currentTarget)}
-        on:dragend={handleDragEnd}
-        on:dragover={(e) => handleDragOver(e, index)}
-        on:dragleave={handleDragLeave}
-        on:drop={(e) => handleDrop(e, index)}
-        role={isEditMode ? "button" : undefined}
-        tabindex={isEditMode ? 0 : undefined}
-      >
-        {#if dragOverIndex === index && draggedCard?.id !== card.id}
-          <div class="drop-indicator"></div>
+  <!-- Main two-column layout -->
+  <div class="profile-layout">
+    <!-- Left Column: Profile Card -->
+    <aside class="profile-sidebar">
+      <div class="profile-card">
+        <!-- Large Avatar -->
+        <div class="profile-avatar-section">
+          <div class="profile-avatar-wrapper">
+            <Avatar 
+              src={avatar}
+              username={username}
+              userId={user?.id || currentUserId}
+              size={200}
+            />
+            <div class="status-indicator {user?.status || 'offline'}"></div>
+          </div>
+        </div>
+
+        <!-- Username -->
+        <h1 class="profile-username">{username}</h1>
+
+        <!-- Bio/Description -->
+        <div class="bio-section">
+          {#if isEditMode && isEditingBio}
+            <div class="bio-edit-container">
+              <textarea
+                bind:this={bioTextarea}
+                bind:value={editableBio}
+                on:blur={finishEditingBio}
+                on:keydown={handleBioKeydown}
+                class="bio-textarea"
+                style="font-family: {bioFont}"
+                placeholder="Write something about yourself..."
+                maxlength="200"
+              ></textarea>
+              <span class="bio-char-count">{editableBio.length}/200</span>
+            </div>
+          {:else}
+            <p 
+              class="profile-description"
+              class:placeholder={!bio && !user?.description}
+              class:editable={isEditMode}
+              style="font-family: {bioFont}"
+              on:click={startEditingBio}
+              on:keydown={(e) => e.key === 'Enter' && startEditingBio()}
+              role={isEditMode ? 'button' : undefined}
+              tabindex={isEditMode ? 0 : undefined}
+            >
+              {#if bio || user?.description}
+                {user?.description || bio}
+              {:else if isEditMode}
+                Click to add a bio...
+              {/if}
+              {#if isEditMode}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="bio-edit-icon">
+                  <path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                </svg>
+              {/if}
+            </p>
+          {/if}
+          
+          {#if isEditMode}
+            <div class="bio-font-picker">
+              <button class="font-picker-btn" on:click={() => showBioFontMenu = !showBioFontMenu}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="4 7 4 4 20 4 20 7"/>
+                  <line x1="9" y1="20" x2="15" y2="20"/>
+                  <line x1="12" y1="4" x2="12" y2="20"/>
+                </svg>
+                Font
+              </button>
+              
+              {#if showBioFontMenu}
+                <div class="bio-font-menu">
+                  {#each bioFonts as font}
+                    <button 
+                      class="font-option"
+                      class:active={bioFont === font.value}
+                      style="font-family: {font.value}"
+                      on:click={() => selectBioFont(font.value)}
+                    >
+                      {font.name}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+
+        <!-- Info Grid -->
+        <div class="profile-info-grid">
+          {#if user?.age}
+            <div class="info-item">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2"/>
+              </svg>
+              <span class="info-label">Age</span>
+              <span class="info-value">{user.age}</span>
+            </div>
+          {/if}
+          
+          {#if user?.location}
+            <div class="info-item">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+              <span class="info-label">Location</span>
+              <span class="info-value">{user.location}</span>
+            </div>
+          {/if}
+        </div>
+
+        <!-- Mood Card -->
+        {#if user?.mood || user?.mood_emoji}
+          <div class="mood-card">
+            <span class="mood-emoji">{user?.mood_emoji || '💭'}</span>
+            <span class="mood-text">{user?.mood || 'Feeling good'}</span>
+          </div>
+        {:else if isOwnProfile}
+          <div class="mood-card placeholder">
+            <span class="mood-emoji">💭</span>
+            <span class="mood-text">Set your mood...</span>
+          </div>
         {/if}
-        
+
+        <!-- Last Active -->
+        <div class="last-active">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 6v6l4 2"/>
+          </svg>
+          {#if user?.status === 'online'}
+            <span>Online now</span>
+          {:else if user?.last_active}
+            <span>Last seen {formatLastActive(user.last_active)}</span>
+          {:else}
+            <span>Offline</span>
+          {/if}
+        </div>
+
+        <!-- Mini Widgets -->
+        {#if miniWidgets.length > 0 || isEditMode}
+          <div class="profile-widgets">
+            {#each miniWidgets as widget (widget.id)}
+              <div class="mini-widget {widget.type}">
+                {#if widget.type === 'date'}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  <span>{currentDate}</span>
+                {:else if widget.type === 'time'}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                  </svg>
+                  <span>{currentTime}</span>
+                {:else if widget.type === 'gif' && widget.gifUrl}
+                  <img src={widget.gifUrl} alt="Mini GIF" class="mini-gif" />
+                {/if}
+                {#if isEditMode}
+                  <button class="remove-widget" on:click={() => removeWidget(widget.id)}>×</button>
+                {/if}
+              </div>
+            {/each}
+
+            {#if isEditMode}
+              <div class="add-widget-wrapper">
+                <button class="add-widget-btn" on:click={() => showWidgetMenu = !showWidgetMenu}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                </button>
+                
+                {#if showWidgetMenu}
+                  <div class="widget-menu">
+                    <button on:click={() => addWidget('date')}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                      </svg>
+                      Date
+                    </button>
+                    <button on:click={() => addWidget('time')}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                      </svg>
+                      Time
+                    </button>
+                    <button on:click={() => addWidget('gif')}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      </svg>
+                      GIF
+                    </button>
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        {/if}
+      </div>
+    </aside>
+
+    <!-- Right Column: Customizable Cards -->
+    <main class="profile-content">
+      <div class="content-header">
+        {#if isEditMode && isEditingGreeting}
+          <input
+            type="text"
+            bind:this={greetingInput}
+            bind:value={customGreeting}
+            on:blur={finishEditingGreeting}
+            on:keydown={handleGreetingKeydown}
+            class="greeting-input"
+            maxlength="30"
+            placeholder="Your greeting..."
+          />
+        {:else}
+          <h2 
+            class="greeting-title"
+            class:editable={isEditMode}
+            on:click={startEditingGreeting}
+            on:keydown={(e) => e.key === 'Enter' && startEditingGreeting()}
+            role={isEditMode ? 'button' : undefined}
+            tabindex={isEditMode ? 0 : undefined}
+          >
+            {customGreeting}
+            {#if isEditMode}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="edit-icon">
+                <path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+              </svg>
+            {/if}
+          </h2>
+        {/if}
+      </div>
+
+      <div 
+        class="profile-grid" 
+        class:edit-mode={isEditMode} 
+        class:is-dragging={isDragging}
+        on:dragover|preventDefault
+        on:drop={handleGridDrop}
+      >
+        {#each cards as card, index (card.id)}
+          <div
+            class="card-wrapper {card.size} {getTransitionClass(card)}"
+            class:dragging={draggedCard?.id === card.id}
+            class:resizing={resizingCard === card.id}
+            class:drop-target={dropTargetIndex === index && draggedCard?.id !== card.id}
+            style={getWrapperStyleCSS(card)}
+            draggable={isEditMode ? "true" : "false"}
+            on:dragstart={(e) => handleDragStart(e, card, e.currentTarget)}
+            on:dragend={handleDragEnd}
+            on:dragover={(e) => handleDragOver(e, index)}
+            on:dragleave={handleDragLeave}
+            on:drop={(e) => handleDrop(e, index)}
+            role={isEditMode ? "button" : undefined}
+            tabindex={isEditMode ? 0 : undefined}
+          >
         <div 
           class="card {card.type}-card" 
           class:edit-mode={isEditMode}
@@ -852,6 +1432,30 @@
                   <circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
                 </svg>
               </div>
+              <!-- Quick size controls -->
+              <div class="size-controls">
+                <button 
+                  class="size-ctrl-btn shrink" 
+                  on:click|stopPropagation={() => cycleCardSize(card.id, 'shrink')}
+                  disabled={card.size === 'small'}
+                  title="Shrink"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M5 12h14"/>
+                  </svg>
+                </button>
+                <span class="size-label">{card.size === 'small' ? '1x' : card.size === 'medium' ? '2x' : card.size === 'wide' ? '3x' : card.size === 'full' ? 'full' : '●'}</span>
+                <button 
+                  class="size-ctrl-btn expand" 
+                  on:click|stopPropagation={() => cycleCardSize(card.id, 'expand')}
+                  disabled={card.size === 'full'}
+                  title="Expand"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                </button>
+              </div>
               <!-- Card settings button -->
               <button class="card-settings-btn" on:click|stopPropagation={() => openCardSettings(card.id)} title="Card settings">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -864,6 +1468,26 @@
                   <path d="M18 6L6 18M6 6l12 12"/>
                 </svg>
               </button>
+            </div>
+            <!-- Resize handle for drag-to-resize -->
+            <div 
+              class="resize-handle"
+              class:active={resizingCard === card.id}
+              on:mousedown={(e) => handleResizeStart(e, card.id)}
+              role="button"
+              aria-label="Resize card"
+              tabindex="0"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M18 6L6 18"/>
+                <path d="M18 13L13 18"/>
+                <path d="M18 18h0"/>
+              </svg>
+              {#if resizingCard === card.id && resizeTargetSize}
+                <div class="resize-tooltip">
+                  {resizeTargetSize === 'small' ? '1×1' : resizeTargetSize === 'medium' ? '2×1' : resizeTargetSize === 'wide' ? '3×1' : 'full'}
+                </div>
+              {/if}
             </div>
           {/if}
 
@@ -908,47 +1532,76 @@
 
           {:else if card.type === 'friends'}
             <FriendsCard editable={isEditMode} {authToken} userId={effectiveUserId} />
+
+          {:else if card.type === 'embed'}
+            <EmbedCard 
+              editable={isEditMode && isOwnProfile} 
+              cardId={card.id}
+              profileEmbedData={profileData?.embedCards?.[card.id] || null}
+              isOwnProfile={isOwnProfile}
+            />
+
+          {:else if card.type === 'calendar'}
+            <CalendarCard 
+              editable={isEditMode && isOwnProfile} 
+              cardId={card.id}
+              profileCalendarData={profileData?.calendarCards?.[card.id] || null}
+              isOwnProfile={isOwnProfile}
+            />
           {/if}
         </div>
       </div>
-    {/each}
+        {/each}
 
-    {#if isEditMode}
-      <div class="card-wrapper small add-card-wrapper">
-        <div class="card add-card">
-          <button class="add-new-btn" on:click={() => showAddCardMenu = !showAddCardMenu}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg>
-            <span>Add Card</span>
-          </button>
-          
-          {#if showAddCardMenu}
-            <div class="add-card-menu">
-              <div class="menu-header">Choose a card type</div>
-              <div class="menu-options">
-                {#each cardOptions as option}
-                  <button 
-                    class="menu-option"
-                    class:disabled={!canAddCardType(option.type)}
-                    on:click={() => addCard(option.type)}
-                    disabled={!canAddCardType(option.type)}
-                  >
-                    <span class="option-label">{option.label}</span>
-                    {#if option.singleton && !canAddCardType(option.type)}
-                      <span class="option-badge">Added</span>
-                    {/if}
-                  </button>
-                {/each}
-              </div>
+        {#if isEditMode}
+          <div class="card-wrapper small add-card-wrapper">
+            <div class="card add-card">
+              <button class="add-new-btn" on:click={openAddCardMenu}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg>
+                <span>Add Card</span>
+              </button>
             </div>
-          {/if}
-        </div>
+          </div>
+        {/if}
       </div>
-    {/if}
-  </div>
 
-  {#if isEditMode}
-    <div class="edit-hint">Drag cards to rearrange your space</div>
-  {/if}
+      <!-- Add card menu portal - positioned fixed on top of everything -->
+      {#if showAddCardMenu}
+        <div 
+          class="add-card-menu-backdrop" 
+          on:click={() => showAddCardMenu = false}
+          on:keydown={(e) => e.key === 'Escape' && (showAddCardMenu = false)}
+          role="button"
+          tabindex="-1"
+        ></div>
+        <div 
+          class="add-card-menu" 
+          style="left: {addCardMenuPos.x}px; bottom: {window.innerHeight - addCardMenuPos.y}px;"
+        >
+          <div class="menu-header">Choose a card type</div>
+          <div class="menu-options">
+            {#each cardOptions as option}
+              <button 
+                class="menu-option"
+                class:disabled={!canAddCardType(option.type)}
+                on:click={() => addCard(option.type)}
+                disabled={!canAddCardType(option.type)}
+              >
+                <span class="option-label">{option.label}</span>
+                {#if option.singleton && !canAddCardType(option.type)}
+                  <span class="option-badge">Added</span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      {#if isEditMode}
+        <div class="edit-hint">Drag cards to rearrange • Click ⚙️ for card settings • Drag corner to resize • Click + to add new cards</div>
+      {/if}
+    </main>
+  </div>
 </div>
 
 <!-- Card Settings Panel -->
@@ -975,17 +1628,22 @@
                 class="size-option" 
                 class:active={editingCard.size === 'small'}
                 on:click={() => updateCardSize(editingCard.id, 'small')}
-              >Small</button>
+              >1x</button>
+              <button 
+                class="size-option" 
+                class:active={editingCard.size === 'medium'}
+                on:click={() => updateCardSize(editingCard.id, 'medium')}
+              >2x</button>
               <button 
                 class="size-option" 
                 class:active={editingCard.size === 'wide'}
                 on:click={() => updateCardSize(editingCard.id, 'wide')}
-              >Wide</button>
+              >3x</button>
               <button 
                 class="size-option" 
-                class:active={editingCard.size === 'custom'}
-                on:click={() => updateCardSize(editingCard.id, 'custom')}
-              >Custom</button>
+                class:active={editingCard.size === 'full'}
+                on:click={() => updateCardSize(editingCard.id, 'full')}
+              >Full</button>
             </div>
           </div>
           
@@ -1206,23 +1864,38 @@
   .profile-container {
     width: 100%;
     height: 100%;
-    background: #1a1a1a;
-    padding: 24px;
+    background: #0a0a0a;
+    padding: 20px;
+    overflow-x: hidden;
     overflow-y: auto;
     position: relative;
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
+    font-size: calc(1rem * var(--font-scale, 1));
   }
 
   .profile-container.has-background {
     background-color: transparent;
   }
 
+  /* Apply font scale to text elements */
+  .profile-container :global(h1),
+  .profile-container :global(h2),
+  .profile-container :global(h3),
+  .profile-container :global(p),
+  .profile-container :global(span),
+  .profile-container :global(div) {
+    font-family: inherit;
+  }
+
   .background-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
     pointer-events: none;
     z-index: 0;
   }
@@ -1231,40 +1904,52 @@
     display: none;
   }
 
-  .background-picker {
+  /* Top Bar */
+  .profile-top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 10;
+    background: rgba(20, 20, 20, 0.8);
+    backdrop-filter: blur(12px);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .top-bar-left, .top-bar-right {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-    position: relative;
-    z-index: 1;
+    gap: 8px;
   }
 
   .bg-picker-btn {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    background: rgba(49, 130, 206, 0.2);
-    border: 1px dashed rgba(49, 130, 206, 0.5);
-    border-radius: 12px;
-    color: #63b3ed;
-    font-size: 13px;
+    gap: 6px;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .bg-picker-btn:hover {
-    background: rgba(49, 130, 206, 0.3);
-    border-color: rgba(49, 130, 206, 0.7);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
   }
 
   .bg-remove-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
     border: none;
-    background: rgba(239, 68, 68, 0.2);
+    background: rgba(239, 68, 68, 0.15);
     color: #f87171;
     cursor: pointer;
     display: flex;
@@ -1274,97 +1959,620 @@
   }
 
   .bg-remove-btn:hover {
-    background: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.25);
   }
 
-  .bg-hint {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.4);
-  }
-
-  .profile-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
+  /* Page Style Controls */
+  .page-style-wrapper {
     position: relative;
-    z-index: 1;
   }
 
-  .greeting {
+  .page-style-btn {
     display: flex;
     align-items: center;
-    gap: 16px;
-  }
-
-  .greeting h1 {
-    font-size: 24px;
-    font-weight: 700;
-    color: #fff;
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .greeting h1.editable {
-    cursor: pointer;
-    padding: 4px 8px;
-    margin: -4px -8px;
+    gap: 6px;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
-    transition: background 0.2s ease;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
   }
 
-  .greeting h1.editable:hover {
+  .page-style-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  .page-style-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    background: rgba(25, 25, 25, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 16px;
+    min-width: 280px;
+    z-index: 100;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .style-section {
+    margin-bottom: 16px;
+  }
+
+  .style-section:last-child {
+    margin-bottom: 0;
+  }
+
+  .style-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+
+  .font-options-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .font-opt {
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: center;
+  }
+
+  .font-opt:hover {
     background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
   }
 
-  .edit-icon {
-    opacity: 0.5;
-    margin-left: 4px;
+  .font-opt.active {
+    background: rgba(99, 179, 237, 0.2);
+    border-color: #63b3ed;
+    color: #63b3ed;
   }
 
-  .greeting h1.editable:hover .edit-icon {
+  .size-options-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .size-opt {
+    flex: 1;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: center;
+  }
+
+  .size-opt:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .size-opt.active {
+    background: rgba(99, 179, 237, 0.2);
+    border-color: #63b3ed;
+    color: #63b3ed;
+  }
+
+  /* Size Controls */
+  .size-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 2px;
+  }
+
+  .size-ctrl-btn {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .size-ctrl-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
+
+  .size-ctrl-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .size-ctrl-btn.expand:hover:not(:disabled) {
+    background: rgba(99, 179, 237, 0.3);
+    color: #63b3ed;
+  }
+
+  .size-ctrl-btn.shrink:hover:not(:disabled) {
+    background: rgba(239, 154, 68, 0.3);
+    color: #ef9a44;
+  }
+
+  .size-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    min-width: 28px;
+    text-align: center;
+    text-transform: lowercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Resize Handle - Drag to resize */
+  .resize-handle {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    cursor: se-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.3);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 15;
+    opacity: 0;
+  }
+
+  .card-wrapper:hover .resize-handle,
+  .resize-handle:focus {
     opacity: 1;
   }
 
-  .greeting-input {
-    font-size: 24px;
-    font-weight: 700;
-    color: #fff;
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid #3182ce;
-    border-radius: 8px;
-    padding: 4px 12px;
-    outline: none;
-    min-width: 120px;
-    max-width: 300px;
+  .resize-handle:hover {
+    color: #63b3ed;
+    background: rgba(99, 179, 237, 0.1);
+    transform: scale(1.15);
   }
 
-  .greeting-input::placeholder {
-    color: rgba(255, 255, 255, 0.3);
+  .resize-handle.active {
+    opacity: 1;
+    color: #63b3ed;
+    background: rgba(99, 179, 237, 0.2);
+    transform: scale(1.2);
+    box-shadow: 0 0 12px rgba(99, 179, 237, 0.4);
+  }
+
+  /* Size tooltip during resize */
+  .resize-tooltip {
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    margin-bottom: 8px;
+    padding: 6px 10px;
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(99, 179, 237, 0.5);
+    border-radius: 6px;
+    color: #63b3ed;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'SF Mono', 'Monaco', monospace;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: tooltipPop 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .resize-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    right: 8px;
+    border: 5px solid transparent;
+    border-top-color: rgba(99, 179, 237, 0.5);
+  }
+
+  @keyframes tooltipPop {
+    0% { transform: scale(0.8) translateY(4px); opacity: 0; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+
+  .edit-space-btn, .save-btn, .cancel-btn, .friend-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+  }
+
+  .edit-space-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .edit-space-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .save-btn {
+    background: #fff;
+    color: #000;
+  }
+
+  .save-btn:hover {
+    background: #f0f0f0;
+  }
+
+  .cancel-btn {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .friend-btn.add {
+    background: #fff;
+    color: #000;
+  }
+
+  .friend-btn.friends {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+
+  .friend-btn.pending {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .spinner-small {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Two Column Layout */
+  .profile-layout {
+    display: flex;
+    gap: 24px;
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  /* Left Sidebar - Profile Card */
+  .profile-sidebar {
+    flex-shrink: 0;
+    width: 320px;
+  }
+
+  .profile-card {
+    background: rgba(18, 18, 18, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 32px 24px;
+    backdrop-filter: blur(20px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    position: sticky;
+    top: 20px;
+  }
+
+  .profile-avatar-section {
+    position: relative;
+  }
+
+  .profile-avatar-wrapper {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    border: 3px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .profile-avatar-wrapper :global(.avatar) {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 16px;
+  }
+
+  .status-indicator {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 4px solid rgba(18, 18, 18, 0.95);
+    z-index: 2;
+  }
+
+  .status-indicator.online { background: #22c55e; }
+  .status-indicator.idle { background: #f59e0b; }
+  .status-indicator.dnd { background: #ef4444; }
+  .status-indicator.offline { background: #6b7280; }
+
+  .profile-username {
+    font-size: 30px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+    text-align: center;
+    letter-spacing: -0.02em;
   }
 
   .bio-section {
-    margin-left: 16px;
-    padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
-    max-width: 400px;
+    width: 100%;
+    position: relative;
   }
 
-  .bio-text {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.7);
+  .profile-description {
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.8);
+    text-align: center;
+    line-height: 1.6;
     margin: 0;
-    line-height: 1.5;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 60px;
   }
 
-  .mini-widgets {
+  .profile-description.editable {
+    cursor: pointer;
+    border-radius: 12px;
+    transition: background 0.2s ease;
+  }
+
+  .profile-description.editable:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .profile-description.placeholder {
+    color: rgba(255, 255, 255, 0.3);
+    font-style: italic;
+    font-size: 14px;
+  }
+
+  .bio-edit-icon {
+    opacity: 0.4;
+    flex-shrink: 0;
+  }
+
+  .profile-description.editable:hover .bio-edit-icon {
+    opacity: 0.8;
+  }
+
+  .bio-edit-container {
+    position: relative;
+    width: 100%;
+  }
+
+  .bio-textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 12px 16px;
+    font-size: 18px;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    resize: none;
+    outline: none;
+    text-align: center;
+    line-height: 1.6;
+    transition: border-color 0.2s ease;
+  }
+
+  .bio-textarea:focus {
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  .bio-textarea::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  .bio-char-count {
+    position: absolute;
+    bottom: 8px;
+    right: 12px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  .bio-font-picker {
+    display: flex;
+    justify-content: center;
+    position: relative;
+  }
+
+  .font-picker-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .font-picker-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .bio-font-menu {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 8px;
+    background: rgba(25, 25, 25, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 8px;
+    min-width: 160px;
+    z-index: 100;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .bio-font-menu .font-option {
+    display: block;
+    width: 100%;
+    padding: 10px 14px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 16px;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.15s ease;
+  }
+
+  .bio-font-menu .font-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .bio-font-menu .font-option.active {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
+
+  .profile-info-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .info-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-left: 16px;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .info-item svg {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .info-label {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .info-value {
+    font-size: 13px;
+    color: #fff;
+    font-weight: 500;
+  }
+
+  .mood-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 12px;
+    width: 100%;
+  }
+
+  .mood-card.placeholder {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.1);
+    border-style: dashed;
+  }
+
+  .mood-emoji {
+    font-size: 24px;
+  }
+
+  .mood-text {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .mood-card.placeholder .mood-text {
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+  }
+
+  .last-active {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .profile-widgets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    width: 100%;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .mini-widget {
@@ -1372,10 +2580,10 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 20px;
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
     position: relative;
   }
 
@@ -1388,9 +2596,9 @@
   }
 
   .mini-gif {
-    width: 28px;
-    height: 28px;
-    border-radius: 14px;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
     object-fit: cover;
   }
 
@@ -1398,13 +2606,13 @@
     position: absolute;
     top: -6px;
     right: -6px;
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     border: none;
     background: #ef4444;
     color: #fff;
-    font-size: 14px;
+    font-size: 12px;
     line-height: 1;
     cursor: pointer;
     display: flex;
@@ -1420,16 +2628,15 @@
 
   .add-widget-wrapper {
     position: relative;
-    z-index: 1000;
   }
 
   .add-widget-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    border: 2px dashed rgba(255, 255, 255, 0.3);
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px dashed rgba(255, 255, 255, 0.3);
     background: transparent;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.4);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1438,38 +2645,39 @@
   }
 
   .add-widget-btn:hover {
-    border-color: rgba(49, 130, 206, 0.6);
-    color: #63b3ed;
-    background: rgba(49, 130, 206, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.05);
   }
 
   .widget-menu {
     position: absolute;
-    top: 100%;
-    left: 0;
-    margin-top: 8px;
-    background: rgba(30, 30, 30, 0.98);
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 8px;
+    background: rgba(25, 25, 25, 0.98);
     border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 12px;
-    padding: 8px;
-    min-width: 140px;
-    z-index: 1001;
+    border-radius: 10px;
+    padding: 6px;
+    min-width: 100px;
+    z-index: 100;
     backdrop-filter: blur(20px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   }
 
   .widget-menu button {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    padding: 10px 12px;
+    padding: 8px 10px;
     background: none;
     border: none;
     color: rgba(255, 255, 255, 0.8);
-    font-size: 13px;
+    font-size: 12px;
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 6px;
     transition: background 0.15s ease;
   }
 
@@ -1477,177 +2685,205 @@
     background: rgba(255, 255, 255, 0.1);
   }
 
-  .widget-menu button svg {
-    opacity: 0.6;
+  /* Right Content Area */
+  .profile-content {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow: hidden;
   }
 
-  .header-actions {
+  .content-header {
     display: flex;
     align-items: center;
     gap: 12px;
   }
 
-  .friend-btn {
+  .greeting-title {
+    font-size: 28px;
+    font-weight: 600;
+    color: #fff;
+    margin: 0;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 20px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 500;
+  }
+
+  .greeting-title.editable {
     cursor: pointer;
-    transition: all 0.2s ease;
-    border: none;
+    padding: 6px 12px;
+    margin: -6px -12px;
+    border-radius: 10px;
+    transition: background 0.2s ease;
   }
 
-  .friend-btn.add {
-    background: #fff;
-    color: #050505;
-  }
-
-  .friend-btn.add:hover {
-    transform: scale(1.02);
-    box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
-  }
-
-  .friend-btn.friends {
-    background: rgba(34, 197, 94, 0.15);
-    color: #22c55e;
-    cursor: default;
-  }
-
-  .friend-btn.pending {
+  .greeting-title.editable:hover {
     background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.5);
-    cursor: default;
   }
 
-  .friend-btn.loading {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.5);
-    min-width: 100px;
-    justify-content: center;
+  .greeting-title .edit-icon {
+    opacity: 0.4;
+    transition: opacity 0.2s ease;
   }
 
-  .friend-btn:disabled {
-    cursor: default;
+  .greeting-title.editable:hover .edit-icon {
+    opacity: 0.8;
   }
 
-  .spinner-small {
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  .friend-error {
-    font-size: 11px;
-    color: #f87171;
-  }
-
-  .edit-space-btn, .save-btn, .cancel-btn {
-    padding: 10px 20px;
-    border-radius: 20px;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .edit-space-btn {
+  .greeting-input {
+    font-size: 28px;
+    font-weight: 600;
+    color: #fff;
     background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #fff;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+    padding: 6px 16px;
+    outline: none;
+    min-width: 200px;
+    max-width: 400px;
   }
 
-  .save-btn {
-    background: #1a365d;
-    border: none;
-    color: #fff;
+  .greeting-input:focus {
+    border-color: #fff;
   }
 
-  .cancel-btn {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.7);
+  .greeting-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
   }
 
-  .edit-space-btn:hover { background: rgba(255, 255, 255, 0.15); }
-  .save-btn:hover { background: #2c5282; }
-  .cancel-btn:hover { background: rgba(255, 255, 255, 0.05); }
-
-  .header-avatar {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    overflow: hidden;
-  }
-
-  .header-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
+  /* Profile Grid - Flexible Auto-flow Layout */
   .profile-grid {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: minmax(200px, auto);
+    grid-auto-flow: dense; /* Auto-reflow cards to fill gaps */
     gap: 16px;
     position: relative;
     z-index: 1;
+    align-items: stretch;
+    width: 100%;
+    max-width: 100%;
+    overflow: visible; /* Allow resize handles to show */
   }
 
   .card-wrapper {
     position: relative;
-    transition: transform 0.2s ease, opacity 0.2s ease;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.2s ease,
+                grid-column 0.3s ease,
+                min-height 0.3s ease;
+    min-height: 200px;
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    overflow: visible; /* Allow resize handle to show outside */
+    contain: layout style; /* Performance optimization */
   }
 
+  /* Card sizes using grid span - 4 column system */
   .card-wrapper.small {
-    flex: 1 1 calc(33.333% - 12px);
-    min-width: 250px;
+    grid-column: span 1;
+  }
+
+  .card-wrapper.medium {
+    grid-column: span 2;
   }
 
   .card-wrapper.wide {
-    flex: 1 1 calc(50% - 8px);
-    min-width: 400px;
+    grid-column: span 3;
+  }
+
+  .card-wrapper.full {
+    grid-column: span 4;
+  }
+
+  /* Custom sized cards inherit their minHeight from inline style */
+  .card-wrapper.custom {
+    grid-column: span 2;
+  }
+  
+  /* Resizing state - disable transitions for instant feedback during drag */
+  .card-wrapper.resizing {
+    z-index: 100;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    transition: none !important; /* Instant feedback during drag */
+  }
+  
+  .card-wrapper.resizing .card {
+    box-shadow: 0 0 0 2px rgba(99, 179, 237, 0.4);
+    transition: box-shadow 0.15s ease !important;
+  }
+  
+  /* Other cards shift smoothly when one is being resized */
+  .profile-grid:has(.resizing) .card-wrapper:not(.resizing) {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                grid-column 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Add card wrapper styling */
+  .card-wrapper.add-card-wrapper {
+    min-height: 180px;
+    grid-column: span 1;
   }
 
   .card-wrapper.dragging {
-    opacity: 0.5;
-    transform: scale(0.98);
+    opacity: 0.4;
+    transform: scale(0.95);
   }
 
-  .card-wrapper.drag-over {
-    transform: translateX(8px);
+  /* Drop target indicator */
+  .card-wrapper.drop-target {
+    position: relative;
   }
 
-  .drop-indicator {
+  .card-wrapper.drop-target::before {
+    content: '';
     position: absolute;
-    left: -8px;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: #3182ce;
-    border-radius: 2px;
+    inset: -4px;
+    border: 3px dashed #63b3ed;
+    border-radius: 20px;
+    background: rgba(99, 179, 237, 0.1);
     z-index: 10;
     animation: pulse 1s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  /* Grid dragging state */
+  .profile-grid.is-dragging {
+    min-height: 200px;
+  }
+
+  .profile-grid.is-dragging .card-wrapper:not(.dragging):not(.drop-target) {
+    opacity: 0.7;
   }
 
   @keyframes pulse {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    50% { opacity: 0.6; }
   }
 
   .card {
-    background: rgba(40, 40, 40, 0.6);
+    background: rgba(30, 30, 30, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 16px;
-    padding: 20px;
+    padding: 16px;
     position: relative;
+    width: 100%;
     height: 100%;
-    min-height: 200px;
-    font-size: 18px;
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    min-height: 180px;
+    font-size: 16px;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
   }
 
   .card.edit-mode {
@@ -1667,7 +2903,7 @@
   .card-edit-controls {
     position: absolute;
     top: 8px;
-    right: 8px;
+    left: 8px;
     display: flex;
     gap: 6px;
     z-index: 5;
@@ -1677,8 +2913,8 @@
     width: 28px;
     height: 28px;
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.5);
+    background: rgba(0, 0, 0, 0.5);
+    color: rgba(255, 255, 255, 0.7);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1689,7 +2925,7 @@
     height: 28px;
     border-radius: 6px;
     border: none;
-    background: rgba(239, 68, 68, 0.2);
+    background: rgba(0, 0, 0, 0.5);
     color: #f87171;
     cursor: pointer;
     display: flex;
@@ -1699,13 +2935,8 @@
   }
 
   .remove-card-btn:hover {
-    background: rgba(239, 68, 68, 0.4);
+    background: rgba(0, 0, 0, 0.7);
     color: #fff;
-  }
-
-  .quote-card { 
-    padding: 16px;
-    min-height: 250px;
   }
 
   .quote-content {
@@ -1719,24 +2950,65 @@
   }
 
   .music-card {
-    display: flex;
-    flex-direction: column;
+    padding: 0;
+    min-height: 220px;
+  }
+
+  .embed-card {
+    padding: 0;
+    min-height: 180px;
+  }
+  
+  .calendar-card {
     padding: 12px;
-    min-height: 280px;
+    min-height: 200px;
+  }
+
+  .gradient-card {
+    padding: 0;
+    min-height: 180px;
+  }
+
+  .games-card {
+    padding: 12px;
+    min-height: 160px;
+  }
+
+  .github-card {
+    padding: 12px;
+    min-height: 160px;
+  }
+
+  .friends-card {
+    padding: 12px;
+    min-height: 180px;
+  }
+
+  .quote-card {
+    padding: 16px;
+    min-height: 160px;
   }
 
   .add-card-wrapper {
     position: relative;
+    overflow: visible !important; /* Allow dropdown to show */
   }
 
   .add-card {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(40, 40, 40, 0.3);
-    border: 2px dashed rgba(49, 130, 206, 0.4);
-    min-height: 160px;
+    background: rgba(30, 30, 30, 0.4);
+    border: 2px dashed rgba(255, 255, 255, 0.15);
+    min-height: 140px;
     position: relative;
+    transition: all 0.2s ease;
+    overflow: visible !important; /* Allow dropdown to show */
+  }
+
+  .add-card:hover {
+    border-color: rgba(99, 179, 237, 0.5);
+    background: rgba(99, 179, 237, 0.05);
   }
 
   .add-new-btn {
@@ -1763,25 +3035,37 @@
     font-weight: 500;
   }
 
-  .add-card-menu {
-    position: absolute;
-    bottom: calc(100% + 12px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(25, 25, 25, 0.98);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 16px;
-    padding: 12px;
-    min-width: 280px;
-    z-index: 1000;
-    backdrop-filter: blur(20px);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-    animation: menuSlideUp 0.2s ease;
+  /* Add card menu backdrop */
+  .add-card-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 99998;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(2px);
+    animation: backdropFade 0.15s ease;
   }
 
-  @keyframes menuSlideUp {
-    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @keyframes backdropFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .add-card-menu {
+    position: fixed;
+    z-index: 99999;
+    background: rgba(20, 20, 20, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 16px;
+    min-width: 300px;
+    backdrop-filter: blur(24px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    animation: menuPop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes menuPop {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
   }
 
   .menu-header {
@@ -1854,11 +3138,147 @@
     z-index: 1;
   }
 
-  /* Tablet breakpoint */
-  @media (max-width: 900px) {
-    .card-wrapper.small, .card-wrapper.wide {
-      flex: 1 1 100%;
-      min-width: unset;
+  /* Extra large screens - 6 column layout for more flexibility */
+  @media (min-width: 1800px) {
+    .profile-grid {
+      grid-template-columns: repeat(6, 1fr);
+      gap: 20px;
+    }
+
+    .card-wrapper.small {
+      grid-column: span 1;
+    }
+
+    .card-wrapper.medium {
+      grid-column: span 2;
+    }
+
+    .card-wrapper.wide {
+      grid-column: span 3;
+    }
+
+    .card-wrapper.full {
+      grid-column: span 6;
+    }
+  }
+
+  /* Large screens - 4 column (default above) */
+  @media (max-width: 1600px) {
+    .profile-grid {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .card-wrapper.small {
+      grid-column: span 1;
+    }
+
+    .card-wrapper.medium {
+      grid-column: span 2;
+    }
+
+    .card-wrapper.wide {
+      grid-column: span 3;
+    }
+
+    .card-wrapper.full {
+      grid-column: span 4;
+    }
+  }
+
+  /* Medium screens - 3 column */
+  @media (max-width: 1400px) {
+    .profile-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .card-wrapper.small {
+      grid-column: span 1;
+    }
+
+    .card-wrapper.medium {
+      grid-column: span 1;
+    }
+
+    .card-wrapper.wide {
+      grid-column: span 2;
+    }
+
+    .card-wrapper.full {
+      grid-column: span 3;
+    }
+  }
+
+  /* Tablet/Medium screens - 2 column */
+  @media (max-width: 1200px) {
+    .profile-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+
+    .card-wrapper.small,
+    .card-wrapper.medium {
+      grid-column: span 1;
+    }
+
+    .card-wrapper.wide,
+    .card-wrapper.full {
+      grid-column: span 2;
+    }
+  }
+
+  /* Tablet breakpoint - stacked layout */
+  @media (max-width: 1024px) {
+    .profile-layout {
+      flex-direction: column;
+    }
+
+    .profile-sidebar {
+      width: 100%;
+    }
+
+    .profile-card {
+      flex-direction: row;
+      flex-wrap: wrap;
+      padding: 24px;
+      gap: 24px;
+      position: static;
+    }
+
+    .profile-avatar-section {
+      flex-shrink: 0;
+    }
+
+    .profile-avatar-wrapper {
+      width: 120px;
+      height: 120px;
+    }
+
+    .profile-username {
+      font-size: 24px;
+    }
+  }
+
+  /* Small tablet / large phone */
+  @media (max-width: 768px) {
+    .profile-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .card-wrapper.small,
+    .card-wrapper.medium {
+      grid-column: span 1;
+    }
+
+    .card-wrapper.wide,
+    .card-wrapper.full {
+      grid-column: span 2;
+    }
+
+    .card-wrapper {
+      min-height: 180px;
     }
   }
 
@@ -1868,39 +3288,56 @@
       padding: 12px;
     }
 
-    .profile-header {
+    .profile-top-bar {
       flex-direction: column;
-      align-items: flex-start;
-      gap: 16px;
-      padding: 16px;
+      gap: 12px;
+      padding: 12px;
     }
 
-    .greeting-section {
-      width: 100%;
+    .profile-card {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
     }
 
-    .greeting {
-      font-size: 2.5rem;
+    .profile-avatar-wrapper {
+      width: 100px;
+      height: 100px;
     }
 
-    .username {
-      font-size: 2rem;
+    .profile-username {
+      font-size: 22px;
     }
 
-    .header-right {
-      width: 100%;
-      justify-content: space-between;
+    .greeting-title {
+      font-size: 20px;
+    }
+
+    .profile-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .card-wrapper.small,
+    .card-wrapper.medium,
+    .card-wrapper.wide,
+    .card-wrapper.full {
+      grid-column: span 1;
+    }
+
+    .card-wrapper {
+      min-height: 160px;
     }
 
     .card {
       padding: 14px;
-      min-height: 160px;
-      font-size: 16px;
+      min-height: 140px;
     }
 
     .card-edit-controls {
-      top: 8px;
-      right: 8px;
+      top: 6px;
+      left: 6px;
       gap: 4px;
     }
 
@@ -1911,7 +3348,17 @@
     }
 
     .profile-grid {
+      grid-template-columns: 1fr;
       gap: 12px;
+    }
+
+    .card-wrapper.small,
+    .card-wrapper.wide {
+      grid-column: span 1;
+    }
+
+    .card-wrapper {
+      min-height: 160px;
     }
 
     .edit-hint {
@@ -2054,8 +3501,8 @@
     height: 28px;
     border-radius: 6px;
     border: none;
-    background: rgba(99, 179, 237, 0.2);
-    color: #63b3ed;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2064,7 +3511,7 @@
   }
 
   .card-settings-btn:hover {
-    background: rgba(99, 179, 237, 0.4);
+    background: rgba(0, 0, 0, 0.7);
     color: #fff;
   }
 

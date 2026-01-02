@@ -78,11 +78,18 @@ export interface User {
   email?: string;
   avatar?: string;
   bio?: string;
+  bio_font?: string;
+  description?: string;
+  age?: number;
+  location?: string;
+  mood?: string;
+  mood_emoji?: string;
   background_image?: string;
   username_font?: string;
   status?: 'online' | 'offline' | 'idle' | 'dnd';
   role?: string;
   terms_accepted_at?: Date | string;
+  last_active?: string;
 }
 
 /**
