@@ -159,14 +159,32 @@
   // Debug function to check audio state - call from console: voiceRoomRef.debugAudio()
   export function debugAudio() {
     console.log('=== VOICE ROOM AUDIO DEBUG ===');
+    console.log('📌 IMPORTANT: Microphone and Screen Share audio are SEPARATE tracks');
+    console.log('   - Muting your mic does NOT affect your stream audio');
+    console.log('   - Deafening mutes ALL incoming audio (mics AND streams)');
     
-    // 1. Check local audio publications
+    // 1. Check local audio publications - separated by type
     if (room) {
       const localAudioPubs = Array.from(room.localParticipant.audioTrackPublications.values());
-      console.log('📤 Local audio publications:', localAudioPubs.length);
+      const micPub = localAudioPubs.find((pub: any) => pub.source === Track.Source.Microphone);
+      const screenShareAudioPub = localAudioPubs.find((pub: any) => pub.source === Track.Source.ScreenShareAudio);
+      
+      console.log('📤 LOCAL AUDIO TRACKS:');
+      console.log(`  🎤 Microphone: ${micPub ? 'ACTIVE' : 'NOT ACTIVE'}`, micPub ? {
+        isMuted: (micPub as any).isMuted,
+        trackSid: (micPub as any).trackSid,
+      } : '');
+      console.log(`  🎬 Screen Share Audio: ${screenShareAudioPub ? 'ACTIVE' : 'NOT ACTIVE'}`, screenShareAudioPub ? {
+        isMuted: (screenShareAudioPub as any).isMuted,
+        trackSid: (screenShareAudioPub as any).trackSid,
+      } : '');
+      
+      console.log('📤 All local audio publications:', localAudioPubs.length);
       localAudioPubs.forEach((pub: any, i) => {
         const mediaTrack = pub.track?.mediaStreamTrack;
-        console.log(`  📤 Publication ${i}:`, {
+        const sourceLabel = pub.source === Track.Source.Microphone ? '🎤 Mic' : 
+                           pub.source === Track.Source.ScreenShareAudio ? '🎬 ScreenShare' : '❓ Unknown';
+        console.log(`  ${sourceLabel} Publication ${i}:`, {
           trackSid: pub.trackSid,
           source: pub.source,
           isMuted: pub.isMuted,
@@ -803,7 +821,25 @@
     if (!room) return;
     try {
       isMuted = !isMuted;
-      await room.localParticipant.setMicrophoneEnabled(!isMuted);
+      
+      // IMPORTANT: Only mute/unmute the MICROPHONE, not screen share audio
+      // This ensures that when you mute yourself:
+      // 1. Your microphone is disabled (others can't hear you speak)
+      // 2. Screen share audio (if you're streaming) continues to play for others
+      // 3. You can still hear all incoming audio (others' mics and streams)
+      
+      // Find only the microphone track (not screen share audio)
+      const microphonePublication = Array.from(room.localParticipant.audioTrackPublications.values())
+        .find((pub: any) => pub.source === Track.Source.Microphone);
+      
+      if (microphonePublication) {
+        await room.localParticipant.setMicrophoneEnabled(!isMuted);
+        console.log(`🎤 Microphone ${isMuted ? 'muted' : 'unmuted'} (screen share audio unaffected)`);
+      } else {
+        // Fallback if no specific microphone publication found
+        await room.localParticipant.setMicrophoneEnabled(!isMuted);
+      }
+      
       dispatch('muteChange', { isMuted });
       updateParticipantDisplays();
     } catch (err) {
@@ -816,14 +852,36 @@
     if (!room) return;
     try {
       isDeafened = !isDeafened;
+      
+      // When deafening:
+      // 1. Mute the microphone (can't speak)
+      // 2. Mute ALL incoming audio (can't hear anything - mics AND streams)
+      // This is different from just muting, which only affects your microphone
+      
       if (isDeafened) {
         await room.localParticipant.setMicrophoneEnabled(false);
         isMuted = true;
         dispatch('muteChange', { isMuted });
+        console.log('🔇 Deafened: Microphone disabled, all audio muted');
+      } else {
+        console.log('🔊 Undeafened: Audio restored');
       }
+      
+      // Mute/unmute ALL audio elements (both microphone audio and screen share audio)
       document.querySelectorAll('audio').forEach((el) => {
-        el.muted = isDeafened;
+        const audio = el as HTMLAudioElement;
+        audio.muted = isDeafened;
+        
+        // Log what we're muting/unmuting for debugging
+        const participantId = audio.dataset.participantId;
+        const isScreenShare = audio.dataset.isScreenShare === 'true';
+        console.log(`  ${isDeafened ? '🔇' : '🔊'} ${isScreenShare ? 'Stream' : 'Mic'} audio from ${participantId}: muted=${isDeafened}`);
       });
+      
+      // Also mute/unmute presence sounds
+      if (joinSound) joinSound.muted = isDeafened;
+      if (leaveSound) leaveSound.muted = isDeafened;
+      
       dispatch('deafenChange', { isDeafened });
       updateParticipantDisplays();
     } catch (err) {
@@ -946,8 +1004,23 @@
         };
         
         await room.localParticipant.setScreenShareEnabled(true, screenShareOptions);
+        
+        // Log the screen share tracks for debugging
+        // Screen share audio is SEPARATE from microphone - muting mic won't affect stream audio
+        const screenShareAudioPub = Array.from(room.localParticipant.audioTrackPublications.values())
+          .find((pub: any) => pub.source === Track.Source.ScreenShareAudio);
+        const microphonePub = Array.from(room.localParticipant.audioTrackPublications.values())
+          .find((pub: any) => pub.source === Track.Source.Microphone);
+        
+        console.log('🎬 Screen share started:', {
+          hasScreenShareAudio: !!screenShareAudioPub,
+          hasMicrophoneAudio: !!microphonePub,
+          isMicrophoneMuted: isMuted,
+          note: 'Screen share audio is independent from microphone - you can mute your mic while streaming',
+        });
       } else {
         await room.localParticipant.setScreenShareEnabled(false);
+        console.log('🎬 Screen share stopped');
       }
       
       // Only update local participant's screen share track
