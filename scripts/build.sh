@@ -47,6 +47,9 @@ npm run build -w @discord-clone/gateway
 echo "Building @discord-clone/api..."
 npm run build -w @discord-clone/api
 
+echo "Building @discord-clone/collab..."
+npm run build -w @discord-clone/collab
+
 # Build frontend last
 echo "Building frontend..."
 npm run build -w frontend

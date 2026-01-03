@@ -1,0 +1,29 @@
+{
+  "name": "@discord-clone/collab",
+  "version": "1.0.0",
+  "description": "Real-time collaboration server using Hocuspocus",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@hocuspocus/server": "^2.15.0",
+    "@hocuspocus/extension-database": "^2.15.0",
+    "dotenv": "^17.2.3",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.3",
+    "y-prosemirror": "^1.2.15",
+    "yjs": "^13.6.22"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.15.23",
+    "@types/pg": "^8.11.13",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
+
