@@ -9,7 +9,6 @@
   import VoiceRoom from './components/VoiceRoom.svelte';
   import VoiceMiniPlayer from './components/VoiceMiniPlayer.svelte';
   import VoiceStreamPopout from './components/VoiceStreamPopout.svelte';
-  import DocumentEditor from './components/DocumentEditor.svelte';
   import GroupInfo from './components/GroupInfo.svelte';
   import UserProfile from './components/UserProfile.svelte';
   import SettingsPanel from './components/SettingsPanel.svelte';
@@ -845,15 +844,7 @@
           on:close={() => { showUserProfile = false; viewedUser = null; }}
         />
       {:else if selectedChannelId}
-        {#if selectedChannelType === 'document'}
-          <DocumentEditor 
-            channelId={selectedChannelId}
-            guildId={selectedGuildId}
-            authToken={authToken || ''}
-            currentUser={currentUser}
-            on:viewUserProfile={handleViewUserProfile}
-          />
-        {:else if !(selectedChannelType === 'voice' && isViewingVoiceCall)}
+        {#if !(selectedChannelType === 'voice' && isViewingVoiceCall)}
           <ChatArea 
             channelId={selectedChannelId}
             guildId={selectedGuildId}

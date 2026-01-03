@@ -64,7 +64,7 @@ export interface Channel {
   id: string;
   guild_id: string;
   name: string;
-  type: 'text' | 'voice' | 'document';
+  type: 'text' | 'voice';
   position?: number;
   topic?: string;
 }

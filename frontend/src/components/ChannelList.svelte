@@ -17,7 +17,7 @@
   export let channelSettingsVersion: number = 0; // Triggers reload when settings change
 
   const dispatch = createEventDispatcher<{
-    selectChannel: { channelId: string; channelType?: 'text' | 'voice' | 'document' };
+    selectChannel: { channelId: string; channelType?: 'text' | 'voice' };
     selectGuild: { guildId: string };
     channelCreated: { channel: Channel };
     openChannelSettings: { channel: Channel };
@@ -35,16 +35,14 @@
   
   let textChannels: Channel[] = [];
   let voiceChannels: Channel[] = [];
-  let documentChannels: Channel[] = [];
   let loading = false;
   let error: string | null = null;
   let generalExpanded = true;
   let voiceExpanded = true;
-  let documentExpanded = true;
   
   // Channel creation modal state
   let showCreateChannelModal = false;
-  let createChannelType: 'text' | 'voice' | 'document' = 'text';
+  let createChannelType: 'text' | 'voice' = 'text';
   
   // Context menu state
   let contextMenu: { x: number; y: number; channel: Channel } | null = null;
@@ -191,10 +189,6 @@
         if (!voiceChannels.find(c => c.id === newChannel.id)) {
           voiceChannels = [...voiceChannels, newChannel];
         }
-      } else if (newChannel.type === 'document') {
-        if (!documentChannels.find(c => c.id === newChannel.id)) {
-          documentChannels = [...documentChannels, newChannel];
-        }
       } else {
         if (!textChannels.find(c => c.id === newChannel.id)) {
           textChannels = [...textChannels, newChannel];
@@ -206,7 +200,6 @@
       const { channelId } = message.data;
       textChannels = textChannels.filter(c => c.id !== channelId);
       voiceChannels = voiceChannels.filter(c => c.id !== channelId);
-      documentChannels = documentChannels.filter(c => c.id !== channelId);
     });
   }
 
@@ -404,13 +397,12 @@
       // Use Number() to handle string types from JSON
       const allChannels: Channel[] = rawChannels.map((c: any) => ({
         ...c,
-        type: Number(c.type) === 2 ? 'voice' : Number(c.type) === 3 ? 'document' : 'text'
+        type: Number(c.type) === 2 ? 'voice' : 'text'
       }));
 
-      // Separate text, voice, and document channels
+      // Separate text and voice channels
       textChannels = allChannels.filter(c => c.type === 'text');
       voiceChannels = allChannels.filter(c => c.type === 'voice');
-      documentChannels = allChannels.filter(c => c.type === 'document');
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load channels';
       textChannels = [];
@@ -421,25 +413,25 @@
   }
 
   // Get all channels combined for box/icon views
-  $: allChannels = [...textChannels, ...voiceChannels, ...documentChannels];
+  $: allChannels = [...textChannels, ...voiceChannels];
 
   function isVoiceChannel(channel: Channel): boolean {
     return channel.type === 'voice';
   }
 
-  function openCreateChannelModal(type: 'text' | 'voice' | 'document') {
+  function openCreateChannelModal(type: 'text' | 'voice') {
     createChannelType = type;
     showCreateChannelModal = true;
   }
 
-  async function handleCreateChannel(event: CustomEvent<{ name: string; type: 'text' | 'voice' | 'document' }>) {
+  async function handleCreateChannel(event: CustomEvent<{ name: string; type: 'text' | 'voice' }>) {
     if (!selectedGuildId || !authToken) return;
 
     const { name, type } = event.detail;
 
     try {
       // Map frontend type to backend type
-      const backendType = type === 'voice' ? 'voice' : type === 'document' ? 'DOCUMENT' : 'TEXT';
+      const backendType = type === 'voice' ? 'voice' : 'TEXT';
       
       const response = await fetch(apiUrl(`/api/guilds/${selectedGuildId}/channels`), {
         method: 'POST',
@@ -468,8 +460,6 @@
       // Add to appropriate list
       if (type === 'voice') {
         voiceChannels = [...voiceChannels, newChannel];
-      } else if (type === 'document') {
-        documentChannels = [...documentChannels, newChannel];
       } else {
         textChannels = [...textChannels, newChannel];
       }
@@ -526,7 +516,6 @@
       // Remove from local state
       textChannels = textChannels.filter(c => c.id !== channelId);
       voiceChannels = voiceChannels.filter(c => c.id !== channelId);
-      documentChannels = documentChannels.filter(c => c.id !== channelId);
       
       // Broadcast deletion via Ably for other users
       const client = getAblyClient();
@@ -736,64 +725,6 @@
         {/if}
       </section>
 
-      <!-- Document Channels Section -->
-      <section class="channel-section">
-        <button class="section-header" on:click={() => documentExpanded = !documentExpanded}>
-          <svg class="chevron" class:expanded={documentExpanded} width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M9 18L15 12L9 6"/>
-          </svg>
-          <span class="section-label">documents</span>
-          <span class="section-count">{documentChannels.length}</span>
-          <button class="add-channel-btn" aria-label="Add document channel" on:click|stopPropagation={() => openCreateChannelModal('document')}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M12 5V19M5 12H19"/>
-            </svg>
-          </button>
-        </button>
-        
-        {#if documentExpanded}
-          <ul class="channel-items">
-            {#each documentChannels as channel}
-              {@const bgUrl = selectedChannelId === channel.id ? getChannelBackground(channel.id) : null}
-              <li>
-                <button 
-                  class="channel-btn document"
-                  class:active={selectedChannelId === channel.id}
-                  class:has-bg={bgUrl}
-                  on:click={() => dispatch('selectChannel', { channelId: channel.id, channelType: 'document' })}
-                  on:contextmenu={(e) => handleChannelContextMenu(e, channel)}
-                >
-                  {#if bgUrl}
-                    <img src={bgUrl} alt="" class="channel-bg-img" />
-                    <span class="channel-bg-overlay"></span>
-                  {/if}
-                  <svg class="channel-icon document-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14,2 14,8 20,8"/>
-                    <line x1="16" y1="13" x2="8" y2="13"/>
-                    <line x1="16" y1="17" x2="8" y2="17"/>
-                  </svg>
-                  <span class="channel-name">{channel.name.toLowerCase()}</span>
-                  {#if isAdmin}
-                    <button 
-                      class="delete-btn" 
-                      aria-label="Delete channel"
-                      on:click|stopPropagation={() => deleteChannel(channel.id, channel.name)}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 6L6 18M6 6l12 12"/>
-                      </svg>
-                    </button>
-                  {/if}
-                </button>
-              </li>
-            {/each}
-            {#if documentChannels.length === 0}
-              <li class="no-channels">no document channels</li>
-            {/if}
-          </ul>
-        {/if}
-      </section>
     {/if}
   </div>
 </aside>
@@ -1154,14 +1085,6 @@
     color: #22c55e;
   }
 
-  .channel-btn.document .document-icon {
-    color: rgba(255, 255, 255, 0.4);
-  }
-
-  .channel-btn.document:hover .document-icon,
-  .channel-btn.document.active .document-icon {
-    color: rgba(255, 255, 255, 0.6);
-  }
 
   .voice-count {
     font-size: 10px;
