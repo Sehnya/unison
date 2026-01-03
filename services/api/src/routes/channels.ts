@@ -314,7 +314,7 @@ export function createChannelRoutes(config: ChannelRoutesConfig): Router {
     try {
       const { id: userId } = (req as AuthenticatedRequest).user;
       const channelId = requireSnowflake('channel_id', req.params.channel_id);
-      const { content, version } = req.body;
+      const { content, version: _version } = req.body;
 
       if (!pool) {
         throw new ApiError(ApiErrorCode.INTERNAL_ERROR, 500, 'Document storage not available');
