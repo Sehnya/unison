@@ -15,7 +15,7 @@
   import Image from '@tiptap/extension-image';
   import Collaboration from '@tiptap/extension-collaboration';
   import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
-  import { TiptapCollabProvider } from '@tiptap-pro/provider';
+  import { HocuspocusProvider } from '@hocuspocus/provider';
   import * as Y from 'yjs';
   import { common, createLowlight } from 'lowlight';
   import type { User, Channel } from '../types';
@@ -30,19 +30,19 @@
     viewUserProfile: { userId: string; username: string; avatar?: string };
   }>();
 
-  // Tiptap Cloud configuration
-  const TIPTAP_APP_ID = import.meta.env.VITE_TIPTAP_APP_ID || '';
-  const TIPTAP_COLLAB_TOKEN = import.meta.env.VITE_TIPTAP_COLLAB_TOKEN || '';
+  // Hocuspocus configuration (optional - works without collab server)
+  const HOCUSPOCUS_URL = import.meta.env.VITE_HOCUSPOCUS_URL || '';
 
   let editor: Editor | null = null;
   let editorElement: HTMLElement;
   let channel: Channel | null = null;
   let loading = true;
-  let provider: TiptapCollabProvider | null = null;
+  let provider: HocuspocusProvider | null = null;
   let ydoc: Y.Doc | null = null;
-  let connectionStatus: 'connecting' | 'connected' | 'disconnected' = 'connecting';
+  let connectionStatus: 'connecting' | 'connected' | 'disconnected' = 'disconnected';
   let collaborators: { clientId: number; user: { name: string; color: string } }[] = [];
   let initialized = false;
+  let isCollabEnabled = false;
 
   // Slash command menu state
   let showSlashMenu = false;
@@ -142,78 +142,81 @@
     const userColor = getRandomColor();
     const documentName = `channel-${channelId}`;
     
-    // Create Yjs document first - store locally to ensure closure captures it
+    // Create Yjs document for local state
     const doc = new Y.Doc();
     ydoc = doc;
-    connectionStatus = 'connecting';
     
-    console.log('Creating TiptapCollabProvider with appId:', TIPTAP_APP_ID);
-    console.log('Document name:', documentName);
-    
-    // Initialize Tiptap Cloud provider
-    const prov = new TiptapCollabProvider({
-      appId: TIPTAP_APP_ID,
-      name: documentName,
-      document: doc,
-      token: TIPTAP_COLLAB_TOKEN,
-      onConnect: () => {
-        console.log('Connected to Tiptap Cloud');
-        connectionStatus = 'connected';
-      },
-      onDisconnect: () => {
-        console.log('Disconnected from Tiptap Cloud');
-        connectionStatus = 'disconnected';
-      },
-      onSynced: ({ state }) => {
-        console.log('Document synced with Tiptap Cloud, state:', state);
-        // Create editor after sync - only once
-        if (!editor) {
-          createEditor(userColor, prov);
-        }
-        loading = false;
-      },
-      onAuthenticationFailed: ({ reason }) => {
-        console.error('Tiptap Cloud auth failed:', reason);
-        connectionStatus = 'disconnected';
-        loading = false;
-      },
-      onAwarenessUpdate: ({ states }) => {
-        collaborators = Array.from(states.entries())
-          .filter(([clientId]) => clientId !== prov?.awareness?.clientID)
-          .map(([clientId, state]: [number, any]) => ({
-            clientId,
-            user: state.user || { name: 'Anonymous', color: '#888' },
-          }));
-      },
-    });
-    provider = prov;
+    // Check if Hocuspocus collaboration server is configured
+    if (HOCUSPOCUS_URL) {
+      connectionStatus = 'connecting';
+      isCollabEnabled = true;
+      
+      console.log('Connecting to Hocuspocus at:', HOCUSPOCUS_URL);
+      console.log('Document name:', documentName);
+      
+      // Initialize Hocuspocus provider for real-time collaboration
+      const prov = new HocuspocusProvider({
+        url: HOCUSPOCUS_URL,
+        name: documentName,
+        document: doc,
+        token: authToken,
+        onConnect: () => {
+          console.log('Connected to collaboration server');
+          connectionStatus = 'connected';
+        },
+        onDisconnect: () => {
+          console.log('Disconnected from collaboration server');
+          connectionStatus = 'disconnected';
+        },
+        onSynced: () => {
+          console.log('Document synced');
+          if (!editor) {
+            createEditor(userColor, doc, prov);
+          }
+          loading = false;
+        },
+        onAwarenessUpdate: ({ states }) => {
+          collaborators = Array.from(states.entries())
+            .filter(([clientId]) => clientId !== prov?.awareness?.clientID)
+            .map(([clientId, state]: [number, any]) => ({
+              clientId,
+              user: state.user || { name: 'Anonymous', color: '#888' },
+            }));
+        },
+      });
+      provider = prov;
+    } else {
+      // No collaboration server - work locally
+      console.log('No collaboration server configured, running in local mode');
+      connectionStatus = 'disconnected';
+      isCollabEnabled = false;
+      createEditor(userColor, doc, null);
+      loading = false;
+    }
   }
 
-  function createEditor(userColor: string, prov: TiptapCollabProvider) {
+  function createEditor(userColor: string, doc: Y.Doc, prov: HocuspocusProvider | null) {
     if (!editorElement) {
       console.error('Editor element not ready in createEditor');
       return;
     }
-    
-    if (!prov) {
-      console.error('Provider is undefined');
-      return;
-    }
 
-    if (!prov.document) {
-      console.error('Provider document is undefined');
+    if (!doc) {
+      console.error('Yjs document is undefined');
       return;
     }
     
-    console.log('Creating editor with provider.document:', !!prov.document);
-    console.log('Provider awareness:', !!prov.awareness);
+    console.log('Creating editor, collaboration enabled:', !!prov);
+    if (prov) {
+      console.log('Provider awareness:', !!prov.awareness);
+    }
 
-    // Build extensions - use provider.document directly in Collaboration
-    const extensions = [
+    // Build base extensions
+    const extensions: any[] = [
       StarterKit.configure({
         codeBlock: false,
         heading: { levels: [1, 2, 3] },
-        history: false, // Yjs handles undo/redo
+        history: !prov, // Use built-in history if no collab, Yjs handles undo/redo otherwise
       }),
       Placeholder.configure({
         placeholder: ({ node }) => {
@@ -236,59 +239,65 @@
       Image.configure({
         HTMLAttributes: { class: 'document-image' },
       }),
-      // Collaboration uses provider.document - the Y.Doc
-      Collaboration.configure({
-        document: prov.document,
-      }),
-      // CollaborationCursor with custom rendering for avatars
-      CollaborationCursor.configure({
-        provider: prov,
-        user: {
-          name: currentUser?.username || 'Anonymous',
-          color: userColor,
-          avatar: currentUser?.avatar || null,
-        },
-        render: (user) => {
-          const cursor = document.createElement('span');
-          cursor.classList.add('collaboration-cursor');
-          cursor.setAttribute('style', `--cursor-color: ${user.color}`);
-
-          // Cursor caret line
-          const caret = document.createElement('span');
-          caret.classList.add('collaboration-cursor__caret');
-          cursor.appendChild(caret);
-
-          // User label container (avatar + name)
-          const label = document.createElement('div');
-          label.classList.add('collaboration-cursor__label');
-          
-          // Avatar circle
-          const avatar = document.createElement('div');
-          avatar.classList.add('collaboration-cursor__avatar');
-          if (user.avatar) {
-            avatar.style.backgroundImage = `url(${user.avatar})`;
-          } else {
-            avatar.textContent = (user.name || 'A').charAt(0).toUpperCase();
-          }
-          label.appendChild(avatar);
-
-          // User name
-          const name = document.createElement('span');
-          name.classList.add('collaboration-cursor__name');
-          name.textContent = user.name || 'Anonymous';
-          label.appendChild(name);
-
-          cursor.appendChild(label);
-          return cursor;
-        },
-        selectionRender: (user) => {
-          return {
-            style: `background-color: ${user.color}20; border-left: 2px solid ${user.color}`,
-            class: 'collaboration-cursor-selection',
-          };
-        },
-      }),
     ];
+
+    // Add collaboration extensions only if provider is available
+    if (prov) {
+      extensions.push(
+        // Collaboration uses the Y.Doc
+        Collaboration.configure({
+          document: doc,
+        }),
+        // CollaborationCursor with custom rendering for avatars
+        CollaborationCursor.configure({
+          provider: prov,
+          user: {
+            name: currentUser?.username || 'Anonymous',
+            color: userColor,
+            avatar: currentUser?.avatar || null,
+          },
+          render: (user) => {
+            const cursor = document.createElement('span');
+            cursor.classList.add('collaboration-cursor');
+            cursor.setAttribute('style', `--cursor-color: ${user.color}`);
+
+            // Cursor caret line
+            const caret = document.createElement('span');
+            caret.classList.add('collaboration-cursor__caret');
+            cursor.appendChild(caret);
+
+            // User label container (avatar + name)
+            const label = document.createElement('div');
+            label.classList.add('collaboration-cursor__label');
+            
+            // Avatar circle
+            const avatar = document.createElement('div');
+            avatar.classList.add('collaboration-cursor__avatar');
+            if (user.avatar) {
+              avatar.style.backgroundImage = `url(${user.avatar})`;
+            } else {
+              avatar.textContent = (user.name || 'A').charAt(0).toUpperCase();
+            }
+            label.appendChild(avatar);
+
+            // User name
+            const name = document.createElement('span');
+            name.classList.add('collaboration-cursor__name');
+            name.textContent = user.name || 'Anonymous';
+            label.appendChild(name);
+
+            cursor.appendChild(label);
+            return cursor;
+          },
+          selectionRender: (user) => {
+            return {
+              style: `background-color: ${user.color}20; border-left: 2px solid ${user.color}`,
+              class: 'collaboration-cursor-selection',
+            };
+          },
+        })
+      );
+    }
 
     try {
       editor = new Editor({
