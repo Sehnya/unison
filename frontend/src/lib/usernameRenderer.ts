@@ -1,14 +1,11 @@
 /**
- * Shared WebGL Username Renderer
+ * Username Effect Renderer
  * 
- * Single offscreen Three.js renderer that draws 3D text effects for all
- * visible usernames. Each username gets rendered to an offscreen target,
- * then the pixels are copied to individual <canvas> elements.
+ * Renders animated text effects using Canvas 2D.
+ * Each effect is a function that draws styled text onto a canvas per frame.
  * 
  * Effects: chrome, neon, holographic, fire, ice, gold, glitch, none
  */
-
-import * as THREE from 'three';
 
 export type UsernameEffect = 'none' | 'chrome' | 'neon' | 'holographic' | 'fire' | 'ice' | 'gold' | 'glitch';
 
@@ -23,320 +20,201 @@ export const EFFECT_LABELS: Record<UsernameEffect, string> = {
   glitch: 'Glitch',
 };
 
-// Shader chunks for different effects
-const EFFECT_SHADERS: Record<UsernameEffect, { vertex: string; fragment: string }> = {
-  none: {
-    vertex: `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragment: `
-      uniform sampler2D tText;
-      uniform vec3 uColor;
-      varying vec2 vUv;
-      void main() {
-        vec4 texel = texture2D(tText, vUv);
-        gl_FragColor = vec4(uColor * texel.rgb, texel.a);
-      }
-    `,
+interface ActiveTarget {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  text: string;
+  effect: UsernameEffect;
+  color: string;
+  font: string;
+  width: number;
+  height: number;
+  dpr: number;
+}
+
+type EffectDrawFn = (ctx: CanvasRenderingContext2D, t: ActiveTarget, time: number) => void;
+
+function drawBase(ctx: CanvasRenderingContext2D, t: ActiveTarget) {
+  const fontSize = Math.floor(t.height * t.dpr * 0.65);
+  ctx.font = `600 ${fontSize}px '${t.font}', sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+}
+
+const effects: Record<UsernameEffect, EffectDrawFn> = {
+  none(ctx, t) {
+    drawBase(ctx, t);
+    ctx.fillStyle = t.color;
+    ctx.fillText(t.text, 4, t.canvas.height / 2);
   },
-  chrome: {
-    vertex: `
-      varying vec2 vUv;
-      varying vec3 vNormal;
-      void main() {
-        vUv = uv;
-        vNormal = normalize(normalMatrix * normal);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragment: `
-      uniform sampler2D tText;
-      uniform float uTime;
-      uniform vec3 uColor;
-      varying vec2 vUv;
-      varying vec3 vNormal;
-      void main() {
-        vec4 texel = texture2D(tText, vUv);
-        if (texel.a < 0.1) discard;
-        float fresnel = pow(1.0 - abs(dot(vNormal, vec3(0.0, 0.0, 1.0))), 2.0);
-        vec3 reflection = vec3(
-          0.7 + 0.3 * sin(uTime + vUv.x * 6.0),
-          0.7 + 0.3 * sin(uTime * 1.3 + vUv.x * 6.0 + 2.0),
-          0.8 + 0.2 * sin(uTime * 0.7 + vUv.x * 6.0 + 4.0)
-        );
-        vec3 color = mix(uColor * 0.6, reflection, fresnel * 0.7 + 0.3);
-        float specular = pow(max(0.0, dot(reflect(vec3(-0.5, 0.5, -1.0), vNormal), vec3(0.0, 0.0, 1.0))), 32.0);
-        color += vec3(specular * 0.5);
-        gl_FragColor = vec4(color, texel.a);
-      }
-    `,
+
+  chrome(ctx, t, time) {
+    drawBase(ctx, t);
+    const w = t.canvas.width;
+    const y = t.canvas.height / 2;
+    // Animated gradient sweep
+    const offset = ((Math.sin(time * 1.5) + 1) / 2) * w;
+    const grad = ctx.createLinearGradient(offset - w * 0.3, 0, offset + w * 0.3, 0);
+    grad.addColorStop(0, '#888');
+    grad.addColorStop(0.3, '#fff');
+    grad.addColorStop(0.5, '#ccc');
+    grad.addColorStop(0.7, '#fff');
+    grad.addColorStop(1, '#888');
+    ctx.fillStyle = grad;
+    ctx.fillText(t.text, 4, y);
   },
-  neon: {
-    vertex: `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragment: `
-      uniform sampler2D tText;
-      uniform float uTime;
-      uniform vec3 uColor;
-      varying vec2 vUv;
-      void main() {
-        vec4 texel = texture2D(tText, vUv);
-        if (texel.a < 0.05) discard;
-        float pulse = 0.85 + 0.15 * sin(uTime * 3.0);
-        float glow = smoothstep(0.0, 0.5, texel.a) * pulse;
-        vec3 neonColor = uColor * 1.5;
-        vec3 outerGlow = uColor * 0.4 * (1.0 - smoothstep(0.1, 0.6, texel.a));
-        vec3 color = mix(outerGlow, neonColor, glow);
-        float alpha = smoothstep(0.0, 0.15, texel.a) * pulse;
-        gl_FragColor = vec4(color, alpha);
-      }
-    `,
+
+  neon(ctx, t, time) {
+    drawBase(ctx, t);
+    const y = t.canvas.height / 2;
+    const pulse = 0.7 + 0.3 * Math.sin(time * 3);
+    // Outer glow layers
+    ctx.save();
+    ctx.shadowColor = t.color;
+    ctx.shadowBlur = 20 * pulse * t.dpr;
+    ctx.fillStyle = t.color;
+    ctx.globalAlpha = 0.4;
+    ctx.fillText(t.text, 4, y);
+    ctx.globalAlpha = 0.6;
+    ctx.shadowBlur = 10 * pulse * t.dpr;
+    ctx.fillText(t.text, 4, y);
+    ctx.restore();
+    // Core text
+    ctx.save();
+    ctx.shadowColor = t.color;
+    ctx.shadowBlur = 4 * t.dpr;
+    ctx.fillStyle = '#fff';
+    ctx.fillText(t.text, 4, y);
+    ctx.restore();
   },
-  holographic: {
-    vertex: `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragment: `
-      uniform sampler2D tText;
-      uniform float uTime;
-      uniform vec3 uColor;
-      varying vec2 vUv;
-      void main() {
-        vec4 texel = texture2D(tText, vUv);
-        if (texel.a < 0.1) discard;
-        float shift = vUv.x * 10.0 + uTime * 2.0;
-        vec3 rainbow = vec3(
-          0.5 + 0.5 * sin(shift),
-          0.5 + 0.5 * sin(shift + 2.094),
-          0.5 + 0.5 * sin(shift + 4.189)
-        );
-        float scanline = 0.95 + 0.05 * sin(vUv.y * 80.0 + uTime * 5.0);
-        vec3 color = mix(uColor, rainbow, 0.6) * scanline;
-        gl_FragColor = vec4(color * 1.2, texel.a);
-      }
-    `,
+
+  holographic(ctx, t, time) {
+    drawBase(ctx, t);
+    const w = t.canvas.width;
+    const y = t.canvas.height / 2;
+    const shift = time * 80;
+    const grad = ctx.createLinearGradient(0, 0, w, 0);
+    const steps = 6;
+    for (let i = 0; i <= steps; i++) {
+      const pos = i / steps;
+      const hue = ((pos * 360) + shift) % 360;
+      grad.addColorStop(pos, `hsl(${hue}, 100%, 70%)`);
+    }
+    ctx.fillStyle = grad;
+    ctx.fillText(t.text, 4, y);
+    // Scanline overlay
+    ctx.save();
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = '#000';
+    const lineH = 2 * t.dpr;
+    for (let sy = 0; sy < t.canvas.height; sy += lineH * 2) {
+      ctx.fillRect(0, sy, w, lineH);
+    }
+    ctx.restore();
   },
-  fire: {
-    vertex: `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragment: `
-      uniform sampler2D tText;
-      uniform float uTime;
-      uniform vec3 uColor;
-      varying vec2 vUv;
-      
-      float noise(vec2 p) {
-        return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
-      }
-      
-      void main() {
-        vec4 texel = texture2D(tText, vUv);
-        if (texel.a < 0.1) discard;
-        float flicker = noise(vec2(vUv.x * 4.0, uTime * 3.0)) * 0.3;
-        float gradient = 1.0 - vUv.y;
-        vec3 fireColor = mix(
-          vec3(1.0, 0.2, 0.0),
-          vec3(1.0, 0.8, 0.0),
-          gradient + flicker
-        );
-        vec3 color = mix(uColor * 0.3, fireColor, 0.8);
-        float alpha = texel.a * (0.85 + flicker * 0.5);
-        gl_FragColor = vec4(color, alpha);
-      }
-    `,
+
+  fire(ctx, t, time) {
+    drawBase(ctx, t);
+    const w = t.canvas.width;
+    const h = t.canvas.height;
+    const y = h / 2;
+    // Base fire gradient
+    const grad = ctx.createLinearGradient(0, h, 0, 0);
+    grad.addColorStop(0, '#ff4500');
+    grad.addColorStop(0.4, '#ff8c00');
+    grad.addColorStop(0.8, '#ffd700');
+    grad.addColorStop(1, '#fff8dc');
+    ctx.fillStyle = grad;
+    ctx.fillText(t.text, 4, y);
+    // Flicker overlay
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    const flicker = 0.85 + 0.15 * Math.sin(time * 15 + Math.sin(time * 7) * 3);
+    ctx.globalAlpha = 1 - flicker;
+    ctx.fillStyle = '#ff4500';
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
   },
-  ice: {
-    vertex: `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragment: `
-      uniform sampler2D tText;
-      uniform float uTime;
-      uniform vec3 uColor;
-      varying vec2 vUv;
-      void main() {
-        vec4 texel = texture2D(tText, vUv);
-        if (texel.a < 0.1) discard;
-        float shimmer = 0.9 + 0.1 * sin(vUv.x * 20.0 + uTime * 2.0) * sin(vUv.y * 20.0 - uTime);
-        vec3 iceColor = mix(
-          vec3(0.6, 0.85, 1.0),
-          vec3(0.9, 0.95, 1.0),
-          sin(vUv.x * 8.0 + uTime) * 0.5 + 0.5
-        );
-        vec3 color = mix(uColor * 0.4, iceColor, 0.7) * shimmer;
-        gl_FragColor = vec4(color, texel.a);
-      }
-    `,
+
+  ice(ctx, t, time) {
+    drawBase(ctx, t);
+    const w = t.canvas.width;
+    const y = t.canvas.height / 2;
+    const shimmer = ((Math.sin(time * 2) + 1) / 2) * w;
+    const grad = ctx.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0, '#a0d2db');
+    grad.addColorStop(0.3, '#d4f1f9');
+    grad.addColorStop(0.5, '#ffffff');
+    grad.addColorStop(0.7, '#d4f1f9');
+    grad.addColorStop(1, '#a0d2db');
+    ctx.fillStyle = grad;
+    ctx.fillText(t.text, 4, y);
+    // Sparkle highlight
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    const sparkGrad = ctx.createRadialGradient(shimmer, y, 0, shimmer, y, 40 * t.dpr);
+    sparkGrad.addColorStop(0, 'rgba(255,255,255,0.6)');
+    sparkGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sparkGrad;
+    ctx.fillRect(0, 0, w, t.canvas.height);
+    ctx.restore();
   },
-  gold: {
-    vertex: `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragment: `
-      uniform sampler2D tText;
-      uniform float uTime;
-      uniform vec3 uColor;
-      varying vec2 vUv;
-      void main() {
-        vec4 texel = texture2D(tText, vUv);
-        if (texel.a < 0.1) discard;
-        float shine = pow(sin(vUv.x * 3.14159 + uTime * 1.5) * 0.5 + 0.5, 3.0);
-        vec3 goldBase = vec3(0.85, 0.65, 0.13);
-        vec3 goldHighlight = vec3(1.0, 0.95, 0.6);
-        vec3 color = mix(goldBase, goldHighlight, shine * 0.6);
-        gl_FragColor = vec4(color, texel.a);
-      }
-    `,
+
+  gold(ctx, t, time) {
+    drawBase(ctx, t);
+    const w = t.canvas.width;
+    const y = t.canvas.height / 2;
+    const shineX = ((Math.sin(time * 1.5) + 1) / 2) * w;
+    const grad = ctx.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0, '#b8860b');
+    grad.addColorStop(0.3, '#daa520');
+    grad.addColorStop(0.5, '#ffd700');
+    grad.addColorStop(0.7, '#daa520');
+    grad.addColorStop(1, '#b8860b');
+    ctx.fillStyle = grad;
+    ctx.fillText(t.text, 4, y);
+    // Shine sweep
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    const shineGrad = ctx.createRadialGradient(shineX, y, 0, shineX, y, 50 * t.dpr);
+    shineGrad.addColorStop(0, 'rgba(255,250,220,0.7)');
+    shineGrad.addColorStop(1, 'rgba(255,250,220,0)');
+    ctx.fillStyle = shineGrad;
+    ctx.fillRect(0, 0, w, t.canvas.height);
+    ctx.restore();
   },
-  glitch: {
-    vertex: `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragment: `
-      uniform sampler2D tText;
-      uniform float uTime;
-      uniform vec3 uColor;
-      varying vec2 vUv;
-      
-      float random(float s) {
-        return fract(sin(s * 12.9898) * 43758.5453);
-      }
-      
-      void main() {
-        float glitchStrength = step(0.95, random(floor(uTime * 10.0)));
-        vec2 uv = vUv;
-        if (glitchStrength > 0.0) {
-          float offset = (random(floor(vUv.y * 20.0) + floor(uTime * 15.0)) - 0.5) * 0.08;
-          uv.x += offset;
-        }
-        vec4 texel = texture2D(tText, uv);
-        if (texel.a < 0.1) discard;
-        
-        float rOffset = glitchStrength * 0.02;
-        float r = texture2D(tText, uv + vec2(rOffset, 0.0)).a;
-        float b = texture2D(tText, uv - vec2(rOffset, 0.0)).a;
-        
-        vec3 color = vec3(
-          uColor.r * max(texel.a, r),
-          uColor.g * texel.a,
-          uColor.b * max(texel.a, b)
-        );
-        gl_FragColor = vec4(color, texel.a);
-      }
-    `,
+
+  glitch(ctx, t, time) {
+    drawBase(ctx, t);
+    const y = t.canvas.height / 2;
+    const glitchActive = Math.sin(time * 10) > 0.92;
+    if (glitchActive) {
+      // Red channel offset
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,0,0,0.7)';
+      ctx.fillText(t.text, 4 + 3 * t.dpr, y);
+      ctx.fillStyle = 'rgba(0,255,255,0.7)';
+      ctx.fillText(t.text, 4 - 3 * t.dpr, y);
+      ctx.restore();
+    }
+    ctx.fillStyle = t.color;
+    ctx.fillText(t.text, 4, y);
+    // Random slice displacement
+    if (glitchActive) {
+      const sliceY = Math.random() * t.canvas.height;
+      const sliceH = 4 * t.dpr;
+      const sliceShift = (Math.random() - 0.5) * 10 * t.dpr;
+      const imgData = ctx.getImageData(0, sliceY, t.canvas.width, sliceH);
+      ctx.putImageData(imgData, sliceShift, sliceY);
+    }
   },
 };
 
 class UsernameRendererSingleton {
-  private renderer: THREE.WebGLRenderer | null = null;
-  private scene: THREE.Scene | null = null;
-  private camera: THREE.OrthographicCamera | null = null;
-  private textCanvas: HTMLCanvasElement;
-  private textCtx: CanvasRenderingContext2D;
+  private activeTargets: Map<string, ActiveTarget> = new Map();
   private animationId: number | null = null;
-  private activeTargets: Map<string, {
-    canvas: HTMLCanvasElement;
-    material: THREE.ShaderMaterial;
-    mesh: THREE.Mesh;
-    renderTarget: THREE.WebGLRenderTarget;
-    text: string;
-    effect: UsernameEffect;
-    color: string;
-    font: string;
-    width: number;
-    height: number;
-  }> = new Map();
   private startTime: number = Date.now();
-  private initialized = false;
 
-  constructor() {
-    // Offscreen canvas for text rasterization
-    this.textCanvas = document.createElement('canvas');
-    this.textCtx = this.textCanvas.getContext('2d')!;
-  }
-
-  private init() {
-    if (this.initialized) return;
-
-    this.renderer = new THREE.WebGLRenderer({
-      alpha: true,
-      antialias: true,
-      powerPreference: 'low-power',
-      preserveDrawingBuffer: true,
-    });
-    this.renderer.setSize(1, 1);
-    this.renderer.autoClear = true;
-
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.1, 10);
-    this.camera.position.z = 1;
-
-    this.initialized = true;
-    this.startAnimationLoop();
-  }
-
-  /**
-   * Rasterize text to a texture using Canvas 2D
-   */
-  private createTextTexture(text: string, font: string, width: number, height: number): THREE.CanvasTexture {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = width * dpr;
-    const h = height * dpr;
-
-    this.textCanvas.width = w;
-    this.textCanvas.height = h;
-
-    const ctx = this.textCtx;
-    ctx.clearRect(0, 0, w, h);
-
-    const fontSize = Math.floor(h * 0.65);
-    ctx.font = `600 ${fontSize}px '${font}', sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(text, fontSize * 0.1, h / 2);
-
-    const texture = new THREE.CanvasTexture(this.textCanvas);
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.needsUpdate = true;
-    return texture;
-  }
-
-  /**
-   * Register a username for rendering. Returns a canvas element
-   * that will be continuously updated with the rendered effect.
-   */
   register(
     id: string,
     text: string,
@@ -346,76 +224,9 @@ class UsernameRendererSingleton {
     width: number,
     height: number
   ): HTMLCanvasElement {
-    if (effect === 'none') {
-      // Return a simple 2D canvas for 'none' effect — no WebGL needed
-      return this.createSimpleCanvas(text, color, font, width, height);
-    }
+    // Clean up existing
+    this.unregister(id);
 
-    this.init();
-
-    // Clean up existing registration
-    if (this.activeTargets.has(id)) {
-      this.unregister(id);
-    }
-
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const rtWidth = Math.ceil(width * dpr);
-    const rtHeight = Math.ceil(height * dpr);
-
-    const renderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight, {
-      minFilter: THREE.LinearFilter,
-      magFilter: THREE.LinearFilter,
-      format: THREE.RGBAFormat,
-    });
-
-    const textTexture = this.createTextTexture(text, font, width, height);
-    const shaders = EFFECT_SHADERS[effect];
-    const colorVec = new THREE.Color(color);
-
-    const material = new THREE.ShaderMaterial({
-      uniforms: {
-        tText: { value: textTexture },
-        uTime: { value: 0 },
-        uColor: { value: colorVec },
-      },
-      vertexShader: shaders.vertex,
-      fragmentShader: shaders.fragment,
-      transparent: true,
-      depthTest: false,
-    });
-
-    const geometry = new THREE.PlaneGeometry(1, 1);
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.visible = false; // Only visible during its render pass
-
-    this.scene!.add(mesh);
-
-    const outputCanvas = document.createElement('canvas');
-    outputCanvas.width = rtWidth;
-    outputCanvas.height = rtHeight;
-    outputCanvas.style.width = `${width}px`;
-    outputCanvas.style.height = `${height}px`;
-
-    this.activeTargets.set(id, {
-      canvas: outputCanvas,
-      material,
-      mesh,
-      renderTarget,
-      text,
-      effect,
-      color,
-      font,
-      width,
-      height,
-    });
-
-    return outputCanvas;
-  }
-
-  /**
-   * Simple 2D canvas for 'none' effect — no WebGL overhead
-   */
-  private createSimpleCanvas(text: string, color: string, font: string, width: number, height: number): HTMLCanvasElement {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil(width * dpr);
@@ -424,55 +235,59 @@ class UsernameRendererSingleton {
     canvas.style.height = `${height}px`;
 
     const ctx = canvas.getContext('2d')!;
-    const fontSize = Math.floor(height * dpr * 0.65);
-    ctx.font = `600 ${fontSize}px '${font}', sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = color;
-    ctx.fillText(text, fontSize * 0.1, canvas.height / 2);
+
+    const target: ActiveTarget = { canvas, ctx, text, effect, color, font, width, height, dpr };
+    this.activeTargets.set(id, target);
+
+    // Draw first frame immediately
+    this.drawTarget(target, 0);
+
+    // Start animation loop if this is an animated effect
+    if (effect !== 'none') {
+      this.startAnimationLoop();
+    }
 
     return canvas;
   }
 
-  /**
-   * Update text/effect for an existing registration
-   */
-  update(id: string, text: string, effect: UsernameEffect, color: string, font: string, width: number, height: number): HTMLCanvasElement {
-    this.unregister(id);
+  update(
+    id: string,
+    text: string,
+    effect: UsernameEffect,
+    color: string,
+    font: string,
+    width: number,
+    height: number
+  ): HTMLCanvasElement {
     return this.register(id, text, effect, color, font, width, height);
   }
 
-  /**
-   * Remove a username from the render loop
-   */
   unregister(id: string) {
-    const target = this.activeTargets.get(id);
-    if (!target) return;
-
-    this.scene?.remove(target.mesh);
-    target.mesh.geometry.dispose();
-    target.material.dispose();
-    target.renderTarget.dispose();
-    const textTex = target.material.uniforms['tText']?.value;
-    if (textTex) textTex.dispose();
-
     this.activeTargets.delete(id);
-
-    // If no more targets, stop the loop and clean up
     if (this.activeTargets.size === 0) {
       this.stopAnimationLoop();
     }
   }
 
-  /**
-   * Main animation loop — renders all active targets
-   */
+  private drawTarget(target: ActiveTarget, time: number) {
+    const { ctx, canvas } = target;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const drawFn = effects[target.effect];
+    if (drawFn) {
+      drawFn(ctx, target, time);
+    }
+  }
+
   private startAnimationLoop() {
     if (this.animationId !== null) return;
-
     const loop = () => {
       this.animationId = requestAnimationFrame(loop);
-      this.renderAll();
+      const time = (Date.now() - this.startTime) / 1000;
+      for (const [, target] of this.activeTargets) {
+        if (target.effect !== 'none') {
+          this.drawTarget(target, time);
+        }
+      }
     };
     this.animationId = requestAnimationFrame(loop);
   }
@@ -484,51 +299,10 @@ class UsernameRendererSingleton {
     }
   }
 
-  private renderAll() {
-    if (!this.renderer || !this.scene || !this.camera) return;
-
-    const elapsed = (Date.now() - this.startTime) / 1000;
-
-    for (const [, target] of this.activeTargets) {
-      // Update time uniform
-      target.material.uniforms['uTime']!.value = elapsed;
-
-      // Resize the shared renderer to match this target
-      const w = target.renderTarget.width;
-      const h = target.renderTarget.height;
-      this.renderer.setSize(w, h, false);
-
-      // Show only this mesh, render directly to the default framebuffer
-      target.mesh.visible = true;
-      this.renderer.setRenderTarget(null);
-      this.renderer.clear();
-      this.renderer.render(this.scene, this.camera);
-      target.mesh.visible = false;
-
-      // Copy from the renderer's canvas to the output canvas
-      const ctx = target.canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, target.canvas.width, target.canvas.height);
-        ctx.drawImage(this.renderer.domElement, 0, 0);
-      }
-    }
-  }
-
-  /**
-   * Clean up everything
-   */
   dispose() {
     this.stopAnimationLoop();
-    for (const id of this.activeTargets.keys()) {
-      this.unregister(id);
-    }
-    this.renderer?.dispose();
-    this.renderer = null;
-    this.scene = null;
-    this.camera = null;
-    this.initialized = false;
+    this.activeTargets.clear();
   }
 }
 
-// Singleton instance
 export const usernameRenderer = new UsernameRendererSingleton();
