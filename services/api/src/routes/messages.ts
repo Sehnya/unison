@@ -177,52 +177,62 @@ export function createMessageRoutes(config: MessageRoutesConfig): Router {
       const messages = await messagingService.getMessages(channelId, userId, options);
 
       // Enrich messages with author information (username, avatar, font)
-      const enrichedMessages = await Promise.all(
-        (messages as any[]).map(async (msg: any) => {
-          const authorId = msg.author_id || msg.authorId;
-          if (authorId) {
-            // Try to get user from cache first
-            let author: { username: string; avatar?: string | null; username_font?: string | null } | null = null;
-            if (cache) {
-              author = await cache.getUser(authorId);
-            }
-            
-            if (!author) {
-              try {
-                author = await authService.getUserById(authorId) as { id: string; username: string; avatar?: string | null; username_font?: string | null } | null;
-                // Cache the user for future requests
-                if (author && cache) {
-                  await cache.cacheUser(authorId, {
-                    username: author.username,
-                    avatar: author.avatar ?? null,
-                    username_font: author.username_font ?? null,
-                  });
-                }
-              } catch (error) {
-                console.warn(`Failed to fetch author info for user ${authorId}:`, error);
+      // Batch: collect unique author IDs, fetch once, then map
+      const messageList = messages as any[];
+      const uniqueAuthorIds = [...new Set(messageList.map(msg => msg.author_id || msg.authorId).filter(Boolean))];
+
+      // Resolve all unique authors (cache first, then DB for misses)
+      const authorMap = new Map<string, { username: string; avatar?: string | null; username_font?: string | null }>();
+
+      // 1. Check cache for all authors at once
+      const uncachedIds: string[] = [];
+      if (cache) {
+        await Promise.all(uniqueAuthorIds.map(async (id) => {
+          const cached = await cache.getUser(id);
+          if (cached) {
+            authorMap.set(id, cached);
+          } else {
+            uncachedIds.push(id);
+          }
+        }));
+      } else {
+        uncachedIds.push(...uniqueAuthorIds);
+      }
+
+      // 2. Fetch uncached authors from DB in parallel (single batch)
+      if (uncachedIds.length > 0) {
+        await Promise.all(uncachedIds.map(async (id) => {
+          try {
+            const author = await authService.getUserById(id) as { id: string; username: string; avatar?: string | null; username_font?: string | null } | null;
+            if (author) {
+              const authorData = {
+                username: author.username,
+                avatar: author.avatar ?? null,
+                username_font: author.username_font ?? null,
+              };
+              authorMap.set(id, authorData);
+              if (cache) {
+                await cache.cacheUser(id, authorData);
               }
             }
-            
-            if (author) {
-              return {
-                ...msg,
-                author_id: authorId,
-                author_name: author.username,
-                author_avatar: author.avatar || null,
-                author_font: author.username_font || null,
-              };
-            }
+          } catch (error) {
+            console.warn(`Failed to fetch author info for user ${id}:`, error);
           }
-          // Fallback if author not found
-          return {
-            ...msg,
-            author_id: authorId,
-            author_name: 'Unknown',
-            author_avatar: null,
-            author_font: null,
-          };
-        })
-      );
+        }));
+      }
+
+      // 3. Map authors onto messages (no async, pure lookup)
+      const enrichedMessages = messageList.map((msg: any) => {
+        const authorId = msg.author_id || msg.authorId;
+        const author = authorMap.get(authorId);
+        return {
+          ...msg,
+          author_id: authorId,
+          author_name: author?.username || 'Unknown',
+          author_avatar: author?.avatar || null,
+          author_font: author?.username_font || null,
+        };
+      });
 
       // Cache the enriched messages (only for default queries without pagination)
       if (cache && useCache && enrichedMessages.length > 0) {

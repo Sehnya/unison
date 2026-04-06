@@ -42,6 +42,26 @@ export function getDatabaseConfig(): DatabaseConfig {
  * Create a database connection pool
  */
 export function createPool(config?: Partial<DatabaseConfig>): Pool {
+  // Prefer DATABASE_URL (Neon connection string) if available
+  const connectionString = process.env.DATABASE_URL;
+  if (connectionString) {
+    const isNeon = connectionString.includes('neon.tech');
+    const dbConfig = { ...getDatabaseConfig(), ...config };
+    const pool = new Pool({
+      connectionString,
+      max: dbConfig.maxConnections,
+      idleTimeoutMillis: dbConfig.idleTimeoutMs,
+      connectionTimeoutMillis: dbConfig.connectionTimeoutMs,
+      ...(isNeon ? { ssl: { rejectUnauthorized: false } } : {}),
+    });
+
+    pool.on('error', (err) => {
+      console.error('Unexpected database pool error:', err);
+    });
+
+    return pool;
+  }
+
   const dbConfig = { ...getDatabaseConfig(), ...config };
 
   const poolConfig: PoolConfig = {

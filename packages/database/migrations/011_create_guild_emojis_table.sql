@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS guild_emojis (
 );
 
 -- Index for fast lookup by guild
-CREATE INDEX idx_guild_emojis_guild_id ON guild_emojis(guild_id);
+CREATE INDEX IF NOT EXISTS idx_guild_emojis_guild_id ON guild_emojis(guild_id);
 
 -- Index for searching emojis by name
-CREATE INDEX idx_guild_emojis_name ON guild_emojis(name);
+CREATE INDEX IF NOT EXISTS idx_guild_emojis_name ON guild_emojis(name);

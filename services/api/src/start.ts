@@ -55,11 +55,15 @@ async function main() {
   }
 
   // Create database pool directly with connection string
+  // Neon requires SSL; detect it from the connection string
+  const databaseUrl = process.env.DATABASE_URL!;
+  const isNeon = databaseUrl.includes('neon.tech');
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: databaseUrl,
     max: parseInt(process.env.POSTGRES_MAX_CONNECTIONS ?? '20', 10),
     idleTimeoutMillis: parseInt(process.env.POSTGRES_IDLE_TIMEOUT ?? '30000', 10),
     connectionTimeoutMillis: parseInt(process.env.POSTGRES_CONNECTION_TIMEOUT ?? '5000', 10),
+    ...(isNeon ? { ssl: { rejectUnauthorized: false } } : {}),
   });
 
   // Test connection

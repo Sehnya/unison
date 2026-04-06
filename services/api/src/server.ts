@@ -183,6 +183,14 @@ export function createApiServer(config: ApiServerConfig): Express {
     });
     app.use('/api/channels/:channel_id/messages/:message_id/reactions', reactionRoutes);
     app.use('/channels/:channel_id/messages/:message_id/reactions', reactionRoutes);
+
+    // Batch reactions route (not nested under :message_id)
+    const batchReactionRoutes = createReactionRoutes({
+      pool: config.pool,
+      validateToken: config.validateToken,
+    });
+    app.use('/api/channels/:channel_id/messages/reactions', batchReactionRoutes);
+    app.use('/channels/:channel_id/messages/reactions', batchReactionRoutes);
   }
 
   // Role routes (includes /guilds/:guild_id/roles and /channels/:channel_id/overwrites)

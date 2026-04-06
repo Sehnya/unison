@@ -137,8 +137,11 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const connectionString = process.env['DATABASE_URL'] ?? 'postgresql://localhost:5432/discord_clone';
+  const isNeon = connectionString.includes('neon.tech');
   const pool = new Pool({
-    connectionString: process.env['DATABASE_URL'] ?? 'postgresql://localhost:5432/discord_clone',
+    connectionString,
+    ...(isNeon ? { ssl: { rejectUnauthorized: false } } : {}),
   });
 
   try {

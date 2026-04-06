@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS message_reactions (
 );
 
 -- Index for fast lookup by message
-CREATE INDEX idx_message_reactions_message_id ON message_reactions(message_id);
+CREATE INDEX IF NOT EXISTS idx_message_reactions_message_id ON message_reactions(message_id);
 
 -- Index for counting reactions by emoji
-CREATE INDEX idx_message_reactions_emoji ON message_reactions(message_id, emoji);
+CREATE INDEX IF NOT EXISTS idx_message_reactions_emoji ON message_reactions(message_id, emoji);

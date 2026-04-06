@@ -39,6 +39,55 @@ export function createReactionRoutes(config: ReactionRoutesConfig): Router {
   router.use(authMiddleware);
 
   /**
+   * POST /channels/:channel_id/messages/reactions/batch
+   * Get reactions for multiple messages at once
+   */
+  router.post('/batch', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id: userId } = (req as AuthenticatedRequest).user;
+      const { message_ids } = req.body;
+
+      if (!Array.isArray(message_ids) || message_ids.length === 0) {
+        res.status(200).json({ reactions: {} });
+        return;
+      }
+
+      // Cap at 100 to prevent abuse
+      const ids = message_ids.slice(0, 100);
+
+      const result = await pool.query(
+        `SELECT message_id, emoji, emoji_url,
+                array_agg(user_id::text) as users,
+                COUNT(*) as count
+         FROM message_reactions
+         WHERE message_id = ANY($1::bigint[])
+         GROUP BY message_id, emoji, emoji_url`,
+        [ids]
+      );
+
+      // Group by message_id
+      const reactionsByMessage: Record<string, MessageReaction[]> = {};
+      for (const row of result.rows) {
+        const msgId = row.message_id.toString();
+        if (!reactionsByMessage[msgId]) {
+          reactionsByMessage[msgId] = [];
+        }
+        reactionsByMessage[msgId].push({
+          emoji: row.emoji,
+          emoji_url: row.emoji_url || undefined,
+          count: parseInt(row.count, 10),
+          users: row.users,
+          me: row.users.includes(userId),
+        });
+      }
+
+      res.status(200).json({ reactions: reactionsByMessage });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
    * GET /channels/:channel_id/messages/:message_id/reactions
    * Get all reactions for a message
    */

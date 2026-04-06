@@ -448,32 +448,29 @@
   async function loadMessageReactions(messageIds: string[]) {
     if (!authToken || messageIds.length === 0) return;
     
-    // Load reactions for each message in parallel
-    const results = await Promise.allSettled(
-      messageIds.map(async (messageId) => {
-        const response = await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}/reactions`), {
-          headers: { 'Authorization': `Bearer ${authToken}` },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          return { messageId, reactions: data.reactions || [] };
-        }
-        return { messageId, reactions: [] };
-      })
-    );
-    
-    // Update messages with their reactions
-    const reactionMap = new Map<string, MessageReaction[]>();
-    results.forEach(result => {
-      if (result.status === 'fulfilled') {
-        reactionMap.set(result.value.messageId, result.value.reactions);
+    // Single batch request instead of N individual requests
+    try {
+      const response = await fetch(apiUrl(`/api/channels/${channelId}/messages/reactions/batch`), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message_ids: messageIds }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const reactionsByMessage = data.reactions || {};
+        
+        messages = messages.map(msg => ({
+          ...msg,
+          reactions: reactionsByMessage[msg.id] || msg.reactions || [],
+        }));
       }
-    });
-    
-    messages = messages.map(msg => ({
-      ...msg,
-      reactions: reactionMap.get(msg.id) || msg.reactions || [],
-    }));
+    } catch (error) {
+      console.error('Failed to load reactions:', error);
+    }
   }
 
   // Check if content is a GIF URL or image
