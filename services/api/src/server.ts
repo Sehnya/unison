@@ -10,6 +10,7 @@ import compression from 'compression';
 import cors from 'cors';
 import type { TokenValidator } from './middleware.js';
 import { errorHandler, ApiError, ApiErrorCode } from './errors.js';
+import { authLimiter, apiLimiter } from './rateLimit.js';
 import {
   createAuthRoutes,
   createGuildRoutes,
@@ -108,7 +109,16 @@ export function createApiServer(config: ApiServerConfig): Express {
     res.status(200).json({ status: 'ok' });
   });
 
+  // Apply general rate limiter to all API routes
+  app.use('/api', apiLimiter);
+
   // Auth routes - MUST be registered before other /api routes to avoid conflicts
+  // Apply strict rate limiter to auth endpoints
+  app.use('/api/auth/register', authLimiter);
+  app.use('/api/auth/login', authLimiter);
+  app.use('/auth/register', authLimiter);
+  app.use('/auth/login', authLimiter);
+
   app.use('/api/auth', createAuthRoutes({
     authService: config.authService,
     guildService: config.guildService,

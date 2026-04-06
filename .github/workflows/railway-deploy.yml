@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -28,7 +28,13 @@ jobs:
 
       - name: Run tests
         run: npm test
-        continue-on-error: true
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Install Railway CLI
         run: npm install -g @railway/cli
@@ -42,5 +48,3 @@ jobs:
         run: railway run npm run migrate:up -w @discord-clone/database
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        continue-on-error: true
-

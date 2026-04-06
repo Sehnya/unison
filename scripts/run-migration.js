@@ -1,3 +1,4 @@
+require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env') });
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
@@ -8,8 +9,17 @@ if (!migrationFile) {
   process.exit(1);
 }
 
+if (!process.env.DATABASE_URL) {
+  console.error('DATABASE_URL is not set. Create a .env file in the project root.');
+  process.exit(1);
+}
+
+const connectionString = process.env.DATABASE_URL;
+const isNeon = connectionString.includes('neon.tech');
+
 const pool = new Pool({
-  connectionString: 'postgresql://neondb_owner:npg_2hPFUZ4XiCGd@ep-wispy-lab-ado832r1-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require'
+  connectionString,
+  ...(isNeon ? { ssl: { rejectUnauthorized: false } } : {}),
 });
 
 async function runMigration() {
