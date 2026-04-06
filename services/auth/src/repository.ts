@@ -13,6 +13,7 @@ export interface UserRow {
   bio: string | null;
   background_image: string | null;
   username_font: string | null;
+  username_effect: string | null;
   mini_profile_background: string | null;
   mini_profile_font: string | null;
   mini_profile_text_color: string | null;
@@ -52,6 +53,9 @@ export function rowToUser(row: UserRow): User {
   }
   if (row.username_font) {
     (user as User & { username_font?: string }).username_font = row.username_font;
+  }
+  if (row.username_effect) {
+    (user as User & { username_effect?: string }).username_effect = row.username_effect;
   }
   if (row.mini_profile_background) {
     (user as User & { mini_profile_background?: string }).mini_profile_background = row.mini_profile_background;
@@ -102,7 +106,7 @@ export class AuthRepository {
     const result = await conn.query<UserRow>(
       `INSERT INTO users (id, email, username, password_hash)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, email, username, password_hash, avatar, bio, background_image, username_font, mini_profile_background, mini_profile_font, mini_profile_text_color, created_at, terms_accepted_at`,
+       RETURNING id, email, username, password_hash, avatar, bio, background_image, username_font, username_effect, mini_profile_background, mini_profile_font, mini_profile_text_color, created_at, terms_accepted_at`,
       [id, email.toLowerCase().trim(), username.trim(), passwordHash]
     );
     const row = result.rows[0];
@@ -117,7 +121,7 @@ export class AuthRepository {
    */
   async findUserByEmail(email: string): Promise<(User & { password_hash: string }) | null> {
     const result = await this.pool.query<UserRow>(
-      `SELECT id, email, username, password_hash, avatar, bio, background_image, username_font, mini_profile_background, mini_profile_font, mini_profile_text_color, created_at, terms_accepted_at
+      `SELECT id, email, username, password_hash, avatar, bio, background_image, username_font, username_effect, mini_profile_background, mini_profile_font, mini_profile_text_color, created_at, terms_accepted_at
        FROM users WHERE email = $1`,
       [email.toLowerCase().trim()]
     );
@@ -137,7 +141,7 @@ export class AuthRepository {
    */
   async findUserById(id: Snowflake): Promise<User | null> {
     const result = await this.pool.query<UserRow>(
-      `SELECT id, email, username, password_hash, avatar, bio, background_image, username_font, mini_profile_background, mini_profile_font, mini_profile_text_color, created_at, terms_accepted_at
+      `SELECT id, email, username, password_hash, avatar, bio, background_image, username_font, username_effect, mini_profile_background, mini_profile_font, mini_profile_text_color, created_at, terms_accepted_at
        FROM users WHERE id = $1`,
       [id]
     );
@@ -344,7 +348,7 @@ export class AuthRepository {
    */
   async updateProfile(
     userId: Snowflake,
-    updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string; mini_profile_background?: string | null; mini_profile_font?: string; mini_profile_text_color?: string }
+    updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string; username_effect?: string; mini_profile_background?: string | null; mini_profile_font?: string; mini_profile_text_color?: string }
   ): Promise<User> {
     const setClauses: string[] = [];
     const values: (string | null)[] = [];
@@ -369,6 +373,10 @@ export class AuthRepository {
     if (updates.username_font !== undefined) {
       setClauses.push(`username_font = $${paramIndex++}`);
       values.push(updates.username_font || null);
+    }
+    if (updates.username_effect !== undefined) {
+      setClauses.push(`username_effect = $${paramIndex++}`);
+      values.push(updates.username_effect || 'none');
     }
     if (updates.mini_profile_background !== undefined) {
       setClauses.push(`mini_profile_background = $${paramIndex++}`);
@@ -395,7 +403,7 @@ export class AuthRepository {
     const result = await this.pool.query<UserRow>(
       `UPDATE users SET ${setClauses.join(', ')}
        WHERE id = $${paramIndex}
-       RETURNING id, email, username, password_hash, avatar, bio, background_image, username_font, mini_profile_background, mini_profile_font, mini_profile_text_color, created_at, terms_accepted_at`,
+       RETURNING id, email, username, password_hash, avatar, bio, background_image, username_font, username_effect, mini_profile_background, mini_profile_font, mini_profile_text_color, created_at, terms_accepted_at`,
       values
     );
     const row = result.rows[0];
@@ -425,6 +433,7 @@ export class AuthRepository {
     bio: string | null;
     backgroundImage: string | null;
     usernameFont: string | null;
+    usernameEffect: string | null;
     textColor: string | null;
   } | null> {
     try {
@@ -434,11 +443,12 @@ export class AuthRepository {
         username: string;
         avatar: string | null;
         bio: string | null;
+        username_effect: string | null;
         mini_profile_background: string | null;
         mini_profile_font: string | null;
         mini_profile_text_color: string | null;
       }>(
-        `SELECT id, username, avatar, bio, mini_profile_background, mini_profile_font, mini_profile_text_color
+        `SELECT id, username, avatar, bio, username_effect, mini_profile_background, mini_profile_font, mini_profile_text_color
          FROM users WHERE id = $1`,
         [userId]
       );
@@ -453,6 +463,7 @@ export class AuthRepository {
         bio: row.bio,
         backgroundImage: row.mini_profile_background,
         usernameFont: row.mini_profile_font,
+        usernameEffect: row.username_effect,
         textColor: row.mini_profile_text_color,
       };
     } catch (error) {
@@ -479,6 +490,7 @@ export class AuthRepository {
           bio: row.bio,
           backgroundImage: null,
           usernameFont: null,
+          usernameEffect: null,
           textColor: null,
         };
       } catch (fallbackError) {

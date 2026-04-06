@@ -11,8 +11,6 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "outDir": "dist",
-    "rootDir": "src",
     "resolveJsonModule": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -28,5 +26,6 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true
   },
-  "exclude": ["node_modules", "dist", "coverage"]
+  "include": ["vitest.config.ts"],
+  "exclude": ["node_modules", "dist", "coverage", "packages", "services", "frontend", "tests"]
 }

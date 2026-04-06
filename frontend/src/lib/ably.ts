@@ -44,6 +44,7 @@ export interface ChatMessage {
   authorName: string;
   authorAvatar?: string;
   authorFont?: string;
+  authorEffect?: string;
   content: string;
   timestamp: number;
   channelId: string;

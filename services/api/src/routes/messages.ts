@@ -182,7 +182,7 @@ export function createMessageRoutes(config: MessageRoutesConfig): Router {
       const uniqueAuthorIds = [...new Set(messageList.map(msg => msg.author_id || msg.authorId).filter(Boolean))];
 
       // Resolve all unique authors (cache first, then DB for misses)
-      const authorMap = new Map<string, { username: string; avatar?: string | null; username_font?: string | null }>();
+      const authorMap = new Map<string, { username: string; avatar?: string | null; username_font?: string | null; username_effect?: string | null }>();
 
       // 1. Check cache for all authors at once
       const uncachedIds: string[] = [];
@@ -203,12 +203,13 @@ export function createMessageRoutes(config: MessageRoutesConfig): Router {
       if (uncachedIds.length > 0) {
         await Promise.all(uncachedIds.map(async (id) => {
           try {
-            const author = await authService.getUserById(id) as { id: string; username: string; avatar?: string | null; username_font?: string | null } | null;
+            const author = await authService.getUserById(id) as { id: string; username: string; avatar?: string | null; username_font?: string | null; username_effect?: string | null } | null;
             if (author) {
               const authorData = {
                 username: author.username,
                 avatar: author.avatar ?? null,
                 username_font: author.username_font ?? null,
+                username_effect: author.username_effect ?? null,
               };
               authorMap.set(id, authorData);
               if (cache) {
@@ -231,6 +232,7 @@ export function createMessageRoutes(config: MessageRoutesConfig): Router {
           author_name: author?.username || 'Unknown',
           author_avatar: author?.avatar || null,
           author_font: author?.username_font || null,
+          author_effect: author?.username_effect || 'none',
         };
       });
 

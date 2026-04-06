@@ -17,6 +17,7 @@ export interface MiniProfileData {
   bio: string | null;
   backgroundImage: string | null;
   usernameFont: string | null;
+  usernameEffect: string | null;
   textColor: string | null;
   mutualFriends: MutualFriend[];
 }

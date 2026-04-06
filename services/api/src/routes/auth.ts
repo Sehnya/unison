@@ -323,14 +323,15 @@ export function createAuthRoutes(config: AuthRoutesConfig): Router {
   router.patch('/profile', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id: userId } = (req as AuthenticatedRequest).user;
-      const { username, avatar, bio, background_image, username_font, mini_profile_background, mini_profile_font, mini_profile_text_color } = req.body;
+      const { username, avatar, bio, background_image, username_font, username_effect, mini_profile_background, mini_profile_font, mini_profile_text_color } = req.body;
 
-      const updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string; mini_profile_background?: string | null; mini_profile_font?: string; mini_profile_text_color?: string } = {};
+      const updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string; username_effect?: string; mini_profile_background?: string | null; mini_profile_font?: string; mini_profile_text_color?: string } = {};
       if (username !== undefined) updates.username = username;
       if (avatar !== undefined) updates.avatar = avatar;
       if (bio !== undefined) updates.bio = bio;
       if (background_image !== undefined) updates.background_image = background_image;
       if (username_font !== undefined) updates.username_font = username_font;
+      if (username_effect !== undefined) updates.username_effect = username_effect;
       if (mini_profile_background !== undefined) updates.mini_profile_background = mini_profile_background;
       if (mini_profile_font !== undefined) updates.mini_profile_font = mini_profile_font;
       if (mini_profile_text_color !== undefined) updates.mini_profile_text_color = mini_profile_text_color;

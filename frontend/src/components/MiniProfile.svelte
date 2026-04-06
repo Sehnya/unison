@@ -2,6 +2,8 @@
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import Avatar from './Avatar.svelte';
   import { apiUrl } from '../lib/api';
+  import Username3D from './Username3D.svelte';
+  import type { UsernameEffect } from '../lib/usernameRenderer';
   import { 
     truncateBio, 
     calculateMiniProfilePosition,
@@ -125,6 +127,7 @@
         bio: profile.bio || null,
         backgroundImage: profile.backgroundImage || profile.mini_profile_background || null,
         usernameFont: profile.usernameFont || profile.mini_profile_font || null,
+        usernameEffect: profile.usernameEffect || profile.username_effect || 'none',
         textColor: profile.textColor || profile.mini_profile_text_color || '#ffffff',
         mutualFriends
       };
@@ -151,6 +154,7 @@
         bio: null,
         backgroundImage: null,
         usernameFont: null,
+        usernameEffect: 'none',
         textColor: '#ffffff',
         mutualFriends: []
       };
@@ -225,6 +229,7 @@
   $: displayAvatar = profileData?.avatar || avatar;
   $: displayBio = profileData?.bio ? truncateBio(profileData.bio, 150) : null;
   $: displayFont = profileData?.usernameFont || 'inherit';
+  $: displayEffect = (profileData?.usernameEffect || 'none') as UsernameEffect;
   $: displayTextColor = profileData?.textColor || '#ffffff';
   $: displayBackground = profileData?.backgroundImage;
   $: mutualFriends = profileData?.mutualFriends || [];
@@ -272,16 +277,28 @@
         />
       </div>
 
-      <!-- Username with custom font and color -->
-      <h3 
-        class="username"
-        style="
-          font-family: {displayFont}, sans-serif;
-          color: {displayTextColor};
-        "
-      >
-        {displayUsername}
-      </h3>
+      <!-- Username with custom font, color, and 3D effect -->
+      {#if displayEffect !== 'none'}
+        <div class="username">
+          <Username3D
+            text={displayUsername}
+            effect={displayEffect}
+            color={displayTextColor}
+            font={displayFont === 'inherit' ? 'Inter' : displayFont}
+            height={28}
+          />
+        </div>
+      {:else}
+        <h3 
+          class="username"
+          style="
+            font-family: {displayFont}, sans-serif;
+            color: {displayTextColor};
+          "
+        >
+          {displayUsername}
+        </h3>
+      {/if}
 
       <!-- Bio -->
       {#if displayBio}

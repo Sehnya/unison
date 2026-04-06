@@ -305,7 +305,7 @@ export class AuthService {
    */
   async updateProfile(
     userId: Snowflake,
-    updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string; mini_profile_background?: string | null; mini_profile_font?: string; mini_profile_text_color?: string }
+    updates: { username?: string; avatar?: string; bio?: string; background_image?: string | null; username_font?: string; username_effect?: string; mini_profile_background?: string | null; mini_profile_font?: string; mini_profile_text_color?: string }
   ): Promise<User> {
     // Validate username if provided
     if (updates.username !== undefined) {
@@ -328,6 +328,7 @@ export class AuthService {
     bio: string | null;
     backgroundImage: string | null;
     usernameFont: string | null;
+    usernameEffect: string | null;
     textColor: string | null;
   } | null> {
     return this.repository.getMiniProfileData(userId);

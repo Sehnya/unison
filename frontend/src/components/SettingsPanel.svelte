@@ -7,6 +7,8 @@
   import { authStorage } from '../utils/storage';
   import { closeAbly } from '../lib/ably';
   import { invalidateMiniProfile } from '../lib/miniProfileCache';
+  import Username3D from './Username3D.svelte';
+  import { EFFECT_LABELS, type UsernameEffect } from '../lib/usernameRenderer';
 
   export let user: User | null = null;
   export let authToken: string = '';
@@ -39,6 +41,10 @@
   
   // Font selection
   let selectedFont = (user as any)?.username_font || 'Inter';
+  
+  // Effect selection
+  let selectedEffect: UsernameEffect = ((user as any)?.username_effect || 'none') as UsernameEffect;
+  const effectOptions: UsernameEffect[] = ['none', 'chrome', 'neon', 'holographic', 'fire', 'ice', 'gold', 'glitch'];
   
   // Mini-profile settings
   let miniProfileSettings = {
@@ -185,6 +191,7 @@
           username: username.trim(),
           avatar: avatarBase64,
           username_font: selectedFont,
+          username_effect: selectedEffect,
           mini_profile_background: currentMiniSettings.backgroundImage,
           mini_profile_font: currentMiniSettings.usernameFont,
           mini_profile_text_color: currentMiniSettings.textColor,
@@ -202,6 +209,7 @@
             username: username.trim(),
             avatar: avatarBase64,
             username_font: selectedFont,
+            username_effect: selectedEffect,
             mini_profile_background: currentMiniSettings.backgroundImage,
             mini_profile_font: currentMiniSettings.usernameFont,
             mini_profile_text_color: currentMiniSettings.textColor,
@@ -497,6 +505,38 @@
               >
                 <span class="font-sample">Aa</span>
                 <span class="font-name">{font.name.toLowerCase()}</span>
+              </button>
+            {/each}
+          </div>
+        </section>
+
+        <!-- Username Effect Section -->
+        <section class="section">
+          <div class="section-label">username effect</div>
+          <div class="effect-preview">
+            {#if selectedEffect !== 'none'}
+              <Username3D
+                text={username || 'preview'}
+                effect={selectedEffect}
+                color="#ffffff"
+                font={selectedFont}
+                height={28}
+              />
+            {:else}
+              <span style="font-family: '{selectedFont}', sans-serif; color: #fff; font-weight: 600;">
+                {username || 'preview'}
+              </span>
+            {/if}
+          </div>
+          <div class="effect-grid">
+            {#each effectOptions as effect}
+              <button
+                class="effect-option"
+                class:active={selectedEffect === effect}
+                on:click={() => { selectedEffect = effect; }}
+                title={EFFECT_LABELS[effect]}
+              >
+                <span class="effect-name">{EFFECT_LABELS[effect].toLowerCase()}</span>
               </button>
             {/each}
           </div>
@@ -1289,5 +1329,53 @@
     color: #4ade80;
     font-size: 16px;
     font-weight: 600;
+  }
+
+  /* Effect picker */
+  .effect-preview {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+  }
+
+  .effect-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .effect-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 6px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .effect-option:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+
+  .effect-option.active {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.4);
+    color: #fff;
+  }
+
+  .effect-name {
+    font-size: 11px;
+    font-family: 'Inter', sans-serif;
   }
 </style>

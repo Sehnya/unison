@@ -5,6 +5,8 @@
   import Avatar from './Avatar.svelte';
   import EmojiPicker from './EmojiPicker.svelte';
   import MiniProfileTrigger from './MiniProfileTrigger.svelte';
+  import Username3D from './Username3D.svelte';
+  import type { UsernameEffect } from '../lib/usernameRenderer';
   import { 
     initAbly, 
     initAblyWithUser,
@@ -742,6 +744,7 @@
         authorName: msg.author_name || msg.message?.author_name || currentUser?.username || 'Unknown',
         authorAvatar: msg.author_avatar || msg.message?.author_avatar || null,
         authorFont: msg.author_font || msg.message?.author_font || null,
+        authorEffect: msg.author_effect || msg.message?.author_effect || 'none',
         content: msg.content || msg.message?.content || '',
         timestamp: new Date(msg.created_at || msg.message?.created_at || Date.now()).getTime(),
         channelId,
@@ -1567,7 +1570,19 @@
                     class="message-author" 
                     on:click={() => handleUserClick(message)}
                     style={message.authorFont ? `font-family: '${message.authorFont}', sans-serif;` : ''}
-                  >{message.authorName}</button>
+                  >
+                    {#if message.authorEffect && message.authorEffect !== 'none'}
+                      <Username3D
+                        text={message.authorName}
+                        effect={message.authorEffect}
+                        color="#ffffff"
+                        font={message.authorFont || 'Inter'}
+                        height={20}
+                      />
+                    {:else}
+                      {message.authorName}
+                    {/if}
+                  </button>
                 </MiniProfileTrigger>
                 <span class="message-time">{formatTimestamp(message.timestamp)}{message.edited ? ' (edited)' : ''}</span>
               </div>
