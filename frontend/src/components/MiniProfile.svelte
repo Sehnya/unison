@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import Avatar from './Avatar.svelte';
   import { apiUrl } from '../lib/api';
-  import Username3D from './Username3D.svelte';
+  import UsernameAnimated from './UsernameAnimated.svelte';
   import type { UsernameEffect } from '../lib/usernameRenderer';
   import { 
     truncateBio, 
@@ -277,28 +277,19 @@
         />
       </div>
 
-      <!-- Username with custom font, color, and 3D effect -->
-      {#if displayEffect !== 'none'}
-        <div class="username">
-          <Username3D
-            text={displayUsername}
-            effect={displayEffect}
-            color={displayTextColor}
-            font={displayFont === 'inherit' ? 'Inter' : displayFont}
-            height={28}
-          />
-        </div>
-      {:else}
-        <h3 
-          class="username"
-          style="
-            font-family: {displayFont}, sans-serif;
-            color: {displayTextColor};
-          "
-        >
-          {displayUsername}
-        </h3>
-      {/if}
+      <!-- Username with layout, effect, or plain text -->
+      <div class="username">
+        <UsernameAnimated
+          {userId}
+          username={displayUsername}
+          font={displayFont === 'inherit' ? 'Inter' : displayFont}
+          effect={displayEffect}
+          color={displayTextColor}
+          {authToken}
+          height={26}
+          layoutScale={0.65}
+        />
+      </div>
 
       <!-- Bio -->
       {#if displayBio}

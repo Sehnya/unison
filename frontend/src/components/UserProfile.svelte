@@ -28,6 +28,7 @@
     type PageStyle
   } from '../lib/profileStorage';
   import { apiUrl } from '../lib/api';
+  import UsernameAnimated from './UsernameAnimated.svelte';
 
   export let user: User | null = null;
   export let authToken: string = '';
@@ -1390,6 +1391,22 @@
         {/if}
       </div>
 
+      <!-- Username layout display -->
+      {#if user?.id}
+        <div class="username-layout-area">
+          <UsernameAnimated
+            userId={user.id}
+            username={user.username}
+            font={(user)?.username_font || 'Inter'}
+            effect={(user)?.username_effect || 'none'}
+            color="#ffffff"
+            {authToken}
+            height={28}
+            layoutScale={0.8}
+          />
+        </div>
+      {/if}
+
       <div 
         class="profile-grid" 
         class:edit-mode={isEditMode} 
@@ -2710,6 +2727,12 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  .username-layout-area {
+    margin: 8px 0 16px;
+    display: flex;
+    align-items: center;
   }
 
   .greeting-title.editable {

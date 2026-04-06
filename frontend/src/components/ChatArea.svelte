@@ -6,6 +6,7 @@
   import EmojiPicker from './EmojiPicker.svelte';
   import MiniProfileTrigger from './MiniProfileTrigger.svelte';
   import Username3D from './Username3D.svelte';
+  import UsernameAnimated from './UsernameAnimated.svelte';
   import type { UsernameEffect } from '../lib/usernameRenderer';
   import { 
     initAbly, 
@@ -1569,19 +1570,17 @@
                   <button 
                     class="message-author" 
                     on:click={() => handleUserClick(message)}
-                    style={message.authorFont ? `font-family: '${message.authorFont}', sans-serif;` : ''}
                   >
-                    {#if message.authorEffect && message.authorEffect !== 'none'}
-                      <Username3D
-                        text={message.authorName}
-                        effect={message.authorEffect}
-                        color="#ffffff"
-                        font={message.authorFont || 'Inter'}
-                        height={20}
-                      />
-                    {:else}
-                      {message.authorName}
-                    {/if}
+                    <UsernameAnimated
+                      userId={message.authorId}
+                      username={message.authorName}
+                      font={message.authorFont || 'Inter'}
+                      effect={message.authorEffect || 'none'}
+                      color="#ffffff"
+                      {authToken}
+                      height={18}
+                      layoutScale={0.45}
+                    />
                   </button>
                 </MiniProfileTrigger>
                 <span class="message-time">{formatTimestamp(message.timestamp)}{message.edited ? ' (edited)' : ''}</span>
