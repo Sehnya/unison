@@ -9,6 +9,9 @@
   import { invalidateMiniProfile } from '../lib/miniProfileCache';
   import Username3D from './Username3D.svelte';
   import { EFFECT_LABELS, type UsernameEffect } from '../lib/usernameRenderer';
+  import UsernameLayoutEditor from './UsernameLayoutEditor.svelte';
+  import UsernameLayoutDisplay from './UsernameLayoutDisplay.svelte';
+  import type { UsernameLayoutConfig } from '../lib/usernameLayout';
 
   export let user: User | null = null;
   export let authToken: string = '';
@@ -45,6 +48,15 @@
   // Effect selection
   let selectedEffect: UsernameEffect = ((user as any)?.username_effect || 'none') as UsernameEffect;
   const effectOptions: UsernameEffect[] = ['none', 'chrome', 'neon', 'holographic', 'fire', 'ice', 'gold', 'glitch'];
+
+  // Username layout editor
+  let showLayoutEditor = false;
+  let usernameLayout: UsernameLayoutConfig | null = null;
+
+  function handleLayoutSave(e: CustomEvent<{ layout: UsernameLayoutConfig }>) {
+    usernameLayout = e.detail.layout;
+    showLayoutEditor = false;
+  }
   
   // Mini-profile settings
   let miniProfileSettings = {
@@ -96,7 +108,26 @@
   onMount(() => {
     loadGoogleFont(selectedFont);
     loadDMPrivacy();
+    loadUsernameLayout();
   });
+
+  async function loadUsernameLayout() {
+    if (!authToken) return;
+    try {
+      const response = await fetch(apiUrl('/api/auth/profile-data'), {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const pd = data.profileData?.profile_data || data.profileData;
+        if (pd?.usernameLayout) {
+          usernameLayout = pd.usernameLayout;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load username layout:', err);
+    }
+  }
   
   async function loadDMPrivacy() {
     if (!authToken) return;
@@ -216,6 +247,22 @@
           }
         });
         saveMessage = 'changes saved';
+
+        // Save username layout if set
+        if (usernameLayout) {
+          try {
+            await fetch(apiUrl('/api/auth/profile-data'), {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ profileData: { usernameLayout } }),
+            });
+          } catch (err) {
+            console.warn('Failed to save username layout:', err);
+          }
+        }
       } else {
         const error = await response.json().catch(() => ({}));
         saveMessage = error.message || 'failed to save';
@@ -540,6 +587,31 @@
               </button>
             {/each}
           </div>
+        </section>
+
+        <!-- Username Layout Editor -->
+        <section class="section">
+          <div class="section-label">username layout</div>
+          {#if showLayoutEditor}
+            <UsernameLayoutEditor
+              {username}
+              font={selectedFont}
+              color="#ffffff"
+              effect={selectedEffect}
+              initialLayout={usernameLayout}
+              on:save={handleLayoutSave}
+              on:cancel={() => showLayoutEditor = false}
+            />
+          {:else}
+            <button class="layout-editor-btn" on:click={() => showLayoutEditor = true}>
+              {usernameLayout ? 'edit layout' : 'create layout'}
+            </button>
+            {#if usernameLayout}
+              <div class="layout-preview-small">
+                <UsernameLayoutDisplay layout={usernameLayout} scale={0.6} />
+              </div>
+            {/if}
+          {/if}
         </section>
 
         <!-- Theme Section (placeholder) -->
@@ -1377,5 +1449,32 @@
   .effect-name {
     font-size: 11px;
     font-family: 'Inter', sans-serif;
+  }
+
+  /* Layout editor */
+  .layout-editor-btn {
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px dashed rgba(255,255,255,0.15);
+    border-radius: 10px;
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s ease;
+  }
+
+  .layout-editor-btn:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(99, 102, 241, 0.4);
+    color: #fff;
+  }
+
+  .layout-preview-small {
+    margin-top: 8px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    justify-content: center;
   }
 </style>
