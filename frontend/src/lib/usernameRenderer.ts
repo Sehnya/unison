@@ -23,17 +23,6 @@ export const EFFECT_LABELS: Record<UsernameEffect, string> = {
   glitch: 'Glitch',
 };
 
-interface RenderRequest {
-  id: string;
-  text: string;
-  effect: UsernameEffect;
-  color: string;
-  font: string;
-  width: number;
-  height: number;
-  resolve: (canvas: HTMLCanvasElement) => void;
-}
-
 // Shader chunks for different effects
 const EFFECT_SHADERS: Record<UsernameEffect, { vertex: string; fragment: string }> = {
   none: {
@@ -303,10 +292,10 @@ class UsernameRendererSingleton {
       alpha: true,
       antialias: true,
       powerPreference: 'low-power',
+      preserveDrawingBuffer: true,
     });
-    // Small default size — we render to offscreen targets
     this.renderer.setSize(1, 1);
-    this.renderer.autoClear = false;
+    this.renderer.autoClear = true;
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.1, 10);
@@ -504,33 +493,25 @@ class UsernameRendererSingleton {
       // Update time uniform
       target.material.uniforms['uTime']!.value = elapsed;
 
-      // Render to offscreen target
+      // Resize the shared renderer to match this target
+      const w = target.renderTarget.width;
+      const h = target.renderTarget.height;
+      this.renderer.setSize(w, h, false);
+
+      // Show only this mesh, render directly to the default framebuffer
       target.mesh.visible = true;
-      this.renderer.setRenderTarget(target.renderTarget);
+      this.renderer.setRenderTarget(null);
       this.renderer.clear();
       this.renderer.render(this.scene, this.camera);
       target.mesh.visible = false;
 
-      // Copy pixels to the output canvas
+      // Copy from the renderer's canvas to the output canvas
       const ctx = target.canvas.getContext('2d');
       if (ctx) {
-        const w = target.renderTarget.width;
-        const h = target.renderTarget.height;
-        const pixels = new Uint8Array(w * h * 4);
-        this.renderer.readRenderTargetPixels(target.renderTarget, 0, 0, w, h, pixels);
-
-        // WebGL reads bottom-up, flip vertically
-        const imageData = ctx.createImageData(w, h);
-        for (let y = 0; y < h; y++) {
-          const srcRow = (h - 1 - y) * w * 4;
-          const dstRow = y * w * 4;
-          imageData.data.set(pixels.subarray(srcRow, srcRow + w * 4), dstRow);
-        }
-        ctx.putImageData(imageData, 0, 0);
+        ctx.clearRect(0, 0, target.canvas.width, target.canvas.height);
+        ctx.drawImage(this.renderer.domElement, 0, 0);
       }
     }
-
-    this.renderer.setRenderTarget(null);
   }
 
   /**

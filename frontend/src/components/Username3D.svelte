@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, afterUpdate } from 'svelte';
   import { usernameRenderer, type UsernameEffect } from '../lib/usernameRenderer';
 
   export let text: string;
@@ -9,55 +9,69 @@
   export let height: number = 28;
 
   let container: HTMLElement;
-  let renderedCanvas: HTMLCanvasElement | null = null;
   let instanceId = `u3d-${Math.random().toString(36).slice(2, 9)}`;
+  let mounted = false;
 
-  // Measure text width using a hidden span
-  function measureTextWidth(text: string, font: string, size: number): number {
+  // Track previous props to detect actual changes
+  let prevText = '';
+  let prevEffect: UsernameEffect = 'none';
+  let prevColor = '';
+  let prevFont = '';
+  let prevHeight = 0;
+
+  function measureTextWidth(t: string, f: string, size: number): number {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
-    ctx.font = `600 ${size}px '${font}', sans-serif`;
-    return Math.ceil(ctx.measureText(text).width) + size * 0.3;
+    ctx.font = `600 ${size}px '${f}', sans-serif`;
+    return Math.ceil(ctx.measureText(t).width) + size * 0.3;
   }
 
-  function mount() {
+  function render() {
     if (!container) return;
 
-    const width = measureTextWidth(text, font, Math.floor(height * 0.65));
-    renderedCanvas = usernameRenderer.register(instanceId, text, effect, color, font, width, height);
-
-    // Clear previous children
-    while (container.firstChild) {
-      container.removeChild(container.firstChild);
-    }
-    container.appendChild(renderedCanvas);
-  }
-
-  function remount() {
-    if (!container) return;
+    // Unregister previous
     usernameRenderer.unregister(instanceId);
 
     const width = measureTextWidth(text, font, Math.floor(height * 0.65));
-    renderedCanvas = usernameRenderer.update(instanceId, text, effect, color, font, width, height);
+    const canvas = usernameRenderer.register(instanceId, text, effect, color, font, width, height);
 
+    // Replace canvas in DOM
     while (container.firstChild) {
       container.removeChild(container.firstChild);
     }
-    container.appendChild(renderedCanvas);
+    container.appendChild(canvas);
+
+    // Track current props
+    prevText = text;
+    prevEffect = effect;
+    prevColor = color;
+    prevFont = font;
+    prevHeight = height;
   }
 
   onMount(() => {
-    mount();
+    mounted = true;
+    render();
   });
 
   onDestroy(() => {
+    mounted = false;
     usernameRenderer.unregister(instanceId);
   });
 
-  // Re-render when props change
-  $: if (container && (text || effect || color || font || height)) {
-    remount();
-  }
+  afterUpdate(() => {
+    if (!mounted) return;
+    // Only re-render if props actually changed
+    if (
+      text !== prevText ||
+      effect !== prevEffect ||
+      color !== prevColor ||
+      font !== prevFont ||
+      height !== prevHeight
+    ) {
+      render();
+    }
+  });
 </script>
 
 <span class="username-3d" bind:this={container} role="img" aria-label={text}></span>
